@@ -49,6 +49,7 @@ var Descriptions = []ProviderDesc{
 	{ID: "openai", Name: "OpenAI", NeedsKey: true, EnvKey: "OPENAI_API_KEY"},
 	{ID: "anthropic", Name: "Anthropic", NeedsKey: true, EnvKey: "ANTHROPIC_API_KEY"},
 	{ID: "openrouter", Name: "OpenRouter (incl. free models)", NeedsKey: true, EnvKey: "OPENROUTER_API_KEY"},
+	{ID: "gemini", Name: "Google Gemini (free tier)", NeedsKey: true, EnvKey: "GEMINI_API_KEY"},
 }
 
 // CloudIDs lists the backends /login accepts.
@@ -104,6 +105,16 @@ var Catalog = map[string][]CatalogModel{
 		{"mistralai/mistral-small-3.1-24b-instruct:free", "Mistral Small 3.1 (free)", 128000, 0, 0},
 		{"google/gemma-3-27b-it:free", "Gemma 3 27B (free)", 128000, 0, 0},
 		{"deepseek/deepseek-chat:free", "DeepSeek Chat (free)", 64000, 0, 0},
+	},
+	// Gemini via the OpenAI-compatible endpoint (chat + tools covered;
+	// native client deferred). Prices move — verify on ai.google.dev.
+	// Refreshed 2026-09-08. AI Studio serves these on a free tier, so
+	// Gemini is a $0 start with only a Google account.
+	"gemini": {
+		{"gemini-2.5-flash", "Gemini 2.5 Flash", 1048576, 0.30, 2.50},
+		{"gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite", 1048576, 0.10, 0.40},
+		{"gemini-2.5-pro", "Gemini 2.5 Pro", 1048576, 1.25, 10.00},
+		{"gemini-2.0-flash", "Gemini 2.0 Flash", 1048576, 0.10, 0.40},
 	},
 }
 
@@ -208,7 +219,7 @@ func Factory(providerID, model, base, key string) (Provider, error) {
 	switch strings.ToLower(providerID) {
 	case "", "ollama":
 		return NewOllama(model), nil
-	case "openai", "anthropic", "openrouter":
+	case "openai", "anthropic", "openrouter", "gemini":
 		id := strings.ToLower(providerID)
 		if key == "" {
 			envKey := "OPENAI_API_KEY"
@@ -217,6 +228,9 @@ func Factory(providerID, model, base, key string) (Provider, error) {
 			}
 			if id == "openrouter" {
 				envKey = "OPENROUTER_API_KEY"
+			}
+			if id == "gemini" {
+				envKey = "GEMINI_API_KEY"
 			}
 			return nil, fmt.Errorf("no %s API key — run /login %s or set $%s", id, id, envKey)
 		}
@@ -230,6 +244,9 @@ func Factory(providerID, model, base, key string) (Provider, error) {
 		}
 		if id == "openrouter" {
 			return NewOpenRouter(model, base, key), nil
+		}
+		if id == "gemini" {
+			return NewGemini(model, base, key), nil
 		}
 		return NewAnthropic(model, base, key), nil
 	default:

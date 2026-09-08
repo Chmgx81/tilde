@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"tilde/internal/provider"
 	"tilde/internal/sandbox"
 )
 
@@ -23,9 +24,12 @@ func splashPanel(width int) []string {
 		"environments only. Sandboxed via bubblewrap + network egress denied by",
 		"default on Linux. See policies.yaml to review current rules.",
 		"",
+		// Cloud list derives from the registry (CloudIDs) so it can never
+		// go stale when a provider is added — the splash is not the place
+		// for a second hardcoded source of truth.
 		"Local models run via Ollama. On a machine without a GPU, /login <pro-",
-		"vider> arms a cloud key (openai, anthropic, openrouter) and /model <provider/model>",
-		"switches mid-session.",
+		"vider> arms a cloud key (" + strings.Join(provider.CloudIDs(), ", ") + ") and /model",
+		"<provider/model> switches mid-session.",
 	}, "\n"))
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderIdle).Padding(0, 1).Width(inner).
