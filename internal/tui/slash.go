@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -23,6 +24,8 @@ type slashRow struct{ cmd, desc string }
 // they align regardless of command name length.
 var slashCommands = []slashRow{
 	{"/model <model>", "Set the current model"},
+	{"/login [provider]", "Configure cloud-provider auth (§2.24)"},
+	{"/logout [provider]", "Remove stored provider auth"},
 	{"/mode <plan|build|auto>", "Set mode explicitly (same as Tab)"},
 	{"/skills", "Browse and load a skill"},
 	{"/compact [focus]", "Summarize older turns to reclaim context"},
@@ -223,6 +226,23 @@ func (m *Model) runSlash(cmd, args string, selected slashRow) tea.Cmd {
 			return nil
 		}
 		return m.switchModel(args)
+	case "/login":
+		if m.running {
+			m.append("✗ an agent turn is running — Esc twice, then /login.")
+			return nil
+		}
+		m.loginStatus()
+		if p := strings.ToLower(strings.TrimSpace(args)); p != "" {
+			return m.beginLogin(p)
+		}
+		return nil
+	case "/logout":
+		if m.running {
+			m.append("✗ an agent turn is running — Esc twice, then /logout.")
+			return nil
+		}
+		m.runLogout(args)
+		return nil
 	case "/skills":
 		m.openSkills()
 		return nil
@@ -350,22 +370,99 @@ func (m *Model) compactCmd(focus string) tea.Cmd {
 	}
 }
 
-// switchModel repoints the Ollama backend live.
-func (m *Model) switchModel(name string) tea.Cmd {
-	if name == "" {
-		m.append("● current model: " + m.model + " — usage: /model <name>")
+// switchModel repoints the backend live (spec §2.24): any provider, any
+// catalog model. The "provider/model" form builds that provider's
+// backend (credentials via the ladder — stored, then env, then
+// --api-key; a missing cloud key says /login); the bare form swaps the
+// model on the current backend.
+func (m *Model) switchModel(ref string) tea.Cmd {
+	if ref == "" {
+		m.append("● current model: " + m.model + " — usage: /model <name> or /model <provider/model>")
 		return nil
 	}
-	if o, ok := m.loop.Prov.(*provider.Ollama); ok {
-		o.Model = name
-		m.model = o.Name()
-		m.append("● model switched to " + m.model)
-		if m.loop.Log != nil {
-			_ = m.loop.Log.Append("system", map[string]any{"model": m.model})
+	ref = strings.TrimSpace(ref)
+	if pid, model, ok := provider.ParseModelRef(ref); ok {
+		// Same provider: repoint its model in place.
+		if pid == strings.SplitN(m.model, "/", 2)[0] {
+			return m.setModelOnCurrent(model)
 		}
+		return m.switchProvider(pid, model, "")
+	}
+	// Bare name: current provider's model.
+	return m.setModelOnCurrent(ref)
+}
+
+// setModelOnCurrent swaps the model on whichever backend is live.
+func (m *Model) setModelOnCurrent(model string) tea.Cmd {
+	cur := m.loop.CurrentProvider()
+	switch p := cur.(type) {
+	case *provider.Ollama:
+		p.Model = model
+	case *provider.OpenAI:
+		p.Model = model
+	case *provider.Anthropic:
+		p.Model = model
+	default:
+		m.append("✗ current backend does not support live model switching.")
 		return nil
 	}
-	m.append("✗ /model only supports the Ollama backend in this build.")
+	m.model = cur.Name()
+	m.append("● model switched to " + m.model)
+	if m.loop.Log != nil {
+		_ = m.loop.Log.Append("system", map[string]any{"model": m.model})
+	}
+	return nil
+}
+
+// switchProvider builds and installs a different provider's backend,
+// resolving its key through the credential ladder. Cloud providers with
+// no key anywhere are a /login-shaped dead end, never a raw 401 later.
+// An empty model defaults to the catalog's first entry; budget
+// auto-size from the catalog window is TODO (§2.24 spec'd, not built).
+func (m *Model) switchProvider(providerID, model, _ string) tea.Cmd {
+	key, src := provider.Resolve(m.creds, providerID, m.keyOverrides)
+	if src == provider.AuthNone {
+		for _, d := range provider.Descriptions {
+			if d.ID == providerID && d.NeedsKey {
+				m.append("✗ no " + providerID + " key — run /login " + providerID + " (or set $" + d.EnvKey + ").")
+				return nil
+			}
+		}
+	}
+	if model == "" {
+		ids := provider.CatalogIDs(providerID)
+		if len(ids) > 0 {
+			model = ids[0]
+		}
+	}
+	p, err := provider.Factory(providerID, model, "", key)
+	if err != nil {
+		m.append("✗ " + err.Error())
+		return nil
+	}
+	m.loop.SetProvider(p)
+	m.model = p.Name()
+	m.append("● provider switched to " + m.model + " (" + src.String() + " credential)")
+	if m.loop.Log != nil {
+		_ = m.loop.Log.Append("system", map[string]any{"model": m.model})
+	}
+	return nil
+}
+
+// beginLogin arms key entry for a cloud provider. Unknown or local
+// providers are named errors — /login is a cloud-only surface.
+func (m *Model) beginLogin(providerID string) tea.Cmd {
+	for _, d := range provider.Descriptions {
+		if d.ID == providerID {
+			if !d.NeedsKey {
+				m.append("● " + providerID + " needs no key — it talks to the local daemon.")
+				return nil
+			}
+			m.startKeyEntry(providerID)
+			return textinput.Blink
+		}
+	}
+	m.append("✗ unknown provider " + providerID + " — cloud options: " + strings.Join(provider.CloudIDs(), ", ") + ".")
 	return nil
 }
 

@@ -1,0 +1,225 @@
+package provider
+
+import (
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+)
+
+// AuthSource records where a provider's credential came from. The
+// ladder is unambiguous (spec §2.24): a stored credential owns the
+// provider outright, the ambient env var is the fallback, and a
+// rejected key is never silently retried against a different source.
+type AuthSource int
+
+const (
+	AuthNone AuthSource = iota
+	AuthStored
+	AuthEnv
+	AuthFlag
+)
+
+func (s AuthSource) String() string {
+	switch s {
+	case AuthStored:
+		return "stored"
+	case AuthEnv:
+		return "env"
+	case AuthFlag:
+		return "flag"
+	default:
+		return "none"
+	}
+}
+
+// ProviderDesc describes one selectable backend: display name, how it
+// authenticates, and whether the credential is required up front
+// (cloud) or supplied by a local daemon (ollama).
+type ProviderDesc struct {
+	ID       string // ollama | openai | anthropic
+	Name     string // human name for dropdowns and status lines
+	NeedsKey bool   // true = cloud provider; /login applies
+	EnvKey   string // ambient env var, "" for local daemons
+}
+
+// Descriptions lists every backend in the registry's canonical order.
+var Descriptions = []ProviderDesc{
+	{ID: "ollama", Name: "Ollama (local)", NeedsKey: false},
+	{ID: "openai", Name: "OpenAI", NeedsKey: true, EnvKey: "OPENAI_API_KEY"},
+	{ID: "anthropic", Name: "Anthropic", NeedsKey: true, EnvKey: "ANTHROPIC_API_KEY"},
+}
+
+// CloudIDs lists the backends /login accepts.
+func CloudIDs() []string {
+	var out []string
+	for _, d := range Descriptions {
+		if d.NeedsKey {
+			out = append(out, d.ID)
+		}
+	}
+	return out
+}
+
+// CatalogModel is one shipped catalog entry (spec §2.24): a model a
+// user can pick by name, with the window geometry the budget auto-size
+// needs. Prices are USD per million tokens; 0 means free/unreported.
+type CatalogModel struct {
+	ID      string // wire model id
+	Name    string // human label
+	Context int    // context window in tokens
+	InCost  float64
+	OutCost float64
+}
+
+// Catalog maps provider id → curated entries. Hand-maintained on
+// purpose (spec §2.24): at tilde's provider count a generation script
+// is maintenance overhead. Refresh when providers ship notable models;
+// keep entries to ~5 current picks.
+var Catalog = map[string][]CatalogModel{
+	"ollama": {
+		{"qwen3.8-4b:16k", "Qwen3 4B (measured default)", 16384, 0, 0},
+		{"llama3.1:8b", "Llama 3.1 8B", 131072, 0, 0},
+	},
+	"openai": {
+		{"gpt-5.2", "GPT-5.2", 400000, 1.25, 10},
+		{"gpt-5.2-mini", "GPT-5.2 mini", 400000, 0.25, 2},
+		{"gpt-4.1", "GPT-4.1", 1047576, 2, 8},
+		{"gpt-4.1-mini", "GPT-4.1 mini", 1047576, 0.4, 1.6},
+		{"o4-mini", "o4-mini (reasoning)", 200000, 1.1, 4.4},
+	},
+	"anthropic": {
+		{"claude-sonnet-4-6", "Claude Sonnet 4.6", 200000, 3, 15},
+		{"claude-opus-4-6", "Claude Opus 4.6", 200000, 5, 25},
+		{"claude-haiku-4-5", "Claude Haiku 4.5", 200000, 1, 5},
+	},
+}
+
+// CatalogIDs returns the model ids for one provider, catalog order.
+func CatalogIDs(providerID string) []string {
+	var out []string
+	for _, cm := range Catalog[providerID] {
+		out = append(out, cm.ID)
+	}
+	return out
+}
+
+// ParseModelRef splits "provider/model" (the /model select form). The
+// one-element form means "model on the current provider" and is the
+// caller's to interpret; on !ok both returns are empty.
+func ParseModelRef(ref string) (providerID, model string, ok bool) {
+	if i := strings.Index(ref, "/"); i > 0 && i < len(ref)-1 {
+		return strings.ToLower(ref[:i]), ref[i+1:], true
+	}
+	return "", "", false
+}
+
+// AuthStatus is one row of /login's status matrix.
+type AuthStatus struct {
+	Provider ProviderDesc
+	Source   AuthSource
+	KeyTail  string // last four characters, "" when no key
+}
+
+// CredentialStore is the read surface the registry needs from the
+// on-disk key store (internal/creds). An interface keeps provider
+// decoupled from the store's file handling — and lets tests pass a stub.
+type CredentialStore interface {
+	Get(id string) (string, error)
+}
+
+// tail4 masks a key for display: only the last four characters ever
+// render — a full key must not be recoverable from a screenshot, a
+// scrollback copy, or a session log.
+func tail4(k string) string {
+	if len(k) <= 4 {
+		return "••••"
+	}
+	return "…" + k[len(k)-4:]
+}
+
+// Status reports the credential ladder's verdict for every backend:
+// stored first (a stored key owns the provider), then the ambient env
+// var, then nothing — never a guess.
+func Status(store CredentialStore, flagOverrides map[string]string) []AuthStatus {
+	out := make([]AuthStatus, 0, len(Descriptions))
+	for _, d := range Descriptions {
+		st := AuthStatus{Provider: d}
+		if k, ok := flagOverrides[d.ID]; ok && k != "" {
+			st.Source, st.KeyTail = AuthFlag, tail4(k)
+		} else if store != nil {
+			if k, err := store.Get(d.ID); err == nil && k != "" {
+				st.Source, st.KeyTail = AuthStored, tail4(k)
+			}
+		}
+		if st.Source == AuthNone && d.EnvKey != "" {
+			if k := os.Getenv(d.EnvKey); k != "" {
+				st.Source, st.KeyTail = AuthEnv, tail4(k)
+			}
+		}
+		out = append(out, st)
+	}
+	return out
+}
+
+// Resolve is the read side of the ladder: the key that actually ships
+// on the wire for providerID, plus its source (or AuthNone). flagOverrides
+// (explicit --api-key) outrank everything for this process; a stored
+// credential outranks the env var; nothing is invented.
+func Resolve(store CredentialStore, providerID string, flagOverrides map[string]string) (string, AuthSource) {
+	if k, ok := flagOverrides[providerID]; ok && k != "" {
+		return k, AuthFlag
+	}
+	if store != nil {
+		if k, err := store.Get(providerID); err == nil && k != "" {
+			return k, AuthStored
+		}
+	}
+	for _, d := range Descriptions {
+		if d.ID == providerID && d.EnvKey != "" {
+			if k := os.Getenv(d.EnvKey); k != "" {
+				return k, AuthEnv
+			}
+		}
+	}
+	return "", AuthNone
+}
+
+// Factory builds the backend for one provider id from explicit config
+// values (each may be ""). It is the single construction point —
+// selection happens on data, never a switch scattered through the app.
+// Cloud providers default their model to the catalog's first entry and
+// refuse to construct without a key (the caller's ladder — flag, store,
+// env — must have produced one; nothing is invented here). Unknown ids
+// fail loud with the valid set.
+func Factory(providerID, model, base, key string) (Provider, error) {
+	switch strings.ToLower(providerID) {
+	case "", "ollama":
+		return NewOllama(model), nil
+	case "openai", "anthropic":
+		id := strings.ToLower(providerID)
+		if key == "" {
+			envKey := "OPENAI_API_KEY"
+			if id == "anthropic" {
+				envKey = "ANTHROPIC_API_KEY"
+			}
+			return nil, fmt.Errorf("no %s API key — run /login %s or set $%s", id, id, envKey)
+		}
+		if model == "" {
+			if ids := CatalogIDs(id); len(ids) > 0 {
+				model = ids[0]
+			}
+		}
+		if id == "openai" {
+			return NewOpenAI(model, base, key), nil
+		}
+		return NewAnthropic(model, base, key), nil
+	default:
+		ids := make([]string, 0, len(Descriptions))
+		for _, d := range Descriptions {
+			ids = append(ids, d.ID)
+		}
+		sort.Strings(ids)
+		return nil, fmt.Errorf("unknown provider %q (use %s)", providerID, strings.Join(ids, "|"))
+	}
+}

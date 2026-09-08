@@ -25,7 +25,7 @@ func helpView() string {
 	for _, r := range rows {
 		s += "  " + padRunesRight(r[0], 22) + r[1] + "\n"
 	}
-	s += "\n  Slash commands: /mode /compact /clear /copy /sandbox /diff /undo /sessions /model /skills /help /quit\n"
+	s += "\n  Slash commands: /mode /compact /clear /copy /sandbox /diff /undo /sessions /model /login /logout /skills /help /quit\n"
 	s += "                                                           press esc to close"
 	return s
 }

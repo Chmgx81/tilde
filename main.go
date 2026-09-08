@@ -20,6 +20,7 @@ import (
 
 	"tilde/internal/agent"
 	"tilde/internal/compact"
+	"tilde/internal/creds"
 	"tilde/internal/eval"
 	"tilde/internal/hooks"
 	"tilde/internal/mcp"
@@ -118,30 +119,26 @@ func main() {
 	}
 
 	// Provider/model misconfiguration fails fast pre-TUI (exit 2), from
-	// construction alone — no dial. Ollama reachability would need a live
-	// ping, which we deliberately skip here; a dead daemon surfaces as a
-	// provider error (exit 3) once the loop calls it.
-	if strings.EqualFold(*providerFlag, "openai") {
-		key := *apiKey
-		if key == "" {
-			key = os.Getenv("OPENAI_API_KEY")
-		}
-		if key == "" {
-			fmt.Fprintln(os.Stderr, "tilde: --provider openai needs an API key — set OPENAI_API_KEY or pass --api-key, then retry")
-			os.Exit(2)
-		}
+	// construction alone — no dial. Keys resolve through the credential
+	// ladder (§2.24): --api-key, then the store, then env. A cloud
+	// provider with no key anywhere is a usage error before the TUI;
+	// /login can also arm a key mid-session.
+	over := map[string]string{}
+	if id, _, ok := provider.ParseModelRef(*providerFlag); ok && *apiKey != "" {
+		over[id] = *apiKey
 	}
-	if strings.EqualFold(*providerFlag, "anthropic") {
-		key := *apiKey
-		if key == "" {
-			key = os.Getenv("ANTHROPIC_API_KEY")
-		}
-		if key == "" {
-			fmt.Fprintln(os.Stderr, "tilde: --provider anthropic needs an API key — set ANTHROPIC_API_KEY or pass --api-key, then retry")
-			os.Exit(2)
-		}
+	// Credential store (§2.24): ~/.tilde/credentials.json. A home-dir
+	// failure degrades to env-only resolution rather than blocking
+	// startup — /login reports the write error if it is ever hit.
+	var credStore *creds.Store
+	if p, err := creds.DefaultPath(); err == nil {
+		credStore = creds.New(p)
 	}
-	prov := selectProvider(*providerFlag, *modelFlag, *apiBase, *apiKey)
+	prov, keyErr := selectProvider(*providerFlag, *modelFlag, *apiBase, *apiKey, credStore)
+	if keyErr != "" {
+		fmt.Fprintln(os.Stderr, "tilde: "+keyErr)
+		os.Exit(2)
+	}
 
 	budget := *budgetFlag
 	if budget <= 0 {
@@ -273,6 +270,8 @@ func main() {
 	} else {
 		_ = sessLog.Append("meta", map[string]any{"root": root, "model": prov.Name(), "budget": budget})
 	}
+	tm.BindCreds(credStore)
+	tm.BindKeys(over)
 	var prog *tea.Program
 	tm.BindProgram(&prog)
 	// Cell-motion mouse tracking is on: wheel motion (touchpad two-finger
@@ -321,18 +320,46 @@ type harness struct {
 // loadPolicies reads policies.yaml (missing = built-in defaults).
 // selectProvider picks the model backend. Unknown names fail loud with
 // the valid set — never a silent fallback to a different vendor.
-func selectProvider(which, model, base, key string) provider.Provider {
-	switch strings.ToLower(which) {
-	case "", "ollama":
-		return provider.NewOllama(model)
-	case "openai":
-		return provider.NewOpenAI(model, base, key)
-	case "anthropic":
-		return provider.NewAnthropic(model, base, key)
+// selectProvider builds the startup backend, resolving its key through
+// the credential ladder (§2.24): --api-key flag, then the store, then
+// env. It returns (provider, "") on success, (nil, usageError) on a
+// cloud provider with no key anywhere — main exits 2 with the fix,
+// never a raw 401 later. No dialing: construction only; a dead daemon
+// surfaces as a provider error (exit 3) once the loop calls it.
+func selectProvider(which, model, base, key string, store *creds.Store) (provider.Provider, string) {
+	id, modelFromRef, ok := provider.ParseModelRef(which)
+	if !ok {
+		id = strings.ToLower(which)
+		if id == "" {
+			id = "ollama"
+		}
+	}
+	if model == "" {
+		model = modelFromRef
+	}
+	switch id {
+	case "ollama":
+		return provider.NewOllama(model), ""
+	case "openai", "anthropic":
+		resolved, _ := provider.Resolve(store, id, map[string]string{})
+		// The explicit flag outranks everything (ladder step zero) —
+		// Resolve saw the store, not the flag; apply it here.
+		if key != "" {
+			resolved = key
+		}
+		if resolved == "" {
+			envName := "OPENAI_API_KEY"
+			if id == "anthropic" {
+				envName = "ANTHROPIC_API_KEY"
+			}
+			return nil, fmt.Sprintf("--provider %s needs an API key: run /login %s in the TUI, or set $%s, or pass --api-key", id, id, envName)
+		}
+		if id == "openai" {
+			return provider.NewOpenAI(model, base, resolved), ""
+		}
+		return provider.NewAnthropic(model, base, resolved), ""
 	default:
-		fmt.Fprintf(os.Stderr, "tilde: unknown --provider %q (use ollama|openai|anthropic)\n", which)
-		os.Exit(2)
-		return nil
+		return nil, fmt.Sprintf("unknown --provider %q (use ollama | openai | anthropic, or provider/model)", which)
 	}
 }
 

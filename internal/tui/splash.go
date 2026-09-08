@@ -22,6 +22,10 @@ func splashPanel(width int) []string {
 		"approve or that fall inside the active sandbox policy. Use in trusted",
 		"environments only. Sandboxed via bubblewrap + network egress denied by",
 		"default on Linux. See policies.yaml to review current rules.",
+		"",
+		"Local models run via Ollama. On a machine without a GPU, /login <pro-",
+		"vider> arms a cloud key (openai, anthropic) and /model <provider/model>",
+		"switches mid-session.",
 	}, "\n"))
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderIdle).Padding(0, 1).Width(inner).

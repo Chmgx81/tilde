@@ -69,6 +69,28 @@ type Loop struct {
 	TotCompletion int
 
 	mu sync.Mutex
+	// pmut guards Prov: /model may swap the backend mid-session while a
+	// background summarizer (compaction, explore child) still holds the
+	// old one. Readers take it only around the pointer read.
+	pmut sync.RWMutex
+}
+
+// CurrentProvider reads the live backend under lock — /model may swap
+// it mid-session while background work still holds the old one.
+func (l *Loop) CurrentProvider() provider.Provider {
+	l.pmut.RLock()
+	defer l.pmut.RUnlock()
+	return l.Prov
+}
+
+// SetProvider swaps the backend for subsequent turns (spec §2.24:
+// provider switching is a first-class mid-session operation). In-flight
+// turns keep the provider they started with — backends are stateless
+// besides config, so nothing else needs migrating.
+func (l *Loop) SetProvider(p provider.Provider) {
+	l.pmut.Lock()
+	defer l.pmut.Unlock()
+	l.Prov = p
 }
 
 // getMode reads the autonomy tier under lock.
@@ -256,7 +278,7 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 		emit(Event{Kind: "usage", Text: compact.Label(used, budget), Pct: pct})
 		l.maybeCompact(ctx, comp, emit)
 		full := append([]provider.Message{{Role: "system", Content: sys}}, l.MsgsSnapshot()...)
-		resp, err := l.Prov.Chat(ctx, full, defs)
+		resp, err := l.CurrentProvider().Chat(ctx, full, defs)
 		if err != nil {
 			emit(Event{Kind: "system", Text: "model error: " + err.Error()})
 			return "", err

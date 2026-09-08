@@ -23,7 +23,7 @@ func (l *Loop) CompactNow(ctx context.Context, focus string) (string, int) {
 				"Summarize this coding-agent session for context compaction with special attention to: "+focus+
 					". Also keep: the user's goal, key findings, decisions, what was tried, pending work. Terse — under 60 lines.")
 		} else {
-			c2.Summarize = compact.SummarizeWithProvider(l.Prov)
+			c2.Summarize = compact.SummarizeWithProvider(l.CurrentProvider())
 		}
 		comp = &c2
 	}

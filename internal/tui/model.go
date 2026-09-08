@@ -14,6 +14,7 @@ import (
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -21,6 +22,7 @@ import (
 	"golang.org/x/term"
 
 	"tilde/internal/agent"
+	"tilde/internal/creds"
 	"tilde/internal/mode"
 	"tilde/internal/policy"
 	"tilde/internal/skills"
@@ -110,6 +112,16 @@ type Model struct {
 	// §2.21) but every copy path expands tokens back to the real
 	// content — the transcript is a summary view, a copy of it is not.
 	pasteEcho map[int][]pasteSeg
+	// Provider abstraction (spec §2.24): creds is the on-disk key store
+	// (nil in tests without BindCreds — env-only), keyOverrides holds
+	// --api-key values for this process. keyProvider non-empty arms the
+	// masked key-entry overlay; loginSel tracks the /model dropdown.
+	creds        *creds.Store
+	keyOverrides map[string]string
+	keyProvider  string
+	keyInput     textinput.Model
+	keyErr       string
+	loginSel     int
 
 	// Phase 4 surfaces.
 	helpOpen     bool
@@ -369,6 +381,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.insertPaste(string(msg.Runes))
 			return m, nil
 		}
+		// Masked key entry (§2.24): the login box owns the keyboard
+		// while open — nothing reaches the composer, pickers, or the
+		// global bindings. Esc cancels without storing anything.
+		if m.overlayKeyEntry() {
+			switch msg.Type {
+			case tea.KeyEnter:
+				return m, validateKeyCmd(m.keyProvider, m.keyInput.Value(), "")
+			case tea.KeyEsc:
+				m.keyProvider, m.keyErr = "", ""
+				m.keyInput.Reset()
+				return m, nil
+			case tea.KeyCtrlC:
+				return m, tea.Quit
+			}
+			var cmd tea.Cmd
+			m.keyInput, cmd = m.keyInput.Update(msg)
+			return m, cmd
+		}
 		// "?" on an empty composer opens the help overlay (spec §2.16).
 		// Pickers own every other key; typing keeps flowing into the box.
 		if msg.Type == tea.KeyRunes && msg.String() == "?" &&
@@ -414,6 +444,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			return m.submit()
 		}
+	case loginValidatedMsg:
+		return m, m.finishKeyEntry(msg)
 	case tea.MouseMsg:
 		// Overlays own the screen: a wheel over help / resume / skills /
 		// confirm must not scroll the transcript underneath.
@@ -1559,7 +1591,11 @@ func (m Model) View() string {
 		border = borderAuto
 	}
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Padding(0, 1)
-	composer := box.Render(m.ta.View())
+	if m.keyProvider != "" {
+		// Masked key entry (§2.24): amber owns the border while open.
+		box = box.BorderForeground(amber)
+	}
+	composer := m.composerView(box)
 	// Inline dropdown directly beneath the composer, replacing nothing.
 	var dropdown string
 	if m.slashOpen {
