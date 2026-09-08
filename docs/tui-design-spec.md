@@ -1402,8 +1402,8 @@ new section per version:
 | Mode toast / Tab cycle | DONE |
 | Confirm / deny prompts | DONE |
 | Compaction ambient + marker | DONE |
-| Tool-call timeline | DONE — `Write` verb + new-file case (2026-09-06) not yet built |
-| Diff rendering | DONE — edit diffs; new-file write rendering (2026-09-06) not yet built |
+| Tool-call timeline | DONE — fixed verb vocabulary (Read/Listed/Grep/Write/Edit/Run) + fixed-width column (2026-09-08); read-only success carries no result line, failures/notices still show, grep counts lift to the call line |
+| Diff rendering | DONE — edit diffs (`⎿ +N -M` + numbered hunk, 2026-09-08) and new-file write rendering (`+N (new file)` + plain numbered body, 2026-09-08); video-regression test replays glob/read/edit/re-read end to end |
 | Plan-mode banner + todos | TODO (spec §2.9 ready; no banner/todo rendering in agent or TUI yet) |
 | Handoff panel | DONE |
 | Splash screen | DONE |
@@ -1417,7 +1417,7 @@ new section per version:
 | Structured multi-question prompts (§2.18) | TODO — no current trigger; spec ready for first-run setup |
 | Subagent exploration view (§2.19) | DEFERRED — behind multi-agent orchestration (Plan.md §8, not v0.1 scope) |
 | Thinking indicator (§2.20) | DONE — live rotating microcopy (2s tick while running) + post-turn `◆ Thought for 3.4s · 38 tok/s` receipt on success (rate omitted when provider tokens unknown; shell escapes receipt-free) |
-| Action grouping (§2.20) | DONE — static parent + indented children for runs of 2+ read-only pairs; lone pairs render ungrouped; no toggle key |
+| Action grouping (§2.20) | DONE — static parent + indented children for runs of 2+ read-only pairs; lone pairs render ungrouped; no toggle key; children carry call lines only (results suppressed per §2.10, 2026-09-08) |
 | Large-paste collapse (§2.21) | DONE — token + off-screen body, submit-time substitution, Backspace unit-delete, orphan notice, submit-time cap |
 | Mouse scroll + drag-select copy (2026-09-08) | DONE — cell-motion tracking, transcript-absolute drag-select with edge autoscroll, clipboard ladder + OSC 52 fallback, `Alt+M` passthrough |
 | Image/file paste path (§2.21) | TODO — `@`-reference of an existing image file works today via §2.5; no clipboard-to-file helper documented or built yet |

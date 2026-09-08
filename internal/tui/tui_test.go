@@ -1848,7 +1848,9 @@ func TestShellArmedSubmitRunsCommand(t *testing.T) {
 
 func TestGroupReadsUnderParent(t *testing.T) {
 	// Consecutive read-only pairs buffer and flush as one parent plus
-	// indented glyph-less children on the next event.
+	// indented glyph-less children on the next event. Successful reads
+	// carry no result lines (spec §2.10) — the call line IS the receipt —
+	// but a grep count survives on its call line.
 	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
 	base := len(m.lines)
 	m.renderEvent(agent.Event{Kind: "tool_call", Text: "read_file a.txt"})
@@ -1860,17 +1862,20 @@ func TestGroupReadsUnderParent(t *testing.T) {
 	}
 	m.renderEvent(agent.Event{Kind: "assistant", Text: "hi"})
 	got := m.lines[base:]
-	if len(got) != 6 {
-		t.Fatalf("parent + 2x(call+result) + assistant = 6 lines, got %d:\n%s", len(got), stripANSI(strings.Join(got, "\n")))
+	if len(got) != 4 {
+		t.Fatalf("parent + 2 calls + assistant = 4 lines (results suppressed), got %d:\n%s", len(got), stripANSI(strings.Join(got, "\n")))
 	}
 	parent := stripANSI(got[0])
 	if !strings.HasPrefix(parent, "● ") || !strings.Contains(parent, "×2") {
 		t.Fatalf("parent must landmark the run, got %q", parent)
 	}
-	if !strings.Contains(parent, "read_file") || !strings.Contains(parent, "grep") {
-		t.Fatalf("parent must name both kinds, got %q", parent)
+	if !strings.Contains(parent, "Read") || !strings.Contains(parent, "Grep") {
+		t.Fatalf("parent must name both kinds in transcript vocabulary, got %q", parent)
 	}
-	for _, ln := range got[1:5] {
+	if strings.Contains(parent, "read_file") {
+		t.Fatalf("parent must not leak raw tool names, got %q", parent)
+	}
+	for _, ln := range got[1:3] {
 		if !strings.HasPrefix(ln, "  ") {
 			t.Fatalf("children must indent 2 spaces, got %q", stripANSI(ln))
 		}
@@ -1878,21 +1883,28 @@ func TestGroupReadsUnderParent(t *testing.T) {
 			t.Fatalf("children must drop the glyph, got %q", stripANSI(ln))
 		}
 	}
-	if !strings.Contains(stripANSI(got[5]), "hi") {
-		t.Fatalf("assistant must follow the group, got %q", stripANSI(got[5]))
+	if child := stripANSI(got[1]); !strings.Contains(child, "Read") || strings.Contains(child, "read_file") {
+		t.Fatalf("child must use transcript vocabulary, got %q", child)
+	}
+	if child := stripANSI(got[2]); !strings.Contains(child, "1 match in 1 file") {
+		t.Fatalf("grep child must carry its count, got %q", child)
+	}
+	if !strings.Contains(stripANSI(got[3]), "hi") {
+		t.Fatalf("assistant must follow the group, got %q", stripANSI(got[3]))
 	}
 }
 
 func TestSinglePairUngrouped(t *testing.T) {
-	// One pair is not a group: today's exact shape, no parent.
+	// One pair is not a group: call line only (a lone read carries no
+	// result line per spec §2.10), no parent.
 	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
 	base := len(m.lines)
 	m.renderEvent(agent.Event{Kind: "tool_call", Text: "read_file a.txt"})
 	m.renderEvent(agent.Event{Kind: "tool_result", Text: "content a"})
 	m.renderEvent(agent.Event{Kind: "assistant", Text: "hi"})
 	got := m.lines[base:]
-	if len(got) != 3 {
-		t.Fatalf("single pair + assistant = 3 lines, got %d", len(got))
+	if len(got) != 2 {
+		t.Fatalf("single call + assistant = 2 lines (result suppressed), got %d", len(got))
 	}
 	if plain := stripANSI(got[0]); !strings.HasPrefix(plain, "● ") || strings.Contains(plain, "×") {
 		t.Fatalf("lone call keeps its glyph, no parent: %q", plain)

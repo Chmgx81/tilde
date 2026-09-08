@@ -1207,7 +1207,7 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 			return nil
 		}
 		m.flushGroup()
-		m.renderCallLine(e.Text, false)
+		m.renderCallLine(e.Text, false, "")
 		return nil
 	}
 	if e.Kind == "tool_result" {
@@ -1279,21 +1279,142 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 }
 
 // renderCallLine renders one tool-call row in the fixed vocabulary
-// (spec §1.2: muted glyph, full-bright verb, muted target). Grouped
-// children trade the glyph for a 2-space indent — same words, quieter
-// gutter. Callers append through m.append so wrapping still applies.
-func (m *Model) renderCallLine(text string, grouped bool) {
+// (spec §1.2: muted glyph, full-bright verb, muted target; spec §2.10:
+// the verb is a fixed-width left-aligned column). Grouped children
+// trade the glyph for a 2-space indent — same words, quieter gutter.
+// Callers append through m.append so wrapping still applies.
+func (m *Model) renderCallLine(text string, grouped bool, extra string) {
 	verb, rest := splitVerb(text)
+	disp := toolDisplayVerb(verb)
+	if len(disp) < verbWidth {
+		disp += strings.Repeat(" ", verbWidth-len(disp))
+	}
 	prefix := lipgloss.NewStyle().Foreground(fgMuted).Render("● ")
 	if grouped {
 		prefix = "  "
 	}
 	m.append(prefix +
-		lipgloss.NewStyle().Foreground(fg).Render(verb) +
-		lipgloss.NewStyle().Foreground(fgMuted).Render(rest))
+		lipgloss.NewStyle().Foreground(fg).Render(disp) +
+		lipgloss.NewStyle().Foreground(fgMuted).Render(rest+extra))
 }
 
-// flushGroup renders buffered read-only pairs: a lone pair exactly as an
+// toolDisplayVerb maps raw tool names to the fixed transcript
+// vocabulary (spec §2.10): Read, Listed, Grep, Write, Edit, Run.
+// Anything outside the six keeps its raw name — the vocabulary covers
+// the hot path, not every future tool.
+func toolDisplayVerb(raw string) string {
+	switch raw {
+	case "read_file":
+		return "Read"
+	case "glob":
+		return "Listed"
+	case "grep":
+		return "Grep"
+	case "write_file":
+		return "Write"
+	case "edit_file":
+		return "Edit"
+	case "shell_command", "shell_poll":
+		return "Run"
+	default:
+		return raw
+	}
+}
+
+// verbWidth pads the verb column: fixed-width, left-aligned (spec
+// §2.10) — "Listed" is the longest of the six. Longer raw names are
+// never truncated, only shorter ones padded.
+const verbWidth = 6
+
+// showReadOnlyResult reports whether a read-only (ParallelSafe) result
+// earns transcript space (spec §2.10): a silent success gets no ⎿ line
+// — the call line IS the receipt. Failures, empty-match notices,
+// input-repair receipts, unchanged-read stubs, and ask-decision
+// receipts always show: those are results, not rhythm. The match is
+// against Dispatch/loop templates (single sources), never content.
+
+func showReadOnlyResult(result string) bool {
+	t := strings.TrimSpace(result)
+	for _, p := range []string{`tool "`, "[", "unknown tool", "Plan mode is read-only", "identical read-only"} {
+		if strings.HasPrefix(t, p) {
+			return true
+		}
+	}
+	return strings.Contains(t, "→ denied") || strings.Contains(t, "→ approved")
+}
+
+// groupResultText returns the result worth rendering for one buffered
+// pair, or "" when a read-only success carries nothing beyond "it
+// ran" — the caller must skip it entirely (no blank line left
+// behind, or suppression would still cost a row per call).
+func groupResultText(it groupItem) string {
+	verb, _ := splitVerb(it.call)
+	if agent.ParallelSafe(verb) && !showReadOnlyResult(it.result) {
+		return ""
+	}
+	return it.result
+}
+
+// grepCountSuffix lifts a match count onto the call line (spec §2.10's
+// `● Grep "x" · 3 matches in 2 files`): the result body itself stays
+// suppressed, but its headline survives on the call. Empty when the
+// result renders normally (failures, notices) or holds no matches.
+func grepCountSuffix(it groupItem) string {
+	verb, _ := splitVerb(it.call)
+	if verb != "grep" || showReadOnlyResult(it.result) {
+		return ""
+	}
+	matches, files := countGrepMatches(it.result)
+	if matches == 0 {
+		return ""
+	}
+	ms := "match"
+	if matches != 1 {
+		ms = "matches"
+	}
+	fs := "file"
+	if files != 1 {
+		fs = "files"
+	}
+	return fmt.Sprintf("  · %d %s in %d %s", matches, ms, files, fs)
+}
+
+// countGrepMatches counts `path:line: text` rows, skipping the fence
+// markers and bracketed notices the tools wrap output in.
+func countGrepMatches(result string) (matches int, files int) {
+	seen := map[string]bool{}
+	for _, ln := range strings.Split(result, "\n") {
+		ln = strings.TrimSpace(ln)
+		if ln == "" || strings.HasPrefix(ln, "---") || strings.HasPrefix(ln, "[") {
+			continue
+		}
+		i := strings.Index(ln, ":")
+		if i <= 0 {
+			continue
+		}
+		rest := ln[i+1:]
+		j := strings.Index(rest, ":")
+		if j <= 0 || !isDigits(rest[:j]) {
+			continue
+		}
+		matches++
+		seen[ln[:i]] = true
+	}
+	return matches, len(seen)
+}
+
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // ungrouped call + result (no parent for one child — that would be noise),
 // a run as one parent landmark plus indented children. Results keep their
 // full rendering, indented to sit under the parent.
@@ -1304,26 +1425,32 @@ func (m *Model) flushGroup() {
 		return
 	}
 	if len(items) == 1 {
-		m.renderCallLine(items[0].call, false)
-		m.append(renderToolResult(items[0].result))
+		m.renderCallLine(items[0].call, false, grepCountSuffix(items[0]))
+		if res := groupResultText(items[0]); res != "" {
+			m.append(renderToolResult(res))
+		}
 		return
 	}
 	var names []string
 	seen := map[string]bool{}
 	for _, it := range items {
 		verb, _ := splitVerb(it.call)
-		if !seen[verb] {
-			seen[verb] = true
-			names = append(names, verb)
+		disp := toolDisplayVerb(verb)
+		if !seen[disp] {
+			seen[disp] = true
+			names = append(names, disp)
 		}
 	}
 	m.append(lipgloss.NewStyle().Foreground(fgMuted).Render("● ") +
 		lipgloss.NewStyle().Foreground(fg).Render(strings.Join(names, ", ")+fmt.Sprintf(" ×%d", len(items))))
 	for _, it := range items {
-		m.renderCallLine(it.call, true)
-		for _, ln := range strings.Split(renderToolResult(it.result), "\n") {
+		m.renderCallLine(it.call, true, grepCountSuffix(it))
+		res := groupResultText(it)
+		if res == "" {
+			continue
+		}
+		for _, ln := range strings.Split(renderToolResult(res), "\n") {
 			if strings.TrimSpace(stripANSI(ln)) == "" {
-				m.append("")
 				continue
 			}
 			m.append("  " + ln)

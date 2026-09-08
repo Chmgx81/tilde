@@ -190,6 +190,19 @@ func (t *WriteFile) Exec(_ context.Context, args map[string]any) (string, error)
 			return "", fmt.Errorf("%s", msg)
 		}
 	}
+	// The before-state for an overwrite diff must be captured BEFORE
+	// the write below — after it, the old content is gone. Best
+	// effort: a failed pre-read only degrades the receipt, never blocks.
+	existed := true
+	if _, serr := os.Stat(full); os.IsNotExist(serr) {
+		existed = false
+	}
+	var before []string
+	if existed {
+		if old, rerr := readFileNoFollow(t.Root, p); rerr == nil {
+			before = lineSplit(string(old))
+		}
+	}
 	// No-follow open: a link planted after contain() must not redirect
 	// the write outside the project (parent dirs via the same helper).
 	if err := writeFileNoFollow(t.Root, p, []byte(c), 0o644); err != nil {
@@ -197,7 +210,26 @@ func (t *WriteFile) Exec(_ context.Context, args map[string]any) (string, error)
 	}
 	t.Seen.Mark(p) // what was just written is now the seen state
 	rel, _ := filepath.Rel(t.Root, full)
-	return fmt.Sprintf("wrote %s (%d bytes). Re-read it with read_file to verify.", rel, len(c)), nil
+	after := lineSplit(c)
+	if !existed {
+		// New file (spec §2.11): a `+N (new file: path)` stat plus the
+		// raw body for the TUI's plain numbered renderer. Bounded —
+		// an unbounded new file in the transcript is flooding by
+		// another name.
+		body := after
+		notice := ""
+		if len(body) > newFileCap {
+			body = body[:newFileCap]
+			notice = fmt.Sprintf("\n[new file truncated in transcript: %d more lines — read the file to review]", len(after)-newFileCap)
+		}
+		return fmt.Sprintf("+%d (new file: %s)\n%s%s", len(after), rel, strings.Join(body, "\n"), notice), nil
+	}
+	if before == nil {
+		return fmt.Sprintf("+%d -0 (overwrote existing file; before-state unreadable)", len(after)), nil
+	}
+	// Overwrite renders as an edit diff (spec §2.11): Write names the
+	// tool, but what the user needs is the change, not a verb debate.
+	return SpanDiff(rel, before, after, 0, len(before), len(after), " (overwrote existing file)"), nil
 }
 
 // --- edit_file (mutating, targeted) ---
@@ -284,7 +316,19 @@ func (t *EditFile) Exec(_ context.Context, args map[string]any) (string, error) 
 		return "", fmt.Errorf("cannot write %q: %v", p, err)
 	}
 	t.Seen.Mark(p) // what was just written is now the seen state
-	return fmt.Sprintf("edited %s (+%d -%d bytes). Re-read the region to verify.%s", p, len(newStr), len(oldS), actualNote), nil
+	// The transcript shows the change, not prose about it (spec §2.11):
+	// a `+N -M` stat line plus one unified hunk. The model reads the
+	// same payload in context — the diff IS the verification, so the
+	// old "re-read to verify" nudge is retired.
+	before := lineSplit(content)
+	after := lineSplit(updated)
+	oldBlock := lineSplit(actualOld)
+	newBlock := lineSplit(newStr)
+	start := spanStart(content, actualOld)
+	if start < 0 {
+		start = 0
+	}
+	return SpanDiff(p, before, after, start, len(oldBlock), len(newBlock), actualNote), nil
 }
 
 // stripReadPrefixes drops fenced-read `N: ` line prefixes from old when

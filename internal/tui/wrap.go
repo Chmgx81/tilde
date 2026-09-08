@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -75,24 +76,40 @@ func renderThinking(text string) string {
 }
 
 // renderToolResult styles a tool result (spec §2.10): the ⎿ line for the
-// one-line case, or a bounded, styled block for multi-line output. Diff
-// runs inside the output get full diff highlighting; everything else is
-// muted. Truncation is announced, never silent.
+// one-line case, or a bounded, styled block for multi-line output. Edit
+// and new-file payloads (stat first line) route to internal/tui/diff.go
+// for full formatting; git-style diff runs inside other output keep
+// their highlighting inline; everything else is muted. Truncation is
+// announced, never silent.
 func renderToolResult(text string) string {
 	body := strings.TrimRight(text, "\n")
 	if body == "" {
 		return lipgloss.NewStyle().Foreground(fgDim).Render("  ⎿ (no output)")
 	}
 	lines := strings.Split(body, "\n")
+	if stat, ok := splitDiffStat(lines[0]); ok {
+		rest, truncated := capResultLines(lines[1:])
+		out := []string{statResultLine(stat)}
+		out = append(out, renderDiffPayload(rest)...)
+		if truncated {
+			out = append(out, truncResultLine())
+		}
+		return strings.Join(out, "\n")
+	}
+	if n, path, ok := splitNewFileStat(lines[0]); ok {
+		rest, truncated := capResultLines(lines[1:])
+		out := []string{statResultLine(fmt.Sprintf("+%d (new file)", n))}
+		out = append(out, renderNewFilePayload(path, n, rest)...)
+		if truncated {
+			out = append(out, truncResultLine())
+		}
+		return strings.Join(out, "\n")
+	}
 	if len(lines) == 1 && !isDiffLine(body) {
 		return lipgloss.NewStyle().Foreground(fgDim).Render("  ⎿ ") +
 			lipgloss.NewStyle().Foreground(fgMuted).Render(body)
 	}
-	truncated := false
-	if len(lines) > maxToolResultLines {
-		lines = lines[:maxToolResultLines]
-		truncated = true
-	}
+	lines, truncated := capResultLines(lines)
 	var out []string
 	i := 0
 	for i < len(lines) {
@@ -109,10 +126,31 @@ func renderToolResult(text string) string {
 		i++
 	}
 	if truncated {
-		out = append(out, lipgloss.NewStyle().Foreground(fgDim).Render(
-			"  ⎿ … truncated in transcript — the session log keeps the full output."))
+		out = append(out, truncResultLine())
 	}
 	return strings.Join(out, "\n")
+}
+
+// capResultLines bounds a result body for the transcript; the session
+// log always keeps everything. Shared by the diff/new-file branches
+// and the generic path below — one cap, one notice, no forks.
+func capResultLines(lines []string) (kept []string, truncated bool) {
+	if len(lines) > maxToolResultLines {
+		return lines[:maxToolResultLines], true
+	}
+	return lines, false
+}
+
+// statResultLine renders a diff/new-file stat as the ⎿ receipt line.
+func statResultLine(stat string) string {
+	return lipgloss.NewStyle().Foreground(fgDim).Render("  ⎿ ") +
+		lipgloss.NewStyle().Foreground(fgMuted).Render(stat)
+}
+
+// truncResultLine announces transcript truncation (never silent).
+func truncResultLine() string {
+	return lipgloss.NewStyle().Foreground(fgDim).Render(
+		"  ⎿ … truncated in transcript — the session log keeps the full output.")
 }
 
 // isDiffLine reports whether ln belongs to a unified-diff run: hunk
