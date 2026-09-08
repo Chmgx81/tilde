@@ -1,8 +1,9 @@
 # tilde policies — loaded at startup from the project root (missing file =
 # built-in defaults). Tiers are checked in order; deny beats ask beats
 # allow, always — including against --yes and Auto mode.
-# `deny`/`ask` name tools; shell commands are additionally judged per
-# pipeline segment on parsed argv (rm -rf, sudo, curl, git force-push…).
+# `deny`/`ask`/`allow` name tools here; shell destructive shapes
+# (rm -rf, sudo, curl, git force-push…) deny in code via shellDeny and
+# always win, even when shell_command itself is only ask-tier.
 # The bwrap sandbox stays the hard backstop behind all of this.
 deny: []
 ask:
@@ -12,6 +13,9 @@ ask:
   - git_worktree_add
   - git_worktree_remove
   - mcp_call
+  - todo_write
+  - ask_user
+  - web_fetch
 allow:
   - read_file
   - grep

@@ -39,10 +39,24 @@ type Index struct {
 
 // Scan rebuilds the index from <root>/.tilde/skills (project) and
 // ~/.tilde/skills (user). Missing directories are empty, not errors.
-func Scan(root string) (*Index, error) {
+// Pass allowProject=false to skip project skills (untrusted source) —
+// mirrors --hooks-project / --mcp-project opt-in.
+func Scan(root string, allowProject ...bool) (*Index, error) {
+	allow := true
+	if len(allowProject) > 0 {
+		allow = allowProject[0]
+	}
 	userDir := ""
 	if home, _ := os.UserHomeDir(); home != "" {
 		userDir = filepath.Join(home, ".tilde", "skills")
+	}
+	projDir := filepath.Join(root, ".tilde", "skills")
+	if !allow {
+		if _, err := os.Stat(projDir); err == nil {
+			fmt.Fprintf(os.Stderr, "tilde: project skills present but NOT loaded (untrusted source) — pass --skills-project to opt in\n")
+		}
+		ix, err := ScanDirs("", userDir)
+		return ix, err
 	}
 	ix, err := ScanDirs(root, userDir)
 	if ix != nil {
@@ -58,6 +72,7 @@ func Scan(root string) (*Index, error) {
 }
 
 // ScanDirs is Scan with an explicit user dir (evals isolate here).
+// An empty root skips project skills entirely.
 func ScanDirs(root, userDir string) (*Index, error) {
 	ix := &Index{byName: map[string]Skill{}}
 	dirs := []struct {
@@ -65,7 +80,12 @@ func ScanDirs(root, userDir string) (*Index, error) {
 		scope string
 	}{
 		{userDir, "user"},
-		{filepath.Join(root, ".tilde", "skills"), "project"},
+	}
+	if root != "" {
+		dirs = append(dirs, struct {
+			dir   string
+			scope string
+		}{filepath.Join(root, ".tilde", "skills"), "project"})
 	}
 	var errs []string
 	for _, d := range dirs {

@@ -221,7 +221,13 @@ func NewExploreChild(parent *Loop, task string) *Loop {
 			// Stateless tools are safe to share.
 			switch t := tl.(type) {
 			case *tools.ReadFile:
-				reg.Register(&tools.ReadFile{Root: t.Root, Seen: t.Seen})
+				reg.Register(&tools.ReadFile{Root: t.Root, Seen: tools.NewSeenMap(parent.Cfg.Root)})
+			case *tools.Grep:
+				reg.Register(&tools.Grep{Root: t.Root, Seen: tools.NewSeenMap(parent.Cfg.Root)})
+			case *tools.WriteFile:
+				reg.Register(&tools.WriteFile{Root: t.Root, Seen: tools.NewSeenMap(parent.Cfg.Root)})
+			case *tools.EditFile:
+				reg.Register(&tools.EditFile{Root: t.Root, Seen: tools.NewSeenMap(parent.Cfg.Root)})
 			case *tools.Shell:
 				reg.Register(&tools.Shell{Root: t.Root, BgAfter: t.BgAfter, BgMax: t.BgMax, Sandbox: t.Sandbox, Tasks: &tools.TaskManager{}})
 			default:

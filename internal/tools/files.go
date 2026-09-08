@@ -145,6 +145,9 @@ func (t *ReadFile) Exec(_ context.Context, args map[string]any) (string, error) 
 	if t.Seen != nil {
 		t.Seen.Mark(p)
 	}
+	if note := AnnotateHighRisk(p); note != "" {
+		fmt.Fprintf(&b, "\n[%s]\n", note)
+	}
 	return Fence(b.String()), nil
 }
 

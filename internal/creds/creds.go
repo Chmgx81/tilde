@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 // Store is the on-disk credential file. Safe for concurrent use; the
@@ -60,6 +61,11 @@ func (s *Store) Set(providerID, key string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	unlock, err := lockFile(s.path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	m, err := s.read()
 	if err != nil {
 		return err
@@ -76,6 +82,11 @@ func (s *Store) Delete(providerID string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	unlock, err := lockFile(s.path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	m, err := s.read()
 	if err != nil {
 		return err
@@ -142,4 +153,24 @@ func Mask(key string) string {
 		return "····"
 	}
 	return "····" + key[len(key)-4:]
+}
+
+// lockFile takes an inter-process exclusive lock guarding read-modify-write.
+// Best-effort on platforms without flock: falls back to in-process mutex only.
+func lockFile(storePath string) (func(), error) {
+	if err := os.MkdirAll(filepath.Dir(storePath), 0o700); err != nil {
+		return nil, fmt.Errorf("create %s: %w", filepath.Dir(storePath), err)
+	}
+	f, err := os.OpenFile(storePath+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("lock %s: %w", storePath, err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("lock %s: %w", storePath, err)
+	}
+	return func() {
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
+	}, nil
 }

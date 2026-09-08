@@ -67,10 +67,13 @@ gets built against.
 | Language | **Go** | Bottleneck is I/O (API calls, subprocess, UI), not compute. Goroutines map cleanly onto the agent loop + streaming + concurrent tool calls. Simpler language = more solo hours spent on the harness, not the borrow checker. |
 | TUI | **Bubble Tea + Lip Gloss + Glamour** | Best-in-class message-passing TUI stack in any language right now; matches the agent loop's event-driven shape directly. |
 | Sandboxing | **bubblewrap (bwrap), OS-level, Linux** | Isolation is a kernel/OS job, not a language job — Go calls the same syscalls Rust would. bwrap + denied network egress by default is a cheap, mature primitive, not a big engineering lift. |
-| Diffing | **sergi/go-diff** | Already integrated; powers inline diff rendering and per-edit revert. |
+| Diffing | **`internal/tui/diff.go` hand-rolled hunk renderer (no diff dep)** | Inline diff rendering and per-edit revert with zero extra dependencies. |
 | Sessions | **JSONL, append-only** | Matches the industry-standard pattern (every major agent does this): replayable, crash-safe, never rewritten in place. |
 | Model access | **Provider interface** | Local Ollama as the zero-cost default; any HTTP-based model (Anthropic, OpenAI-compatible, OpenRouter) plugs into the same interface later. |
-| Permissions | **`policies.yaml`: deny / ask / allow tiers** | Matches the field's converged pattern (Command Code, Claude Code, etc. all land on some version of this). Deny beats ask beats allow, always. |
+| Permissions | **`policies.yaml`: deny / ask / allow tiers** | Matches the field's converged pattern (Command Code, Claude Code, etc. all land on some version of this). Deny beats ask beats allow, always. Ask tier also covers `todo_write` / `ask_user` / `web_fetch`. |
+| Secrets | **`internal/tools/scrub.go`: Scrub + IsHighRiskPath** | Dispatch redacts secret-shaped output before it re-enters context; `read_file` annotates high-risk paths. |
+| Project trust | **`internal/trust` + `tilde trust` / `untrust`** | Project skills stay unloaded until `--skills-project` (or env) or a recorded trust; missing/corrupt store resolves to untrusted. |
+| Compaction budget | **`provider.BudgetFor` model-aware auto-size** | Catalog context window when known, else 32000; explicit `--budget` / `TILDE_BUDGET` always wins. |
 
 ---
 
@@ -92,7 +95,7 @@ gets built against.
                       ▼
  ┌─────────────────────────────────────────────┐
  │  TOOL REGISTRY: read · edit · write · shell   │
- │                  grep · glob · git             │
+ │      grep · glob · git · todo · ask · fetch   │
  │  each gated by policies.yaml (deny/ask/allow) │
  │  each executes inside the bwrap sandbox       │
  └───────────────────┬───────────────────────────┘
@@ -125,6 +128,8 @@ lives (not in the model).
   one-line reason plus what to send next.
 - Never return a bare error. Wrap it in enough context that the model can
   self-correct without a retry-and-guess cycle.
+- Dispatch secret-scrubs every result (`internal/tools/scrub.go`);
+  `read_file` annotates high-risk paths instead of silently serving them.
 - Repair, don't reject, malformed input. See "the repair layer" below —
   this is the single highest-priority piece of harness work for a project
   running local models, because local/open models make the *same small set*
@@ -225,6 +230,9 @@ Rule of thumb for writing new policy rules: match `deny`/`ask` aggressively
 (catch env-var tricks, wrapper commands, compound commands), match `allow`
 conservatively (an allow rule should only ever say yes to exactly what it
 names). Failing toward a prompt is always the safe direction.
+Ask tier also gates `todo_write`, `ask_user` (unwired/denied callback reads
+as deny), and `web_fetch` — which additionally needs `TILDE_ALLOW_NET=1`,
+http(s) only, 30s timeout, 5MB cap.
 
 ---
 
@@ -260,7 +268,8 @@ summary to the append-only log. Live: `--budget 300` run compacted
 mid-session with a correct goal/findings/decisions summary and continued.
 Plan-escape proven by test at both layers — loop check and registry gate —
 with on-disk assertions that blocked writes create nothing. Budget via
-`--budget` / `TILDE_BUDGET` (default 32000); TUI status bar shows
+`--budget` / `TILDE_BUDGET` (default 32000, explicit always wins) else the
+model catalog window (`provider.BudgetFor`) when known; TUI status bar shows
 `model · ctx %` turning amber past 80%.
 
 ### Phase 2 — OS-level sandboxing (done, verified 2026-09-05)
@@ -372,7 +381,10 @@ bwrap (documented trust note). Live: real python MCP server listed + called
 (HELLO, fenced) through the binary; picker load + no-restart install on
 the PTY. Honest note: the default 4B local model reads skill bodies fine
 but follows standing instructions weakly — mechanism proven, model is the
-ceiling. Marketplace/registry proper stays future work.
+ceiling. Project skills also load via recorded `tilde trust`
+(missing/corrupt store = untrusted); loader is
+`skills.Scan(root, allowProject)`, flag `--skills-project` /
+`TILDE_SKILLS_PROJECT`. Marketplace/registry proper stays future work.
 
 ### Phase 7 — Evaluation & consistency (done, first measurement 2026-09-05)
 A small trajectory-level eval suite (not just unit tests on harness
@@ -411,6 +423,13 @@ eval failure cluster) with loud disclosure. A PTY-driven review round
 closed the loop on spec compliance (colored gutter, diff styling, red
 handoff panel, branch status, confirm preemption) and added parallel
 read-only tool batches, provider usage accounting, and headless JSON.
+New tools `todo_write`, `ask_user` (unwired/denied callback reads as deny),
+and `web_fetch` (http(s) only, 30s timeout, 5MB cap, `TILDE_ALLOW_NET`-gated)
+registered in `buildHarness`, all ask-tier. Explore children get per-child
+`SeenMap`s for Read/Grep/Write/Edit (no shared read cache). Creds store
+takes an inter-process `flock`; CI runs in `.github/workflows/ci.yml`, and
+`docs/ARCHITECTURE.md` is the module-layout pointer (Plan stays behavior
+source of truth).
 
 ### Red-team validation (HTB AI Red Teamer curriculum, 8 live drills)
 All 8 drills executed against the running binary; every boundary held:
@@ -593,6 +612,12 @@ As of v0.6+:
 | Skills loader | DONE — Phase 6 |
 | MCP client | DONE — Phase 6 |
 | Trajectory-level eval suite | DONE — Phase 7 (7/15 → 22/24 final, costs + paths tracked) |
+| todo_write / ask_user / web_fetch (ask-tier) | DONE — buildHarness-registered; web_fetch also needs TILDE_ALLOW_NET |
+| Secret scrubber + high-risk path notes | DONE — Dispatch Scrub, read annotate |
+| Project trust gate (`tilde trust`/`untrust`) | DONE — skills fallback, deny on missing/corrupt store |
+| Model-aware compaction budget | DONE — BudgetFor catalog window unless explicit |
+| Creds store inter-process lock | DONE — flock read-modify-write |
+| CI + ARCHITECTURE pointer | DONE — .github/workflows/ci.yml; docs/ARCHITECTURE.md |
 | Timeline action grouping (spec §2.20) | TODO — spec ready, not yet built |
 | Thinking-duration indicator (spec §2.20) | TODO — spec ready, not yet built |
 | Write-verb / new-file rendering (spec §2.10-2.11) | TODO — spec ready, not yet built |

@@ -31,6 +31,7 @@ import (
 	"tilde/internal/session"
 	"tilde/internal/skills"
 	"tilde/internal/tools"
+	"tilde/internal/trust"
 	"tilde/internal/tui"
 	"tilde/internal/update"
 )
@@ -50,6 +51,7 @@ func main() {
 	outputFlag := flag.String("output", "text", "Headless output: text | json (one object per line)")
 	mcpProject := flag.Bool("mcp-project", false, "Start project .tilde/mcp.json servers (same as TILDE_MCP_PROJECT=1; user servers always start)")
 	hooksProject := flag.Bool("hooks-project", false, "Run project .tilde/hooks.yaml scripts (same as TILDE_HOOKS_PROJECT=1; user hooks always run)")
+	skillsProject := flag.Bool("skills-project", false, "Load project .tilde/skills (same as TILDE_SKILLS_PROJECT=1; user skills always load)")
 	providerFlag := flag.String("provider", "ollama", "Model provider: ollama | openai | anthropic | openrouter | gemini | opencode")
 	apiBase := flag.String("api-base", "", "OpenAI-compatible base URL (default $OPENAI_BASE_URL or https://api.openai.com/v1)")
 	apiKey := flag.String("api-key", "", "API key (default $OPENAI_API_KEY)")
@@ -68,6 +70,17 @@ func main() {
 	if flag.NArg() > 0 && flag.Arg(0) == "update" {
 		if err := update.Run(); err != nil {
 			fmt.Fprintln(os.Stderr, "tilde: update:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// `tilde trust [dir]` / `tilde untrust [dir]` records project-folder
+	// trust (Pi resolveProjectTrusted pattern). Headless never writes
+	// trust without this explicit action; a miss always reads as denied.
+	if flag.NArg() > 0 && (flag.Arg(0) == "trust" || flag.Arg(0) == "untrust") {
+		if err := runTrustCmd(flag.Arg(0), flag.Args()); err != nil {
+			fmt.Fprintln(os.Stderr, "tilde:", err)
 			os.Exit(1)
 		}
 		return
@@ -106,7 +119,11 @@ func main() {
 	polFile := loadPolicies(root)
 	reg := h.reg
 	reg.Hooks = loadHooks(root, *hooksProject || os.Getenv("TILDE_HOOKS_PROJECT") == "1")
-	skIx, skErr := skills.Scan(root) // progressive disclosure index
+	allowSkills := *skillsProject || os.Getenv("TILDE_SKILLS_PROJECT") == "1"
+	if !allowSkills && trust.IsTrusted(root) {
+		allowSkills = true
+	}
+	skIx, skErr := skills.Scan(root, allowSkills) // progressive disclosure index
 	if skErr != nil {
 		fmt.Fprintf(os.Stderr, "tilde: warning: %v\n", skErr)
 	}
@@ -153,12 +170,20 @@ func main() {
 	}
 
 	budget := *budgetFlag
+	budgetExplicit := *budgetFlag > 0 || os.Getenv("TILDE_BUDGET") != ""
 	if budget <= 0 {
 		budget = 32000
 		if env := os.Getenv("TILDE_BUDGET"); env != "" {
 			var n int
 			if _, err := fmt.Sscanf(env, "%d", &n); err == nil && n > 0 {
 				budget = n
+			}
+		}
+		if !budgetExplicit {
+			if pid, mname, ok := provider.ParseModelRef(prov.Name()); ok {
+				if b := provider.BudgetFor(pid, mname); b > 0 {
+					budget = b
+				}
 			}
 		}
 	}
@@ -235,6 +260,12 @@ func main() {
 	}
 	if mcpMgr != nil {
 		loop.Cfg.MCP = mcpMgr
+	}
+	h.ask.AskUser = func(tool string, args map[string]any) bool {
+		if loop.Cfg.AskUser == nil {
+			return false
+		}
+		return loop.Cfg.AskUser(tool, args)
 	}
 
 	// --skill preloads one skill body before anything else runs.
@@ -338,6 +369,9 @@ type harness struct {
 	seen  *tools.SeenMap
 	tasks *tools.TaskManager
 	undo  *tools.UndoManager
+	todos *tools.TodoManager
+	ask   *tools.Ask
+	fetch *tools.WebFetch
 }
 
 // loadPolicies reads policies.yaml (missing = built-in defaults).
@@ -440,6 +474,9 @@ func buildHarness(root string) harness {
 		seen:  tools.NewSeenMap(root),
 		tasks: &tools.TaskManager{},
 		undo:  &tools.UndoManager{Root: root},
+		todos: &tools.TodoManager{},
+		ask:   &tools.Ask{},
+		fetch: &tools.WebFetch{AllowNet: func() bool { return os.Getenv("TILDE_ALLOW_NET") == "1" }},
 	}
 	h.reg.Undo = h.undo
 	h.seen.Tasks = h.tasks // stale checks see in-flight background work
@@ -455,6 +492,9 @@ func buildHarness(root string) harness {
 	h.reg.Register(&tools.GitWorktreeList{Root: root})
 	h.reg.Register(&tools.GitWorktreeAdd{Root: root})
 	h.reg.Register(&tools.GitWorktreeRemove{Root: root})
+	h.reg.Register(&tools.TodoWrite{Mgr: h.todos})
+	h.reg.Register(h.ask)
+	h.reg.Register(h.fetch)
 	return h
 }
 
@@ -602,6 +642,7 @@ func runEval(root string, prov provider.Provider, filter string, trials int) {
 		if trialMCP != nil && len(trialMCP.Live()) > 0 {
 			loop.Cfg.MCP = trialMCP
 		}
+		h.ask.AskUser = loop.Cfg.AskUser
 		reg.Gate = func(toolName string, args map[string]any) (bool, string) {
 			if err := loop.GetMode().AllowedCall(toolName, args); err != nil {
 				return false, err.Error()
@@ -809,6 +850,41 @@ func firstLine(s string) string {
 // silently swallow (--resume or --eval): fail loud at parse time.
 func conflictingFlags(prompt string, resume, eval bool) bool {
 	return prompt != "" && (resume || eval)
+}
+
+// runTrustCmd implements `tilde trust [dir]` / `tilde untrust [dir]`.
+// Explicit user action only; headless callers must invoke it directly.
+func runTrustCmd(verb string, args []string) error {
+	dir := ""
+	if len(args) > 1 {
+		dir = args[1]
+	}
+	if dir == "" {
+		var err error
+		dir, err = os.Getwd()
+		if err != nil {
+			return fmt.Errorf("cannot determine working dir: %w", err)
+		}
+	}
+	if strings.HasPrefix(dir, "-") {
+		return fmt.Errorf("usage: tilde %s [dir] — got flag-like %q", verb, dir)
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("resolve %q: %w", dir, err)
+	}
+	if verb == "trust" {
+		if err := trust.SetTrusted(abs, true); err != nil {
+			return err
+		}
+		fmt.Printf("trusted %s\n", abs)
+		return nil
+	}
+	if err := trust.SetTrusted(abs, false); err != nil {
+		return err
+	}
+	fmt.Printf("untrusted %s\n", abs)
+	return nil
 }
 
 // headlessExitCode maps a loop outcome to the spec §4 table: 3 = provider

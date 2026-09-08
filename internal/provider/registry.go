@@ -145,6 +145,18 @@ func CatalogIDs(providerID string) []string {
 	return out
 }
 
+// BudgetFor returns the compaction budget for a provider/model pair:
+// the catalog context window when known, else 0 (caller keeps default).
+// A 0 Context means unreported and is skipped by design.
+func BudgetFor(providerID, model string) int {
+	for _, cm := range Catalog[strings.ToLower(providerID)] {
+		if cm.ID == model && cm.Context > 0 {
+			return cm.Context
+		}
+	}
+	return 0
+}
+
 // ParseModelRef splits "provider/model" (the /model select form). The
 // one-element form means "model on the current provider" and is the
 // caller's to interpret; on !ok both returns are empty.

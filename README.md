@@ -154,8 +154,9 @@ Same tasks, repeated trials, fresh directories. Exits 1 if any task scores zero.
   segment, never substring-matched.
 - **Real isolation.** Every shell call runs under bwrap: disposable root,
   no network by default.
-- **Explicit opt-in.** Project MCP servers and hooks stay off until you pass
-  `--mcp-project` / `--hooks-project`.
+- **Explicit opt-in.** Project MCP servers, hooks, and skills stay off until you pass
+  `--mcp-project` / `--hooks-project` / `--skills-project` (or `tilde trust` the folder).
+- **Scrubbed.** Shell/file/search output is secret-scrubbed before the model sees it; sensitive paths warn.
 - **Reversible.** Every mutating step snapshots for `/undo`.
 - **Untrusted by default.** Tool output is data, never instructions. Package
   installs stay Ask-tier with an unverified-name warning — approve only names
@@ -171,7 +172,7 @@ already does those jobs.
 | File | Scope | Notes |
 |---|---|---|
 | `policies.yaml` | project root | Live tiers; deny beats `--yes` and Auto |
-| `.tilde/skills/*.md` | project | Progressive disclosure (one-liners in prompt, bodies on load) |
+| `.tilde/skills/*.md` | project | Needs `--skills-project`; progressive disclosure (one-liners in prompt, bodies on load) |
 | `~/.tilde/skills/*.md` | user | Same, personal |
 | `.tilde/hooks.yaml` | project | Needs `--hooks-project`; `before` blocks, `after` observes |
 | `~/.tilde/hooks.yaml` | user | Always on |
@@ -181,10 +182,10 @@ already does those jobs.
 | Env var | Meaning |
 |---|---|
 | `TILDE_MODEL` / `OLLAMA_HOST` | Model + Ollama endpoint |
-| `TILDE_BUDGET` | Token budget before auto-compaction (default 32000) |
+| `TILDE_BUDGET` | Token budget before auto-compaction (default 32000, or model window when known) |
 | `TILDE_NO_SANDBOX=1` | Disable bwrap (loud warning, not recommended) |
-| `TILDE_ALLOW_NET=1` | Lift the sandbox network ban (policy still judges commands) |
-| `TILDE_MCP_PROJECT=1` / `TILDE_HOOKS_PROJECT=1` | Opt into project MCP / hooks |
+| `TILDE_ALLOW_NET=1` | Lift the sandbox network ban (policy still judges commands; required for `web_fetch`) |
+| `TILDE_MCP_PROJECT=1` / `TILDE_HOOKS_PROJECT=1` / `TILDE_SKILLS_PROJECT=1` | Opt into project MCP / hooks / skills |
 | `TILDE_PASTE_LINES` | Large-paste collapse threshold in lines (default 4, `0` disables) |
 | `TILDE_ARROWS=scroll` | Arrows scroll the transcript instead of recalling history |
 | `TILDE_NO_UPDATE_CHECK=1` | Disable the daily update check and splash notice |
@@ -193,6 +194,8 @@ already does those jobs.
 | `OPENROUTER_API_KEY` | `--provider openrouter` (free `:free` models included) |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `--provider gemini` (either name works; free tier via AI Studio) |
 | `OPENCODE_API_KEY` | `--provider opencode` (Zen dashboard key; curated coding models) |
+
+Trust a folder once — `tilde trust [dir]` (`tilde untrust [dir]` to revoke) — instead of per-run project flags.
 
 ## Providers
 
@@ -233,7 +236,8 @@ second-guessed.
 main.go                  flags, wiring, headless + eval runners
 internal/agent/          ReAct loop, modes gate, subagents, compaction hooks
 internal/tools/          read/edit/write/shell/grep/glob/git + registry,
-                         repair layer, undo, sandbox tasks, containment
+                         todo/ask/web_fetch, scrubbed output, undo, containment
+internal/trust/          explicit project trust, no auto-trust
 internal/sandbox/        bwrap isolation (fs + net, PID namespace)
 internal/policy/         deny/ask/allow + destructive-command parser
 internal/mode/           Plan/Build/Auto gate
@@ -263,3 +267,5 @@ go test -count=1 ./...                          # full suite, fresh
 go test -race ./internal/agent/ ./internal/tools/
 ./tilde --eval --trials 3                        # consistency number
 ```
+
+CI (`.github/workflows/ci.yml`) runs vet + tests + build on push/PR.

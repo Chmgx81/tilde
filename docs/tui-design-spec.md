@@ -259,7 +259,7 @@ up through history.
   dirty-file count (`fg-dim`).
 - Right: active model (`fg-muted`) → context usage as a percentage *and* raw
   count (`fg-muted`, turns `accent-plan` colored text — not border — past 80%,
-  see §2.11).
+  see §2.11). Budget ceiling auto-sizes to the catalog window when known unless `--budget` / `TILDE_BUDGET` was set explicit (§2.24).
 - This line never wraps. If the terminal is too narrow, drop the raw token
   count before dropping anything else; drop the branch dirty-count before the
   branch name; never drop the mode word.
@@ -382,6 +382,7 @@ Inline dropdown directly beneath the composer, replacing nothing above it.
 
 - Source tag (`project` / `user`) always right-aligned, always `fg-dim` — it's
   provenance metadata, lowest priority information on the row.
+- Project skills load only with `--skills-project` / `TILDE_SKILLS_PROJECT=1` (same opt-in as hooks) or a `tilde trust` / `untrust [dir]` record (`~/.tilde/trusted.json`, `0600`, CLI-only — not a `/` command); otherwise the picker shows user skills only with a stderr notice.
 - Loading a skill posts a single `●` event into the transcript ("Loaded skill:
   code-review") so it's part of the auditable history, not a silent context
   injection.
@@ -471,10 +472,12 @@ anything else, so its consistency matters more than its cleverness.
   thing a user scanning the gutter needs the verb column to answer without
   reading the `⎿` line underneath.
 - Target/argument follows in `fg-muted`.
+- New tools keep their raw names (outside the six-verb vocabulary above), all ask-tier and Plan-allowed (none are Plan-blocked mutating): `● todo_write` (serial checklist: `add|done|list|clear`); `● ask_user` (routes to the host AskUser callback — nil/unwired or denied reads as denied, propose a safe default); `● web_fetch` (http(s) GET only, 30s timeout, 5MB hard cap, needs `TILDE_ALLOW_NET=1` — denied otherwise without retry; allowed in Plan since it mutates no repo state).
 - Result (`⎿`) is optional and only appears when there's something worth
   reporting beyond "it ran" — a diff stat, a test summary, an error. A silent
   success with nothing worth surfacing gets no `⎿` line at all; don't manufacture
   one just for rhythm's sake.
+- Tool output is secret-scrubbed centrally (`<<REDACTED:name>>`); reads of sensitive paths (`.env`, `*.pem`, `id_*`, …) carry a warn-notice instead of raw content (same discipline as the §2.22 export rule).
 - Final `✓ Done` (or `✗ Failed`) closes the group — this is the only place
   `✓`/`✗` appear outside of individual test/check results, reserved for "this
   whole unit of work is over."

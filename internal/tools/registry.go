@@ -122,6 +122,9 @@ func (r *Registry) Dispatch(ctx context.Context, name string, args map[string]an
 	if out == "" {
 		return receipt + fmt.Sprintf("tool %q returned no output. This means nothing matched / the file was empty — not an error. Do not retry the identical call; broaden the search or read a different path.", name)
 	}
+	if scrubbed, _ := Scrub(out); scrubbed != out {
+		out = scrubbed
+	}
 	return receipt + out
 }
 
