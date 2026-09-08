@@ -12,33 +12,42 @@
 ![Linux](https://img.shields.io/badge/platform-linux-E6E6E6?style=flat-square)
 ![Sandboxed](https://img.shields.io/badge/sandbox-bubblewrap-4CAF50?style=flat-square)
 
-**A terminal-native coding agent.** You type a goal — it reads your codebase,
-edits files, runs commands, and reports back. Security-first, local-first,
-and measured: repeat-run reliability per task instead of single-demo
-applause (qwen3.8-4b: **22/24 ≈ 92%** on the built-in trajectory suite).
+**A terminal-native coding agent.** Describe a goal in plain language — tilde
+reads your codebase, edits files, runs commands in a sandbox, and reports back
+with the diff.
 
-Where your code goes:
+No telemetry, no tracking, no accounts. The only network connection tilde ever
+opens is the model endpoint you configured.
 
-| Setup | Model runs | Network | Your code leaves the machine? |
+| Setup | Model runs | Sandbox network | Your code leaves the machine? |
 |---|---|---|---|
-| Default (Ollama) | localhost | Denied in sandbox | **Never** |
-| `--provider openai` | Your endpoint / API | Provider API only | Only to the endpoint you configured |
+| Default (Ollama) | localhost | Denied | **Never** |
+| `--provider openai` | Your endpoint / API | Denied | Only to the endpoint you configured |
 
-No telemetry, no tracking, no accounts. The only network connection tilde
-ever opens is to the model endpoint you configured.
+## Why tilde
+
+- **Security-first.** A policy engine gates every tool call; shell commands run
+  inside a bubblewrap jail with a disposable filesystem and no network. Deny
+  tiers beat `--yes`, beat Auto mode, beat everything.
+- **Local-first.** The default provider is Ollama on localhost — your code and
+  your context never leave the machine unless you point it somewhere else.
+- **Measured, not demoed.** Repeat-run reliability per task instead of
+  single-demo applause: same tasks, repeated trials, fresh directories,
+  trajectory scoring. Qwen3.8-4b scores **22/24 ≈ 92%** on the built-in suite.
 
 ## Quickstart
 
-**1. Build** — prerequisites: Go 1.25+, Linux with
-[bubblewrap](https://github.com/containers/bubblewrap)
-(shell calls refuse to run without it).
+Prerequisites: Go 1.25+, Linux with
+[bubblewrap](https://github.com/containers/bubblewrap) — shell calls refuse to
+run without it.
+
+**1. Build and install** (to `~/.local/bin`; override with `PREFIX=...`):
 
 ```sh
 ./install.sh
 ```
 
-This builds and installs to `~/.local/bin` (`PREFIX=... ./install.sh`
-to override). Alternative (manual build, no install):
+Or build without installing:
 
 ```sh
 go build -o tilde .
@@ -53,7 +62,7 @@ ollama serve & ollama pull qwen3.8-4b:16k
 **3. Run it in your repo** — starts in read-only Plan mode:
 
 ```sh
-cd ~/my-project && ./tilde
+cd ~/my-project && tilde
 ```
 
 ```text
@@ -67,49 +76,78 @@ cd ~/my-project && ./tilde
 ✓ Done
 ```
 
-## Daily use
+## Interface
 
-| Input | Meaning |
+### Keys & commands
+
+| Input | Action |
 |---|---|
-| `Tab` | Cycle Plan → Build → Auto (Plan is read-only, enforced in code, not in prose) |
-| `/command` | Palette: `/mode /compact /clear /sandbox /diff /undo /sessions /model /skills /help` |
+| `Tab` | Cycle Plan → Build → Auto (read-only enforcement is in code, not prose) |
+| `/` | Command palette: `/mode /compact /clear /copy /sandbox /diff /undo /sessions /model /skills /help /quit` |
 | `@file` | Fuzzy file reference (respects `.gitignore`) |
-| `!cmd` | Run a shell command (same sandbox + confirm tier as the agent) |
-| `Ctrl+C` | Cancel the turn (again to quit) · `Ctrl+J` newline · `esc` dismiss |
+| `!cmd` | Shell escape — same sandbox and confirm tier as the agent |
+| `Ctrl+Y` | Copy the latest assistant response (raw markdown) |
+| `Ctrl+C` | Cancel the turn (again to quit) |
+| `Esc Esc` | Cancel the running turn |
+| `Ctrl+J` | Newline inside the composer |
+| `↑ ↓` | Prompt history; picks up the transcript when nothing to recall |
+| `PgUp/PgDn` · `Ctrl+U/D` | Scroll the transcript by half a screen |
+| `Home/End` | Jump to top of history / back to live |
 
-Headless (CI, scripts):
+### Mouse & clipboard
+
+| Gesture | Action |
+|---|---|
+| Wheel / two-finger scroll | Scroll the transcript — even mid-drag or with a picker open |
+| Left-drag on the transcript | Select rows and release to copy: inverse-video highlight, transcript-absolute anchors (hold at a screen edge to autoscroll), plain-text copy with a toast. A bare click copies nothing |
+| `Shift` + drag | Bypass to the terminal's own selection |
+| `Alt+M` | Pause mouse tracking entirely for native terminal selection (rectangles, terminal copy chords); the hint bar shows the paused state until re-armed |
+
+Clipboard writes try `xclip`/`xsel` first and fall back to **OSC 52** — the
+terminal sets its own clipboard, so copying works on bare Wayland (kitty,
+WezTerm, alacritty), over SSH, and in tmux with `set -g set-clipboard on`,
+with nothing to install. Collapsed pastes copy expanded: a
+`[Pasted text #N …]` token in the transcript ships the full original body to
+the clipboard, while the screen keeps the compact token. `/copy [n]` copies
+the whole transcript (or one line) the same way.
+
+### Headless
 
 ```sh
 tilde --prompt "Fix the failing test" --mode build --yes
 tilde --prompt "..." --output json   # JSONL events + result object with token usage
 ```
 
-Measure, don't demo:
+### Evaluation
 
 ```sh
 tilde --eval [--eval-task write-two-files,rename-chain] [--trials 3]
 ```
 
-Same tasks, repeated trials, fresh dirs, trajectory scoring. Exit 1 if
-any task scores zero.
+Same tasks, repeated trials, fresh directories, trajectory scoring. Exits 1
+if any task scores zero.
 
 ## Safety model
 
-Three tiers — `deny / ask / allow`, deny always wins, `policies.yaml`
-is loaded at startup from your project root (fail-closed: a broken
-file refuses to start). Destructive shell shapes are parsed per pipeline
-segment, never substring-matched. Every shell runs under bwrap with a
-disposable root and no network by default. Project MCP servers and
-hooks need explicit opt-in. Every mutating step snapshots for `/undo`.
-All tool output is fenced as untrusted data. Package installs (`pip`,
-`npm`, `go get`, …) stay Ask-tier but carry an explicit
-unverified-package-name warning — approve only names you checked
-(slopsquatting: models hallucinate plausible names attackers
-pre-register). With default-deny egress the fetch fails closed anyway.
+- **Three tiers** — `deny / ask / allow`. Deny always wins. `policies.yaml`
+  loads at startup from the project root and fails closed: a broken file
+  refuses to start the session.
+- **Structural parsing.** Destructive shell shapes are recognized per pipeline
+  segment, never substring-matched.
+- **Real isolation.** Every shell call runs under bwrap with a disposable root
+  and no network by default.
+- **Explicit opt-in.** Project MCP servers and hooks do nothing until you ask
+  for them (`--mcp-project`, `--hooks-project`).
+- **Reversible.** Every mutating step snapshots for `/undo`.
+- **Untrusted by default.** All tool output is fenced as data, never
+  instructions. Package installs (`pip`, `npm`, `go get`, …) stay Ask-tier
+  with an explicit unverified-package-name warning — approve only names you
+  have checked (models hallucinate plausible package names that attackers
+  pre-register; with default-deny egress the fetch fails closed anyway).
 
-Honest scope: Linux only (sandboxing is OS-level work and bwrap is the
-mechanism); no clipboard capture, no cloud runs, no multi-session tabs —
-the terminal already does those jobs.
+**Honest scope:** Linux only (sandboxing is OS-level work and bwrap is the
+mechanism); no clipboard capture, no cloud runs, no multi-session tabs — the
+terminal already does those jobs.
 
 ## Configuration
 
@@ -131,18 +169,19 @@ the terminal already does those jobs.
 | `TILDE_ALLOW_NET=1` | Lift the sandbox network ban (policy still judges commands) |
 | `TILDE_MCP_PROJECT=1` / `TILDE_HOOKS_PROJECT=1` | Opt into project MCP / hooks |
 | `TILDE_PASTE_LINES` | Large-paste collapse threshold in lines (default 4, `0` disables) |
-| `TILDE_ARROWS=scroll` | Arrows scroll the transcript (non-empty Up still recalls, navigating Down still walks); default recalls history |
+| `TILDE_ARROWS=scroll` | Arrows scroll the transcript instead of recalling history |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` | `--provider openai` credentials |
 | `ANTHROPIC_API_KEY` | `--provider anthropic` credentials (native Messages API; needs live-key verification) |
 
-Mouse wheel and touchpad scroll (two fingers) scroll the transcript natively via cell-motion mouse tracking; keyboard bindings are unchanged. Drag with the touchpad (or left mouse button) to select transcript rows — the selection is transcript-absolute (wheel mid-drag keeps it glued to the content; holding the drag at a screen edge autoscrolls), and release copies the selection as plain text with a toast, no setup needed (OSC 52 fallback means it works on bare Wayland/SSH without xclip). Collapsed pastes copy expanded: a `[Pasted text #N …]` token in the transcript carries the full original body into the clipboard, even though the screen shows only the token. `Alt+M` still pauses tracking for the terminal's own selection (rectangles, terminal copy chords); `Ctrl+Y` copies the latest response and `/copy [n]` copies the transcript (or one line).
+## Providers
 
-Providers: `--provider ollama` (default), `--provider openai`
-(OpenAI-compatible, BYOK, verified against Ollama's `/v1`), or
-`--provider anthropic` (native Messages API, `ANTHROPIC_API_KEY`; wire
-format httptest-verified, awaiting a live-key run).
+- `--provider ollama` (default) — localhost, private by construction.
+- `--provider openai` — OpenAI-compatible, bring your own key and base URL;
+  wire format verified against Ollama's `/v1`.
+- `--provider anthropic` — native Messages API (`ANTHROPIC_API_KEY`); wire
+  format httptest-verified, awaiting a live-key run.
 
-## Layout (for maintainers)
+## Architecture
 
 ```text
 main.go                  flags, wiring, headless + eval runners
@@ -165,10 +204,10 @@ docs/                    Plan.md · tui-design-spec.md · agents-survey-2026.md
 examples/                sample skill, hooks.yaml, mcp.json
 ```
 
-Rules for changing anything: every tool result names its own recovery
-(never silence, never bare errors); fail loud, cheap, and closed; repair
-the model's mistakes instead of punishing them; every token must justify
-itself. Full checklist: `docs/Plan.md §1`.
+Design rules for changing anything: every tool result names its own recovery
+(never silence, never bare errors); fail loud, cheap, and closed; repair the
+model's mistakes instead of punishing them; every token must justify itself.
+Full checklist in `docs/Plan.md §1`.
 
 ## Development
 
@@ -176,5 +215,5 @@ itself. Full checklist: `docs/Plan.md §1`.
 go build ./... && go vet ./... && gofmt -l .   # must all be silent
 go test -count=1 ./...                          # full suite, fresh
 go test -race ./internal/agent/ ./internal/tools/
-./tilde --eval --trials 3                       # consistency number
+./tilde --eval --trials 3                        # consistency number
 ```
