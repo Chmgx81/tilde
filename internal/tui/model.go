@@ -159,6 +159,7 @@ type Model struct {
 	toastAt      time.Time
 	pendingShell string // shell-escape command awaiting confirm
 	splashN      int    // transcript line count of the fresh-session splash block
+	updateNote   string // cached update-available line ("" = none); re-appended on splash refits
 	// lastAssistant is the latest assistant prose verbatim (raw markdown,
 	// not the Glamour rendering) — the Ctrl+Y copy source.
 	lastAssistant string
@@ -280,6 +281,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.stick = true // resizes re-anchor to the tail
 		if m.splashN > 0 && len(m.lines) == m.splashN {
 			m.lines = splashLines(m.root, m.model, m.budget, m.vp.Width)
+			if m.updateNote != "" {
+				m.lines = append(m.lines, lipgloss.NewStyle().Foreground(fgDim).Render(m.updateNote))
+			}
 			m.splashN = len(m.lines)
 			m.vp.SetContent(strings.Join(m.lines, "\n"))
 		}
@@ -1456,6 +1460,23 @@ func (m *Model) flushGroup() {
 			m.append("  " + ln)
 		}
 	}
+}
+
+// SetUpdateNotice inserts the cached update-available line at the end
+// of a pristine splash (spec §2.1 real estate, dim, no glyph). It is a
+// no-op once the transcript has moved past the splash — a notice must
+// never splice into the middle of a live session. The width-resize
+// path below re-appends it via updateNote so it survives refits.
+func (m *Model) SetUpdateNotice(note string) {
+	if note == "" || m.updateNote != "" {
+		return
+	}
+	if !(m.splashN > 0 && len(m.lines) == m.splashN) {
+		return
+	}
+	m.updateNote = note
+	m.lines = append(m.lines, lipgloss.NewStyle().Foreground(fgDim).Render(note))
+	m.splashN = len(m.lines)
 }
 
 func (m Model) modeColor() lipgloss.Color {

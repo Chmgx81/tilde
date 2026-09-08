@@ -75,6 +75,29 @@ cd ~/my-project && tilde
 ✓ Done
 ```
 
+## Updating
+
+tilde tells you when it goes stale. Once a day, interactive starts
+compare your build against `main` on GitHub (one anonymous API read —
+no identity or telemetry leaves the machine) and cache the answer. When
+an update exists, the welcome panel gains a dim line:
+
+```text
+update available (a1b2c3d → e5f6a7b) — run tilde update
+```
+
+```sh
+tilde update   # pull --ff-only, rebuild, smoke-test, reinstall, restart
+```
+
+Fail-closed like everything else: a dirty source tree refuses (commit or
+stash first — nothing is stashed or reset for you), and a failed build
+or smoke test never touches your installed binary (atomic rename, never
+a partial overwrite). Headless runs never check; `TILDE_NO_UPDATE_CHECK=1`
+opts out entirely. No install record (`~/.tilde/install.json`, written by
+`install.sh`) means `tilde update` can't find its source — reinstall from
+a fresh clone instead.
+
 ## Interface
 
 ### Keys & commands
@@ -164,6 +187,7 @@ already does those jobs.
 | `TILDE_MCP_PROJECT=1` / `TILDE_HOOKS_PROJECT=1` | Opt into project MCP / hooks |
 | `TILDE_PASTE_LINES` | Large-paste collapse threshold in lines (default 4, `0` disables) |
 | `TILDE_ARROWS=scroll` | Arrows scroll the transcript instead of recalling history |
+| `TILDE_NO_UPDATE_CHECK=1` | Disable the daily update check and splash notice |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` | `--provider openai` credentials |
 | `ANTHROPIC_API_KEY` | `--provider anthropic` (native API; needs live-key verification) |
 | `OPENROUTER_API_KEY` | `--provider openrouter` (free `:free` models included) |

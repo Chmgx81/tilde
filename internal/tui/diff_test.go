@@ -221,3 +221,35 @@ func firstArg(args map[string]any) string {
 	}
 	return ""
 }
+
+func TestSetUpdateNotice(t *testing.T) {
+	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	splashN := m.splashN
+	note := "update available (a1b2c3d → e5f6a7b) — run tilde update"
+	m.SetUpdateNotice(note)
+	if m.splashN != splashN+1 {
+		t.Fatal("notice must extend the pristine splash by exactly one line")
+	}
+	if got := stripANSI(m.lines[len(m.lines)-1]); got != note {
+		t.Fatalf("notice must sit last and plain, got %q", got)
+	}
+	// Second call is a no-op (no duplicates across refits).
+	m.SetUpdateNotice(note)
+	if m.splashN != splashN+1 || len(m.lines) != splashN+1 {
+		t.Fatal("repeat notice must not duplicate")
+	}
+	// Empty notice is a no-op.
+	m2 := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	m2.SetUpdateNotice("")
+	if m2.splashN != len(m2.lines) {
+		t.Fatal("empty notice must change nothing")
+	}
+	// Past the splash, notices never splice into a live transcript.
+	m3 := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	m3.append("user work here")
+	before := len(m3.lines)
+	m3.SetUpdateNotice(note)
+	if len(m3.lines) != before {
+		t.Fatal("notice must not splice into a live transcript")
+	}
+}

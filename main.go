@@ -32,6 +32,7 @@ import (
 	"tilde/internal/skills"
 	"tilde/internal/tools"
 	"tilde/internal/tui"
+	"tilde/internal/update"
 )
 
 func main() {
@@ -59,6 +60,17 @@ func main() {
 	if conflictingFlags(*prompt, *resumeFlag, *evalFlag) {
 		fmt.Fprintln(os.Stderr, "tilde: --prompt cannot be combined with --resume or --eval — run one at a time")
 		os.Exit(2)
+	}
+
+	// `tilde update` pulls, rebuilds, and reinstalls from the install
+	// source. Dispatched before anything session-shaped: it needs no
+	// provider, no log, and no TUI — and it must never create them.
+	if flag.NArg() > 0 && flag.Arg(0) == "update" {
+		if err := update.Run(); err != nil {
+			fmt.Fprintln(os.Stderr, "tilde: update:", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	// Crash hint, not a prompt: a previous run that never wrote its
@@ -276,6 +288,13 @@ func main() {
 	// set a budget: an explicit --budget or $TILDE_BUDGET is never
 	// second-guessed by a model switch.
 	tm.SetBudgetExplicit(*budgetFlag > 0 || os.Getenv("TILDE_BUDGET") != "")
+	// Update notice (cached, free) + background refresh (one API read
+	// per day, silent). Interactive path only — headless runs returned
+	// above and never phone home.
+	if note := update.Notice(); note != "" {
+		tm.SetUpdateNotice(note)
+	}
+	go update.RefreshAsync()
 	var prog *tea.Program
 	tm.BindProgram(&prog)
 	// Cell-motion mouse tracking is on: wheel motion (touchpad two-finger
