@@ -158,7 +158,7 @@ func (m *Model) loginStatus() {
 		}
 		m.append(fmt.Sprintf("%-10s %-8s %-9s %s", st.Provider.ID, st.Source.String(), key, model))
 	}
-	m.append(dim.Render("login a cloud provider: /login <openai|anthropic>"))
+	m.append(dim.Render("login a cloud provider: /login <" + strings.Join(provider.CloudIDs(), "|") + ">"))
 }
 
 // currentModelRef reports the model id for providerID ("p/m"): the live

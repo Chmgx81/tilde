@@ -49,7 +49,7 @@ func main() {
 	outputFlag := flag.String("output", "text", "Headless output: text | json (one object per line)")
 	mcpProject := flag.Bool("mcp-project", false, "Start project .tilde/mcp.json servers (same as TILDE_MCP_PROJECT=1; user servers always start)")
 	hooksProject := flag.Bool("hooks-project", false, "Run project .tilde/hooks.yaml scripts (same as TILDE_HOOKS_PROJECT=1; user hooks always run)")
-	providerFlag := flag.String("provider", "ollama", "Model provider: ollama | openai | anthropic")
+	providerFlag := flag.String("provider", "ollama", "Model provider: ollama | openai | anthropic | openrouter")
 	apiBase := flag.String("api-base", "", "OpenAI-compatible base URL (default $OPENAI_BASE_URL or https://api.openai.com/v1)")
 	apiKey := flag.String("api-key", "", "API key (default $OPENAI_API_KEY)")
 	flag.Parse()
@@ -344,7 +344,7 @@ func selectProvider(which, model, base, key string, store *creds.Store) (provide
 	switch id {
 	case "ollama":
 		return provider.NewOllama(model), ""
-	case "openai", "anthropic":
+	case "openai", "anthropic", "openrouter":
 		resolved, _ := provider.Resolve(store, id, map[string]string{})
 		// The explicit flag outranks everything (ladder step zero) —
 		// Resolve saw the store, not the flag; apply it here.
@@ -356,14 +356,20 @@ func selectProvider(which, model, base, key string, store *creds.Store) (provide
 			if id == "anthropic" {
 				envName = "ANTHROPIC_API_KEY"
 			}
+			if id == "openrouter" {
+				envName = "OPENROUTER_API_KEY"
+			}
 			return nil, fmt.Sprintf("--provider %s needs an API key: run /login %s in the TUI, or set $%s, or pass --api-key", id, id, envName)
 		}
 		if id == "openai" {
 			return provider.NewOpenAI(model, base, resolved), ""
 		}
+		if id == "openrouter" {
+			return provider.NewOpenRouter(model, base, resolved), ""
+		}
 		return provider.NewAnthropic(model, base, resolved), ""
 	default:
-		return nil, fmt.Sprintf("unknown --provider %q (use ollama | openai | anthropic, or provider/model)", which)
+		return nil, fmt.Sprintf("unknown --provider %q (use ollama | openai | anthropic | openrouter, or provider/model)", which)
 	}
 }
 

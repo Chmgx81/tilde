@@ -1246,7 +1246,9 @@ the single most common cloud-auth support question.
   APIs) is maintenance overhead, not a win.
 - `/model <provider/…>` lists catalog entries in the §2.4 dropdown plus a
   trailing `custom…` row for raw model IDs (proxies, previews). A user
-  never has to type a model ID blind.
+  never has to type a model ID blind. (v1: bare `/model` prints the
+  catalog as transcript rows with the live backend marked — same data,
+  no picker state.)
 - Selecting a catalog model with no explicit `TILDE_BUDGET` auto-sizes
   the budget from that model's context window — a 1M-window model should
   not inherit a 32k assumption.
@@ -1419,7 +1421,7 @@ new section per version:
 | Large-paste collapse (§2.21) | DONE — token + off-screen body, submit-time substitution, Backspace unit-delete, orphan notice, submit-time cap |
 | Mouse scroll + drag-select copy (2026-09-08) | DONE — cell-motion tracking, transcript-absolute drag-select with edge autoscroll, clipboard ladder + OSC 52 fallback, `Alt+M` passthrough |
 | Image/file paste path (§2.21) | TODO — `@`-reference of an existing image file works today via §2.5; no clipboard-to-file helper documented or built yet |
-| Cloud onboarding (§2.24) | DONE (v1) — registry + ladder (flag>stored 0600>env), masked /login with validate-before-store, /logout, /model provider switching + catalog listing, budget auto-size unless explicit, command-shaped 401/404 hints; deferred: OAuth, keychain, conditional reachability splash, closest-id 404 suggestion |
+| Cloud onboarding (§2.24) | DONE (v1) — registry + ladder (flag>stored 0600>env), masked /login with validate-before-store, /logout, /model provider switching + catalog listing, budget auto-size unless explicit, command-shaped 401/404 hints; openrouter first-class with free-models shelf; deferred: OAuth, keychain, conditional reachability splash, closest-id 404 suggestion |
 | Session export / brief (§2.22) | TODO — spec ready; no `/export` command or brief template built yet |
 | Provider retry/backoff + classified errors (§2.23) | TODO — provider calls currently fail without a retry loop or kind classification |
 | Startup config validation, fail-closed (§2.23) | PARTIAL — sandbox already fails closed (Plan.md Phase 2); `policies.yaml` parse errors not yet distinguished from other startup failures |

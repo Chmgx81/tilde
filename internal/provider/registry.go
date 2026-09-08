@@ -48,6 +48,7 @@ var Descriptions = []ProviderDesc{
 	{ID: "ollama", Name: "Ollama (local)", NeedsKey: false},
 	{ID: "openai", Name: "OpenAI", NeedsKey: true, EnvKey: "OPENAI_API_KEY"},
 	{ID: "anthropic", Name: "Anthropic", NeedsKey: true, EnvKey: "ANTHROPIC_API_KEY"},
+	{ID: "openrouter", Name: "OpenRouter (incl. free models)", NeedsKey: true, EnvKey: "OPENROUTER_API_KEY"},
 }
 
 // CloudIDs lists the backends /login accepts.
@@ -92,6 +93,17 @@ var Catalog = map[string][]CatalogModel{
 		{"claude-sonnet-4-6", "Claude Sonnet 4.6", 200000, 3, 15},
 		{"claude-opus-4-6", "Claude Opus 4.6", 200000, 5, 25},
 		{"claude-haiku-4-5", "Claude Haiku 4.5", 200000, 1, 5},
+	},
+	// Free per-token models (account + key still required). Free-tier
+	// ids rotate as vendors join/leave — refreshed 2026-09-08; if a 404
+	// points here, check openrouter.ai/models or pass any custom id to
+	// /model. Prices are 0: the point of this shelf is $0 experiments.
+	"openrouter": {
+		{"meta-llama/llama-3.3-70b-instruct:free", "Llama 3.3 70B (free)", 128000, 0, 0},
+		{"qwen/qwen-2.5-72b-instruct:free", "Qwen 2.5 72B (free)", 32768, 0, 0},
+		{"mistralai/mistral-small-3.1-24b-instruct:free", "Mistral Small 3.1 (free)", 128000, 0, 0},
+		{"google/gemma-3-27b-it:free", "Gemma 3 27B (free)", 128000, 0, 0},
+		{"deepseek/deepseek-chat:free", "DeepSeek Chat (free)", 64000, 0, 0},
 	},
 }
 
@@ -196,12 +208,15 @@ func Factory(providerID, model, base, key string) (Provider, error) {
 	switch strings.ToLower(providerID) {
 	case "", "ollama":
 		return NewOllama(model), nil
-	case "openai", "anthropic":
+	case "openai", "anthropic", "openrouter":
 		id := strings.ToLower(providerID)
 		if key == "" {
 			envKey := "OPENAI_API_KEY"
 			if id == "anthropic" {
 				envKey = "ANTHROPIC_API_KEY"
+			}
+			if id == "openrouter" {
+				envKey = "OPENROUTER_API_KEY"
 			}
 			return nil, fmt.Errorf("no %s API key — run /login %s or set $%s", id, id, envKey)
 		}
@@ -212,6 +227,9 @@ func Factory(providerID, model, base, key string) (Provider, error) {
 		}
 		if id == "openai" {
 			return NewOpenAI(model, base, key), nil
+		}
+		if id == "openrouter" {
+			return NewOpenRouter(model, base, key), nil
 		}
 		return NewAnthropic(model, base, key), nil
 	default:

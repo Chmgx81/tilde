@@ -24,7 +24,7 @@ func splashPanel(width int) []string {
 		"default on Linux. See policies.yaml to review current rules.",
 		"",
 		"Local models run via Ollama. On a machine without a GPU, /login <pro-",
-		"vider> arms a cloud key (openai, anthropic) and /model <provider/model>",
+		"vider> arms a cloud key (openai, anthropic, openrouter) and /model <provider/model>",
 		"switches mid-session.",
 	}, "\n"))
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).

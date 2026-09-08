@@ -446,6 +446,8 @@ func (m *Model) setModelOnCurrent(model string) tea.Cmd {
 		p.Model = model
 	case *provider.OpenAI:
 		p.Model = model
+	case *provider.OpenRouter:
+		p.Model = model
 	case *provider.Anthropic:
 		p.Model = model
 	default:

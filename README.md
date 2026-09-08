@@ -182,14 +182,20 @@ No GPU? No problem — cloud keys are a first-class path, not a fallback.
   wire format verified against Ollama's `/v1`.
 - `--provider anthropic` — native Messages API (`ANTHROPIC_API_KEY`); wire
   format httptest-verified, awaiting a live-key run.
+- `--provider openrouter` — one key reaching many vendors via
+  OpenRouter's OpenAI-compatible endpoint (`OPENROUTER_API_KEY`);
+  ships a **free-models shelf** (`:free` suffix, $0 per token — account
+  + key still required). Cheapest way to try tilde with no GPU and no
+  vendor account beyond OpenRouter.
 
 Credential ladder (no silent fallbacks — a stored key owns its provider):
 
 1. `--api-key` flag (this process only, wins outright)
-2. Stored credential — `/login <openai|anthropic>` prompts (masked,
+2. Stored credential — `/login <openai|anthropic|openrouter>` prompts (masked,
    never echoed or logged), validates with a one-token request, and
    stores in `~/.tilde/credentials.json` (mode `0600`); `/logout` removes
-3. Ambient env var — `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
+3. Ambient env var — `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
+   `OPENROUTER_API_KEY`
 
 Bare `/login` shows a status matrix (provider · source · key tail ·
 model). Mid-session switching keeps transcript and session intact:

@@ -103,7 +103,7 @@ func TestBareModelListsCatalog(t *testing.T) {
 	m := newLoginTestModel(t, "ollama/llama3.2")
 	m.switchModel("")
 	joined := strings.Join(m.lines, "\n")
-	for _, want := range []string{"openai/gpt-5.2", "anthropic/", "/model <provider/model>"} {
+	for _, want := range []string{"openai/gpt-5.2", "anthropic/", "openrouter/", "/model <provider/model>"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("bare /model must list the catalog (missing %q):\n%s", want, joined)
 		}
@@ -118,6 +118,20 @@ func TestAutosizeBudgetFromCatalog(t *testing.T) {
 	m.switchProvider("openai", "gpt-5.2", "")
 	if m.budget != 400000 {
 		t.Fatalf("budget should auto-size to 400000, got %d", m.budget)
+	}
+}
+
+func TestSwitchProviderOpenRouterDefaultsFree(t *testing.T) {
+	m := newLoginTestModel(t, "ollama/llama3.2")
+	m.keyOverrides = map[string]string{"openrouter": "test-key-1234"}
+	m.SetBudgetExplicit(false)
+	m.switchProvider("openrouter", "", "")
+	want := "openrouter/" + provider.CatalogIDs("openrouter")[0]
+	if m.model != want {
+		t.Fatalf("empty model should default to first free entry: got %q, want %q", m.model, want)
+	}
+	if m.budget != 128000 {
+		t.Fatalf("budget should auto-size to the free model's window (128000), got %d", m.budget)
 	}
 }
 
