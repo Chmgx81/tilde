@@ -2273,7 +2273,8 @@ func TestPasteSubmitCapsPayload(t *testing.T) {
 	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
 	var b strings.Builder
 	for i := 0; i < 5; i++ {
-		b.WriteString(strings.Repeat("y", 4000) + "\n")
+		b.WriteString(strings.Repeat("y", 4000))
+		b.WriteByte('\n')
 	}
 	m = pasteViaUpdate(m, b.String())
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})

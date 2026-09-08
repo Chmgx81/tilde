@@ -39,16 +39,23 @@ func SpanDiff(path string, before, after []string, start, oldCount, newCount int
 		cEnd = len(before)
 	}
 	var b strings.Builder
-	b.WriteString(stat + "\n")
-	b.WriteString("--- " + path + "\n")
-	b.WriteString("+++ " + path + "\n")
+	b.WriteString(stat)
+	b.WriteByte('\n')
+	b.WriteString("--- ")
+	b.WriteString(path)
+	b.WriteByte('\n')
+	b.WriteString("+++ ")
+	b.WriteString(path)
+	b.WriteByte('\n')
 	fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@\n", oldStart, oldCount, newStart, newCount)
 	body := 0
 	flush := func(prefix, line string) bool {
 		if body >= diffCap {
 			return false
 		}
-		b.WriteString(prefix + line + "\n")
+		b.WriteString(prefix)
+		b.WriteString(line)
+		b.WriteByte('\n')
 		body++
 		return true
 	}

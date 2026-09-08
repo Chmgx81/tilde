@@ -12,6 +12,57 @@ import (
 // prose in fg, strong/headings bold fg, code muted — and crucially no
 // background fills anywhere (spec §2.11's no-fill rule applies to prose
 // code blocks too, not just diffs).
+// tildeChroma maps syntax tokens onto the transcript palette (review
+// feedback 2026-09-08: palette-synced highlighting, never raw
+// high-contrast ANSI fallbacks). Roles follow the rest of the UI:
+// strings green like additions (new data), numbers amber like
+// attention, errors red, comments dim, keywords bold fg. Everything
+// else stays in fg/muted so the framework never outshouts the code.
+// Background is deliberately zero — code blocks stay transparent (no
+// full-width tinted slabs breaking scrollback momentum). Glamour
+// resolves the lexer from the fence info string, so .py/.rs/.go/.json
+// .yaml highlighting comes free; unknown languages fall back to the
+// muted CodeBlock style with content intact (never lost).
+func tildeChroma() *ansi.Chroma {
+	fgStr, mutStr, dimStr := string(fg), string(fgMuted), string(fgDim)
+	greenStr, amberStr, redStr := string(success), string(amber), string(danger)
+	bold := true
+	prim := func(c string) ansi.StylePrimitive { return ansi.StylePrimitive{Color: &c} }
+	primBold := func(c string) ansi.StylePrimitive { return ansi.StylePrimitive{Color: &c, Bold: &bold} }
+	return &ansi.Chroma{
+		Text:                prim(fgStr),
+		Error:               prim(redStr),
+		Comment:             prim(dimStr),
+		CommentPreproc:      prim(dimStr),
+		Keyword:             primBold(fgStr),
+		KeywordReserved:     primBold(fgStr),
+		KeywordNamespace:    primBold(fgStr),
+		KeywordType:         primBold(fgStr),
+		Operator:            prim(fgStr),
+		Punctuation:         prim(mutStr),
+		Name:                prim(fgStr),
+		NameBuiltin:         prim(fgStr),
+		NameTag:             prim(fgStr),
+		NameAttribute:       prim(mutStr),
+		NameClass:           primBold(fgStr),
+		NameConstant:        prim(fgStr),
+		NameDecorator:       prim(mutStr),
+		NameException:       prim(redStr),
+		NameFunction:        primBold(fgStr),
+		NameOther:           prim(fgStr),
+		Literal:             prim(fgStr),
+		LiteralNumber:       prim(amberStr),
+		LiteralDate:         prim(amberStr),
+		LiteralString:       prim(greenStr),
+		LiteralStringEscape: prim(greenStr),
+		GenericDeleted:      prim(redStr),
+		GenericEmph:         prim(fgStr),
+		GenericInserted:     prim(greenStr),
+		GenericStrong:       primBold(fgStr),
+		GenericSubheading:   primBold(fgStr),
+	}
+}
+
 func tildeMarkdownStyle() ansi.StyleConfig {
 	fgStr, mutStr := string(fg), string(fgMuted)
 	bold := true
@@ -26,6 +77,7 @@ func tildeMarkdownStyle() ansi.StyleConfig {
 		Code:     ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{Color: &mutStr}},
 		CodeBlock: ansi.StyleCodeBlock{
 			StyleBlock: ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{Color: &mutStr}},
+			Chroma:     tildeChroma(),
 		},
 		Link: ansi.StylePrimitive{Color: &mutStr, Underline: &bold},
 		Item: ansi.StylePrimitive{Color: &fgStr},
