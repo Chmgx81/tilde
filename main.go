@@ -272,6 +272,10 @@ func main() {
 	}
 	tm.BindCreds(credStore)
 	tm.BindKeys(over)
+	// Catalog budget auto-size (§2.24) applies only when the user never
+	// set a budget: an explicit --budget or $TILDE_BUDGET is never
+	// second-guessed by a model switch.
+	tm.SetBudgetExplicit(*budgetFlag > 0 || os.Getenv("TILDE_BUDGET") != "")
 	var prog *tea.Program
 	tm.BindProgram(&prog)
 	// Cell-motion mouse tracking is on: wheel motion (touchpad two-finger

@@ -121,7 +121,10 @@ func (o *OpenAI) Chat(ctx context.Context, messages []Message, tools []ToolDef) 
 			}
 			hint := "retry the request or check the endpoint."
 			if status == 401 {
-				hint = "check that OPENAI_API_KEY is set and valid, then retry."
+				hint = "run /login openai to update the stored key, then retry."
+			}
+			if status == 404 {
+				hint = "run /model to pick from the catalog — the model id may be wrong or retired."
 			}
 			return Response{}, fmt.Errorf("openai: status %d for model %q: %s — %s", status, o.Model, snip, hint)
 		}

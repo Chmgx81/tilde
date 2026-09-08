@@ -186,6 +186,9 @@ func TestAnthropic401MentionsKey(t *testing.T) {
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "key") {
 		t.Fatalf("expected key-hint error, got: %v", err)
 	}
+	if !strings.Contains(err.Error(), "/login anthropic") {
+		t.Fatalf("401 remedy must be command-shaped (/login anthropic), got: %v", err)
+	}
 }
 
 func TestAnthropicMalformedInputDegrades(t *testing.T) {

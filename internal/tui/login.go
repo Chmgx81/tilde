@@ -26,6 +26,13 @@ func (m *Model) BindCreds(s *creds.Store) { m.creds = s }
 // step zero, explicit intent wins).
 func (m *Model) BindKeys(over map[string]string) { m.keyOverrides = over }
 
+// SetBudgetExplicit records whether the context budget came from the
+// user (--budget flag or $TILDE_BUDGET). Catalog model switches
+// auto-size the budget from the model's window only when it did not —
+// a 1M-window model must not inherit a 32k assumption, but an explicit
+// user choice is never second-guessed.
+func (m *Model) SetBudgetExplicit(explicit bool) { m.budgetExplicit = explicit }
+
 // composerView renders the composer's content: the masked key input
 // while key entry is open, otherwise the normal textarea.
 func (m *Model) composerView(box lipgloss.Style) string {

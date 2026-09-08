@@ -159,7 +159,10 @@ func (a *Anthropic) Chat(ctx context.Context, messages []Message, tools []ToolDe
 		}
 		hint := "retry the request or check the endpoint."
 		if resp.StatusCode == 401 {
-			hint = "check that ANTHROPIC_API_KEY is set and valid, then retry."
+			hint = "run /login anthropic to update the stored key, then retry."
+		}
+		if resp.StatusCode == 404 {
+			hint = "run /model to pick from the catalog — the model id may be wrong or retired."
 		}
 		return Response{}, fmt.Errorf("anthropic: status %d for model %q: %s — %s", resp.StatusCode, a.Model, snip, hint)
 	}

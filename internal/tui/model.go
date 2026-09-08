@@ -122,6 +122,9 @@ type Model struct {
 	keyInput     textinput.Model
 	keyErr       string
 	loginSel     int
+	// budgetExplicit is set once at startup (main): true when --budget
+	// or $TILDE_BUDGET was given. See SetBudgetExplicit in login.go.
+	budgetExplicit bool
 
 	// Phase 4 surfaces.
 	helpOpen     bool

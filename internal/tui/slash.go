@@ -377,7 +377,7 @@ func (m *Model) compactCmd(focus string) tea.Cmd {
 // model on the current backend.
 func (m *Model) switchModel(ref string) tea.Cmd {
 	if ref == "" {
-		m.append("● current model: " + m.model + " — usage: /model <name> or /model <provider/model>")
+		m.listCatalog()
 		return nil
 	}
 	ref = strings.TrimSpace(ref)
@@ -390,6 +390,52 @@ func (m *Model) switchModel(ref string) tea.Cmd {
 	}
 	// Bare name: current provider's model.
 	return m.setModelOnCurrent(ref)
+}
+
+// listCatalog renders the shipped model catalog (spec §2.24) as plain
+// transcript rows — provider/model, context window, price — with the
+// live backend marked. A user never types a model ID blind; custom ids
+// stay available for proxies and previews via /model <provider/id>.
+func (m *Model) listCatalog() {
+	cur := m.model
+	for _, d := range provider.Descriptions {
+		entries := provider.Catalog[d.ID]
+		if len(entries) == 0 {
+			continue
+		}
+		m.append("○ " + d.ID + " — " + d.Name)
+		for _, cm := range entries {
+			mark := "  "
+			if cur == d.ID+"/"+cm.ID {
+				mark = "● "
+			}
+			price := "free"
+			if cm.InCost > 0 || cm.OutCost > 0 {
+				price = fmt.Sprintf("$%.2f/$%.2f per 1M in/out", cm.InCost, cm.OutCost)
+			}
+			m.append(fmt.Sprintf("%s%s/%s — %s, %dk ctx, %s", mark, d.ID, cm.ID, cm.Name, cm.Context/1000, price))
+		}
+	}
+	m.append("usage: /model <provider/model> or /model <name> (current backend) — custom ids allowed")
+}
+
+// maybeAutosizeBudget adopts the catalog window as the context budget
+// when the user never set one explicitly (SetBudgetExplicit). It runs
+// on the /model path only — turns never touch it — so no lock is
+// needed beyond the dispatch-time running guard.
+func (m *Model) maybeAutosizeBudget(providerID, modelID string) {
+	if m.budgetExplicit {
+		return
+	}
+	for _, cm := range provider.Catalog[providerID] {
+		if cm.ID == modelID && cm.Context > 0 {
+			m.budget = cm.Context
+			if m.loop != nil && m.loop.Cfg.Compactor != nil {
+				m.loop.Cfg.Compactor.Budget = cm.Context
+			}
+			return
+		}
+	}
 }
 
 // setModelOnCurrent swaps the model on whichever backend is live.
@@ -407,6 +453,7 @@ func (m *Model) setModelOnCurrent(model string) tea.Cmd {
 		return nil
 	}
 	m.model = cur.Name()
+	m.maybeAutosizeBudget(strings.SplitN(m.model, "/", 2)[0], model)
 	m.append("● model switched to " + m.model)
 	if m.loop.Log != nil {
 		_ = m.loop.Log.Append("system", map[string]any{"model": m.model})
@@ -417,8 +464,8 @@ func (m *Model) setModelOnCurrent(model string) tea.Cmd {
 // switchProvider builds and installs a different provider's backend,
 // resolving its key through the credential ladder. Cloud providers with
 // no key anywhere are a /login-shaped dead end, never a raw 401 later.
-// An empty model defaults to the catalog's first entry; budget
-// auto-size from the catalog window is TODO (§2.24 spec'd, not built).
+// An empty model defaults to the catalog's first entry; the budget
+// auto-sizes from the catalog window unless explicitly set (main).
 func (m *Model) switchProvider(providerID, model, _ string) tea.Cmd {
 	key, src := provider.Resolve(m.creds, providerID, m.keyOverrides)
 	if src == provider.AuthNone {
@@ -442,6 +489,7 @@ func (m *Model) switchProvider(providerID, model, _ string) tea.Cmd {
 	}
 	m.loop.SetProvider(p)
 	m.model = p.Name()
+	m.maybeAutosizeBudget(providerID, model)
 	m.append("● provider switched to " + m.model + " (" + src.String() + " credential)")
 	if m.loop.Log != nil {
 		_ = m.loop.Log.Append("system", map[string]any{"model": m.model})

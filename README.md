@@ -83,7 +83,7 @@ cd ~/my-project && tilde
 | Input | Action |
 |---|---|
 | `Tab` | Cycle Plan → Build → Auto (read-only enforcement is in code, not prose) |
-| `/` | Command palette: `/mode /compact /clear /copy /sandbox /diff /undo /sessions /model /skills /help /quit` |
+| `/` | Command palette: `/mode /compact /clear /copy /sandbox /diff /undo /sessions /model /login /logout /skills /help /quit` |
 | `@file` | Fuzzy file reference (respects `.gitignore`) |
 | `!cmd` | Shell escape — same sandbox and confirm tier as the agent |
 | `Ctrl+Y` | Copy the latest assistant response (raw markdown) |
@@ -175,11 +175,29 @@ terminal already does those jobs.
 
 ## Providers
 
+No GPU? No problem — cloud keys are a first-class path, not a fallback.
+
 - `--provider ollama` (default) — localhost, private by construction.
 - `--provider openai` — OpenAI-compatible, bring your own key and base URL;
   wire format verified against Ollama's `/v1`.
 - `--provider anthropic` — native Messages API (`ANTHROPIC_API_KEY`); wire
   format httptest-verified, awaiting a live-key run.
+
+Credential ladder (no silent fallbacks — a stored key owns its provider):
+
+1. `--api-key` flag (this process only, wins outright)
+2. Stored credential — `/login <openai|anthropic>` prompts (masked,
+   never echoed or logged), validates with a one-token request, and
+   stores in `~/.tilde/credentials.json` (mode `0600`); `/logout` removes
+3. Ambient env var — `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
+
+Bare `/login` shows a status matrix (provider · source · key tail ·
+model). Mid-session switching keeps transcript and session intact:
+`/model <provider/model>` (e.g. `/model openai/gpt-5.2`); bare
+`/model` lists the shipped catalog with context windows and pricing.
+Picking a catalog model auto-sizes the context budget from its window —
+unless `--budget` / `TILDE_BUDGET` was set explicitly, which is never
+second-guessed.
 
 ## Architecture
 

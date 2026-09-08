@@ -91,6 +91,22 @@ func TestOpenAI401MentionsKey(t *testing.T) {
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "key") {
 		t.Fatalf("expected key-hint error, got: %v", err)
 	}
+	if !strings.Contains(err.Error(), "/login openai") {
+		t.Fatalf("401 remedy must be command-shaped (/login openai), got: %v", err)
+	}
+}
+
+func TestOpenAI404PointsToCatalog(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+		_, _ = w.Write([]byte(`{"error":{"message":"model not found"}}`))
+	}))
+	defer srv.Close()
+	p := NewOpenAI("test-model", srv.URL, "test-key")
+	_, err := p.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "/model") {
+		t.Fatalf("404 remedy must point at /model catalog, got: %v", err)
+	}
 }
 
 func TestOpenAIMalformedArgsError(t *testing.T) {

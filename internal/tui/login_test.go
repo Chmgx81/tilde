@@ -98,3 +98,36 @@ func TestFinishKeyEntryNeverStoresUnvalidated(t *testing.T) {
 	joined := strings.Join(m.lines, "\n")
 	_ = joined
 }
+
+func TestBareModelListsCatalog(t *testing.T) {
+	m := newLoginTestModel(t, "ollama/llama3.2")
+	m.switchModel("")
+	joined := strings.Join(m.lines, "\n")
+	for _, want := range []string{"openai/gpt-5.2", "anthropic/", "/model <provider/model>"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("bare /model must list the catalog (missing %q):\n%s", want, joined)
+		}
+	}
+}
+
+func TestAutosizeBudgetFromCatalog(t *testing.T) {
+	m := newLoginTestModel(t, "ollama/llama3.2")
+	m.keyOverrides = map[string]string{"openai": "test-key-1234"}
+	// Not explicit: catalog window wins (gpt-5.2 → 400000).
+	m.SetBudgetExplicit(false)
+	m.switchProvider("openai", "gpt-5.2", "")
+	if m.budget != 400000 {
+		t.Fatalf("budget should auto-size to 400000, got %d", m.budget)
+	}
+}
+
+func TestExplicitBudgetNeverAutosized(t *testing.T) {
+	m := newLoginTestModel(t, "ollama/llama3.2")
+	m.keyOverrides = map[string]string{"openai": "test-key-1234"}
+	m.budget = 32000
+	m.SetBudgetExplicit(true)
+	m.switchProvider("openai", "gpt-5.2", "")
+	if m.budget != 32000 {
+		t.Fatalf("explicit budget must survive a model switch, got %d", m.budget)
+	}
+}

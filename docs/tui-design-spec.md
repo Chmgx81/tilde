@@ -1250,14 +1250,19 @@ the single most common cloud-auth support question.
 - Selecting a catalog model with no explicit `TILDE_BUDGET` auto-sizes
   the budget from that model's context window — a 1M-window model should
   not inherit a 32k assumption.
-- An unknown-model 404 from the provider suggests the closest catalog id
-  instead of surfacing the raw model name as terminal truth.
+- An unknown-model 404 surfaces a command-shaped remedy (`/model` —
+  pick from the catalog) instead of the raw model name as terminal
+  truth. Closest-id suggestion is a later refinement, not v1.
 
 **First-run guidance.**
 
-When no provider is configured or reachable at startup, the splash (§2.1)
-gains a dim, three-line block naming the fastest path — command included,
-never prose only:
+The welcome panel (§2.1) always carries the two runnable lines — local
+and cloud — so a user without a GPU sees the path on the very first
+screen, never after a failure. Conditional display (only when no
+backend is reachable) was considered and rejected: reachability means
+a startup dial, which main deliberately skips (construction only, §2.23
+rule — a dead daemon surfaces as a provider error once the loop calls
+it). A static two-line panel is the whole v1.
 
 ```
   no model backend found.
@@ -1414,7 +1419,7 @@ new section per version:
 | Large-paste collapse (§2.21) | DONE — token + off-screen body, submit-time substitution, Backspace unit-delete, orphan notice, submit-time cap |
 | Mouse scroll + drag-select copy (2026-09-08) | DONE — cell-motion tracking, transcript-absolute drag-select with edge autoscroll, clipboard ladder + OSC 52 fallback, `Alt+M` passthrough |
 | Image/file paste path (§2.21) | TODO — `@`-reference of an existing image file works today via §2.5; no clipboard-to-file helper documented or built yet |
-| Cloud onboarding (§2.24) | TODO — spec only (2026-09-08, from pi/cline case study); no `/login`, catalog, or first-run guidance built yet |
+| Cloud onboarding (§2.24) | DONE (v1) — registry + ladder (flag>stored 0600>env), masked /login with validate-before-store, /logout, /model provider switching + catalog listing, budget auto-size unless explicit, command-shaped 401/404 hints; deferred: OAuth, keychain, conditional reachability splash, closest-id 404 suggestion |
 | Session export / brief (§2.22) | TODO — spec ready; no `/export` command or brief template built yet |
 | Provider retry/backoff + classified errors (§2.23) | TODO — provider calls currently fail without a retry loop or kind classification |
 | Startup config validation, fail-closed (§2.23) | PARTIAL — sandbox already fails closed (Plan.md Phase 2); `policies.yaml` parse errors not yet distinguished from other startup failures |
