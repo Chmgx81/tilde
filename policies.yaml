@@ -1,0 +1,24 @@
+# tilde policies — loaded at startup from the project root (missing file =
+# built-in defaults). Tiers are checked in order; deny beats ask beats
+# allow, always — including against --yes and Auto mode.
+# `deny`/`ask` name tools; shell commands are additionally judged per
+# pipeline segment on parsed argv (rm -rf, sudo, curl, git force-push…).
+# The bwrap sandbox stays the hard backstop behind all of this.
+deny: []
+ask:
+  - write_file
+  - edit_file
+  - shell_command
+  - git_worktree_add
+  - git_worktree_remove
+  - mcp_call
+allow:
+  - read_file
+  - grep
+  - glob
+  - git_status
+  - git_diff
+  - git_worktree_list
+  - load_skill
+  - mcp_list
+  - spawn_explore

@@ -1,0 +1,10 @@
+# Project hooks (needs --hooks-project to run — see README).
+# before: non-zero exit BLOCKS the tool call; stderr becomes the reason.
+# after: output appends as a note; failures never fail the call.
+# "*" matches every tool. Env: TILDE_TOOL, TILDE_ARGS_JSON.
+before:
+  write_file:
+    - "echo \"$TILDE_ARGS_JSON\" | grep -q '\"path\":\"\\.env\"' && { echo refusing .env writes >&2; exit 1; }; exit 0"
+after:
+  write_file:
+    - "gofmt -l . 2>/dev/null | head -5"

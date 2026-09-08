@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "docs": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-fetch"],
+      "env": {}
+    }
+  }
+}
