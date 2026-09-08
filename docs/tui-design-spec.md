@@ -323,6 +323,8 @@ Inline dropdown directly beneath the composer, replacing nothing above it.
     /diff                 Show working-tree diff for review
     /undo [n]             Revert the last n mutating steps
     /sessions             List and resume a past session
+    /login [provider]     Configure cloud-provider auth (§2.24)
+    /logout [provider]    Remove stored provider auth
     /export [id]           Write a portable markdown brief for handoff
     /help                 Full keybinding + command reference
 ```
@@ -1120,8 +1122,8 @@ exists so tilde is never that tool.
   than cycling forever on something backoff can't fix:
 
 ```
-✗ Authentication failed — check your API key (see policies.yaml
-  provider block) and try again. No further retries will help this.
+✗ Authentication failed — the stored openai key was rejected.
+  Run /login openai to update it. No further retries will help this.
 ```
 
 - **The composer, Esc Esc, and scroll always remain responsive during a
@@ -1181,6 +1183,119 @@ simply become unavailable for the rest of the session, or the hook is
 skipped for that one call), exactly matching the per-server isolation
 already built in Plan.md's Phase 6. This section just makes explicit that
 the *same* isolation guarantee is a UI promise, not only a backend one.
+
+### 2.24 Cloud Provider Onboarding — /login, Model Catalog, First-Run
+      Guidance (added 2026-09-08)
+
+§2.23 names the failure modes for the model provider underneath the loop,
+but its auth-failure remedy was "edit policies.yaml" — a documentation
+exercise, not a fix. A user whose PC has no GPU for local models had no
+onboardable path to cloud models at all: env vars they must know to set,
+model IDs they must guess from provider docs. This section is sourced from
+current field practice (pi's provider/auth architecture and cline CLI's
+`auth` command, reviewed 2026-09-08): the converged shape is **one command,
+a shipped catalog, and command-shaped remedies** — onboarding a cloud key
+must never require reading tilde's docs.
+
+**Credentials ladder (unambiguous, no silent fallback).**
+
+1. Stored credential from `/login` — `~/.tilde/credentials.json`, mode
+   `0600`, one entry per provider.
+2. Ambient env var — `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (existing
+   behavior).
+3. Not configured — never guessed, never prompted for mid-turn.
+
+A stored credential *owns* its provider: env vars are consulted only when
+nothing is stored, and a rejected stored key is never silently retried
+against an env key — auth errors name which source was in play. This is
+pi's resolution rule, adopted because "which key am I actually using?" is
+the single most common cloud-auth support question.
+
+**`/login [provider]` / `/logout [provider]`.**
+
+```
+  provider     source    key            model
+  ollama       local     —              qwen3.8-4b:16k
+  openai       stored    ····9f2a       gpt-5.2
+  anthropic    env       ····c41d       claude-sonnet-4-6
+```
+
+- Bare `/login` renders the status matrix above as a dropdown (same
+  machinery as §2.4); `/logout` lists and removes. With an argument, the
+  composer becomes the key entry field: border amber, input masked as
+  `●` glyphs.
+- **Keys are never echoed, never rendered into the transcript, and never
+  written to the session file** — the session stores only that a login
+  happened. Status display shows the last four characters only.
+- A key is stored **only after validation**: a one-token request to the
+  real endpoint. 401 → `✗ key rejected by openai — nothing was stored`;
+  network failure → `✗ could not reach openai to validate — nothing
+  stored` (no save-unvalidated path; a stored-but-broken key is worse
+  than an absent one). Success toasts `✓ openai configured — key ····9f2a
+  stored in ~/.tilde/credentials.json`.
+- `/login` and `/logout` are ordinary palette entries (§2.4); both work
+  mid-session — switching providers mid-conversation keeps the transcript
+  and the session file exactly as-is.
+
+**Model catalog (shipped, small, curated).**
+
+- Each provider ships a hand-curated catalog (~5 current models): model
+  id, human name, context window, input/output price per million tokens.
+  Data lives in one Go table, dated like this section — at tilde's
+  provider count a generation script (pi auto-generates from provider
+  APIs) is maintenance overhead, not a win.
+- `/model <provider/…>` lists catalog entries in the §2.4 dropdown plus a
+  trailing `custom…` row for raw model IDs (proxies, previews). A user
+  never has to type a model ID blind.
+- Selecting a catalog model with no explicit `TILDE_BUDGET` auto-sizes
+  the budget from that model's context window — a 1M-window model should
+  not inherit a 32k assumption.
+- An unknown-model 404 from the provider suggests the closest catalog id
+  instead of surfacing the raw model name as terminal truth.
+
+**First-run guidance.**
+
+When no provider is configured or reachable at startup, the splash (§2.1)
+gains a dim, three-line block naming the fastest path — command included,
+never prose only:
+
+```
+  no model backend found.
+    local:  run `ollama serve` (model: ollama pull qwen3.8-4b:16k)
+    cloud:  /login openai  (key from platform.openai.com)
+```
+
+Both lines are exact, runnable text; the cloud line works because `/login`
+exists — guidance without the command behind it is what §2.23's original
+auth message got wrong.
+
+**Error remedies become command-shaped (amends §2.23).**
+
+| Wire class | Plain-words kind (§2.23 rule) | Remedy shown |
+|---|---|---|
+| 401 | `key rejected` | `run /login <provider> to update the stored key` |
+| 403 | `not authorized` (org/billing) | same, plus `check billing on the provider console` |
+| 404 model | `model unavailable` | `/model` — pick from the catalog |
+| 429 | `rate limited` | `Retry-After` honored (§2.23, unchanged) |
+| 5xx | `provider outage` | retry with backoff (§2.23, unchanged) |
+| conn refused :11434 | `ollama not reachable` | ``run `ollama serve` `` |
+
+§2.23's authentication-failure example is updated accordingly — its
+remedy is now executable, not documentary.
+
+**Non-goals (deferred, stated so absence is a decision not an omission):**
+OAuth/subscription flows (pi-style device-code login — the status matrix
+renders a `subscription` row marked `not yet`), OS keychain integration
+(a `0600` file is the whole v1; keychain later), custom base-URL/proxy UI
+(`policies.yaml` remains the power path), and automated catalog syncing.
+
+Implementation home: `internal/creds` (store + ladder, beside `internal/
+policy`'s provider block), the login/logout overlay and status matrix in
+`internal/tui`, catalog data beside the provider constructors in `main`'s
+wiring. Tests to pin: ladder precedence and no-silent-fallback, `0600`
+enforced on write, masked input absent from transcript and session file,
+validation-before-store, catalog dropdown and budget auto-size, splash
+guidance on empty config, command-shaped auth remedy.
 
 ---
 
@@ -1299,6 +1414,7 @@ new section per version:
 | Large-paste collapse (§2.21) | DONE — token + off-screen body, submit-time substitution, Backspace unit-delete, orphan notice, submit-time cap |
 | Mouse scroll + drag-select copy (2026-09-08) | DONE — cell-motion tracking, transcript-absolute drag-select with edge autoscroll, clipboard ladder + OSC 52 fallback, `Alt+M` passthrough |
 | Image/file paste path (§2.21) | TODO — `@`-reference of an existing image file works today via §2.5; no clipboard-to-file helper documented or built yet |
+| Cloud onboarding (§2.24) | TODO — spec only (2026-09-08, from pi/cline case study); no `/login`, catalog, or first-run guidance built yet |
 | Session export / brief (§2.22) | TODO — spec ready; no `/export` command or brief template built yet |
 | Provider retry/backoff + classified errors (§2.23) | TODO — provider calls currently fail without a retry loop or kind classification |
 | Startup config validation, fail-closed (§2.23) | PARTIAL — sandbox already fails closed (Plan.md Phase 2); `policies.yaml` parse errors not yet distinguished from other startup failures |
