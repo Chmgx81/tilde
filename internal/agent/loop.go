@@ -280,7 +280,7 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 		full := append([]provider.Message{{Role: "system", Content: sys}}, l.MsgsSnapshot()...)
 		resp, err := l.CurrentProvider().Chat(ctx, full, defs)
 		if err != nil {
-			emit(Event{Kind: "system", Text: "model error: " + err.Error()})
+			emit(Event{Kind: "system", Text: "model error [" + provider.Classify(err) + "]: " + err.Error()})
 			return "", err
 		}
 		l.TotPrompt += resp.Usage.Prompt

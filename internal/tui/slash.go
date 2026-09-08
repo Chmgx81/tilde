@@ -3,15 +3,19 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"tilde/internal/export"
 	"tilde/internal/mode"
 	"tilde/internal/provider"
 	"tilde/internal/sandbox"
@@ -35,6 +39,7 @@ var slashCommands = []slashRow{
 	{"/diff", "Show working-tree diff for review"},
 	{"/undo [n]", "Revert the last n mutating steps"},
 	{"/sessions", "List and resume a past session"},
+	{"/export [id]", "Write a portable markdown brief for handoff"},
 	{"/help", "Full keybinding + command reference"},
 	{"/quit", "Exit tilde"},
 }
@@ -220,6 +225,13 @@ func (m *Model) runSlash(cmd, args string, selected slashRow) tea.Cmd {
 		}
 		m.OpenResume()
 		return nil
+	case "/export":
+		if m.running {
+			m.append("✗ an agent turn is running — Esc twice, then /export.")
+			return nil
+		}
+		m.doExport(args)
+		return nil
 	case "/model":
 		if m.running {
 			m.append("✗ an agent turn is running — Esc twice, then /model.")
@@ -250,6 +262,64 @@ func (m *Model) runSlash(cmd, args string, selected slashRow) tea.Cmd {
 		m.append(fmt.Sprintf("✗ unknown command %q — type / to browse the palette.", cmd))
 		return nil
 	}
+}
+
+// doExport writes a distilled markdown brief of a session log: the
+// current session by default, or a past one by id. The brief carries
+// goals, files, and direction — never raw file contents — and is
+// secret-scrubbed, so it is safe to paste to another agent.
+func (m *Model) doExport(args string) {
+	id := strings.TrimSpace(args)
+	var src string
+	if id == "" {
+		if m.loop == nil || m.loop.Log == nil {
+			m.append("✗ no active session to export.")
+			return
+		}
+		src = m.loop.Log.Path
+		id = strings.TrimSuffix(filepath.Base(src), ".jsonl")
+	} else {
+		if !validSessionID(id) {
+			m.append(fmt.Sprintf("✗ bad session id %q: letters, digits, _ and - only (max 64).", id))
+			return
+		}
+		dir, err := sessionsDir()
+		if err != nil {
+			m.append("✗ " + err.Error())
+			return
+		}
+		src = filepath.Join(dir, id+".jsonl")
+	}
+	brief, err := export.BriefFromFile(src, 6000)
+	if err != nil {
+		m.append("✗ export: " + err.Error())
+		return
+	}
+	out := filepath.Join(m.root, id+"-brief.md")
+	if err := os.WriteFile(out, []byte(brief), 0o600); err != nil {
+		m.append(fmt.Sprintf("✗ export: cannot write %q: %v", out, err))
+		return
+	}
+	m.append(fmt.Sprintf("● exported %s (%d chars) — distilled brief, safe to share or hand to another agent.", out, len(brief)))
+	if m.loop.Log != nil {
+		_ = m.loop.Log.Append("system", map[string]any{"exported": out})
+	}
+}
+
+// validSessionID keeps /export <id> inside the sessions dir: no
+// separators, no dot games, no empty — traversal is structurally
+// impossible, not just unlikely.
+func validSessionID(id string) bool {
+	if id == "" || len(id) > 64 {
+		return false
+	}
+	for _, r := range id {
+		if r == '_' || r == '-' || unicode.IsLetter(r) || unicode.IsDigit(r) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // runningBackground lists in-flight shell tasks across the registry's

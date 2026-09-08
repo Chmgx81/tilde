@@ -81,6 +81,31 @@ func listed(list []string, tool string) bool {
 	return false
 }
 
+// UnknownTools reports tier entries naming no known tool — a typo here
+// fails dangerous in opposite directions (a misspelled allow is dead
+// weight; a misspelled deny is a missing guard), so callers refuse the
+// file instead of guessing. Nil file = defaults = nothing unknown.
+func (f *File) UnknownTools(known []string) []string {
+	if f == nil {
+		return nil
+	}
+	have := map[string]bool{}
+	for _, k := range known {
+		have[k] = true
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, tier := range [][]string{f.Deny, f.Ask, f.Allow} {
+		for _, t := range tier {
+			if !have[t] && !seen[t] {
+				seen[t] = true
+				out = append(out, t)
+			}
+		}
+	}
+	return out
+}
+
 // ApproveSession records one literal shell command string as approved
 // for the rest of this process ([a] key in the confirm panel). It
 // returns false — recording nothing — for empty strings and for

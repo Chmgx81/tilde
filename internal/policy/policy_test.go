@@ -166,6 +166,21 @@ func TestLoadMissingIsDefaults(t *testing.T) {
 	}
 }
 
+func TestUnknownTools(t *testing.T) {
+	known := []string{"read_file", "grep", "shell_command"}
+	f := &File{Deny: []string{"read_file", "reed_file"}, Ask: []string{"grep", "shell_command", "shell_command"}}
+	got := f.UnknownTools(known)
+	if len(got) != 1 || got[0] != "reed_file" {
+		t.Fatalf("must report the typo once, got %v", got)
+	}
+	if got := (*File)(nil).UnknownTools(known); len(got) != 0 {
+		t.Fatalf("nil file must report nothing, got %v", got)
+	}
+	if got := (&File{}).UnknownTools(known); len(got) != 0 {
+		t.Fatalf("empty file must report nothing, got %v", got)
+	}
+}
+
 func TestLoadMalformed(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "p.yaml")
 	os.WriteFile(path, []byte("deny: [unclosed"), 0o644)

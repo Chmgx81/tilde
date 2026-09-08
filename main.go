@@ -94,7 +94,8 @@ func main() {
 
 	// Crash hint, not a prompt: a previous run that never wrote its
 	// clean-shutdown marker may have left a session behind to resume.
-	if unclosed := newestUnclosedSession(cleanMarkerTime()); unclosed != "" {
+	unclosed := newestUnclosedSession(cleanMarkerTime())
+	if unclosed != "" {
 		fmt.Fprintf(os.Stderr, "tilde: unclosed session %s found — resume with `tilde --resume`\n", unclosed)
 	}
 
@@ -297,6 +298,12 @@ func main() {
 	reg.Register(&agent.ExploreTool{NewChild: func(task string) *agent.Loop {
 		return agent.NewExploreChild(loop, task)
 	}})
+	// Unknown tool names in policies.yaml refuse here, after every
+	// tool (core + skills + MCP + subagents) is registered — earlier
+	// would false-positive on tools registered below. MCP names are
+	// always known: those tools register only when servers exist, but
+	// policies may name them regardless.
+	checkPolicyTools(root, polFile, append(reg.Names(), "mcp_list", "mcp_call"))
 
 	if *prompt != "" {
 		_ = sessLog.Append("meta", map[string]any{"root": root, "model": prov.Name(), "budget": budget})
@@ -310,7 +317,7 @@ func main() {
 	// the --mode flag (deliberate safety default). The flag still governs
 	// headless and eval runs above.
 	loop.SetMode(mode.Plan)
-	if *resumeFlag {
+	if *resumeFlag || offerResume(unclosed, root) {
 		// Non-TTY list already returned before the log opened; reaching
 		// here means a screen exists for the picker.
 		// Fresh log for now; selecting a session swaps it for that file.
@@ -472,6 +479,21 @@ func loadPolicies(root string) *policy.File {
 		}
 	}
 	return f
+}
+
+// checkPolicyTools refuses a policies.yaml naming tools that do not
+// exist — a typo fails dangerous in both directions (a misspelled
+// allow is dead weight; a misspelled deny is a missing guard), so the
+// file is rejected instead of partially honored. Nil = defaults.
+func checkPolicyTools(root string, f *policy.File, known []string) {
+	if f == nil {
+		return
+	}
+	if unknown := f.UnknownTools(known); len(unknown) > 0 {
+		fmt.Fprintf(os.Stderr, "tilde: %s: unknown tool %q (expected one of: %s) — refusing to start. Fix the policy file and try again.\n",
+			filepath.Join(root, "policies.yaml"), strings.Join(unknown, ", "), strings.Join(known, ", "))
+		os.Exit(2)
+	}
 }
 
 func buildHarness(root string) harness {
@@ -821,11 +843,12 @@ func runHeadless(loop *agent.Loop, goal string, yes bool, format string) {
 	})
 	if err != nil {
 		code := headlessExitCode(err, text, false)
+		class := provider.Classify(err)
 		if asJSON {
-			emitJSON(map[string]any{"type": "result", "ok": false, "error": err.Error(),
+			emitJSON(map[string]any{"type": "result", "ok": false, "error": err.Error(), "class": class,
 				"tokens_in": loop.TotPrompt, "tokens_out": loop.TotCompletion})
 		} else {
-			fmt.Fprintln(os.Stderr, "tilde:", err)
+			fmt.Fprintf(os.Stderr, "tilde [%s]: %s\n", class, err)
 		}
 		os.Exit(code)
 	}
@@ -856,6 +879,48 @@ func firstLine(s string) string {
 // silently swallow (--resume or --eval): fail loud at parse time.
 func conflictingFlags(prompt string, resume, eval bool) bool {
 	return prompt != "" && (resume || eval)
+}
+
+// offerResume reports whether startup should open the session picker
+// unprompted: an unclosed session exists, it belongs to this project,
+// and there is a screen to show the picker on. Anything else keeps
+// the stderr hint above as the whole offer — a picker with no screen,
+// or for another project's session, would be a wrong turn.
+func offerResume(unclosed, root string) bool {
+	if unclosed == "" || root == "" || !isTTY() {
+		return false
+	}
+	return sessionMetaRoot(unclosed) == root
+}
+
+// sessionMetaRoot reads a session file's meta root ("" when the file
+// is missing, corrupt, or never recorded one — all read as "not
+// mine"). Bounded: only the first 100 lines are scanned.
+func sessionMetaRoot(id string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	f, err := os.Open(filepath.Join(home, ".tilde", "sessions", id+".jsonl"))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64*1024), 256*1024)
+	for n := 0; n < 100 && sc.Scan(); n++ {
+		var e struct {
+			Type string         `json:"type"`
+			Data map[string]any `json:"data"`
+		}
+		if json.Unmarshal(sc.Bytes(), &e) != nil || e.Type != "meta" {
+			continue
+		}
+		if r, _ := e.Data["root"].(string); r != "" {
+			return r
+		}
+	}
+	return ""
 }
 
 // runTrustCmd implements `tilde trust [dir]` / `tilde untrust [dir]`.

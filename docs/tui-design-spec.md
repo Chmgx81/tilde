@@ -191,7 +191,7 @@ document, not to make a silent exception:
 Shown once per new session start (not on resume — see §2.13).
 
 ```
-                     ~/dev/tilde · tilde v0.8.0
+                     ~/dev/tilde · tilde v0.9.0
 
 ╭────────────────────────────────────────────────────────────────────────────╮
 │ Welcome to tilde.                                                          │
@@ -680,7 +680,7 @@ because this is a reference screen, not a log, and shouldn't compete with the
 timeline vocabulary it's explaining.
 
 ```
-  Keybindings                                                    tilde v0.8.0
+  Keybindings                                                    tilde v0.9.0
 
   Tab              Cycle mode: Plan → Build → Auto
   Ctrl+C           Quit when idle (running turns ignore it — see Esc Esc)
@@ -1425,8 +1425,8 @@ new section per version:
 | Mouse scroll + drag-select copy (2026-09-08) | DONE — cell-motion tracking, transcript-absolute drag-select with edge autoscroll, clipboard ladder + OSC 52 fallback, `Alt+M` passthrough |
 | Image/file paste path (§2.21) | TODO — `@`-reference of an existing image file works today via §2.5; no clipboard-to-file helper documented or built yet |
 | Cloud onboarding (§2.24) | DONE (v1) — registry + ladder (flag>stored 0600>env), masked /login with validate-before-store, /logout, /model provider switching + catalog listing, budget auto-size unless explicit, command-shaped 401/404 hints; openrouter (free shelf) + gemini (free tier) + opencode Zen (live-verified catalog, chat/completions-only discipline) first-class; splash cloud list derives from registry; deferred: OAuth, keychain, native clients, conditional reachability splash, closest-id 404 suggestion |
-| Session export / brief (§2.22) | TODO — spec ready; no `/export` command or brief template built yet |
-| Provider retry/backoff + classified errors (§2.23) | TODO — provider calls currently fail without a retry loop or kind classification |
-| Startup config validation, fail-closed (§2.23) | PARTIAL — sandbox already fails closed (Plan.md Phase 2); `policies.yaml` parse errors not yet distinguished from other startup failures |
-| Crash recovery / unclosed-session resume offer (§2.23) | PARTIAL — JSONL log is already append-only and resumable (Plan.md §2); no crash-line write or "resume the crashed session?" prompt yet |
+| Session export / brief (§2.22) | DONE — `/export [id]` writes a distilled scrubbed `<id>-brief.md` (goal, files, direction, open steps; 0600) |
+| Provider retry/backoff + classified errors (§2.23) | DONE — backoff + Retry-After + fail-fast auth; `provider.Classify` names every model error in the transcript and headless JSON |
+| Startup config validation, fail-closed (§2.23) | DONE — sandbox, provider, and policies refuse pre-TUI with file+line; unknown tiers and unknown tool names refuse (exit 2) |
+| Crash recovery / unclosed-session resume offer (§2.23) | DONE — panic writes a crash line; next launch hints, and auto-opens the picker when the unclosed session belongs to the cwd |
 | Classified exit codes (§2.23) | DONE — headless exits 0/2/3/4/5/1 per the §4 table (config/startup, provider-exhausted, handoff, deny-tier, other) |

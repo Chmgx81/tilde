@@ -57,7 +57,7 @@ const (
 // the TUI splash/help and the MCP client handshake read it from here.
 // Bump on every tagged release; the freshness check compares it
 // against the newest remote tag.
-const Version = "v0.8.0"
+const Version = "v0.9.0"
 
 // LocalSHA reports the commit this binary was built from (stamped by
 // the Go toolchain for builds inside a git checkout), or "" when
