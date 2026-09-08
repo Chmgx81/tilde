@@ -26,6 +26,7 @@ import (
 	"tilde/internal/mode"
 	"tilde/internal/policy"
 	"tilde/internal/skills"
+	"tilde/internal/update"
 )
 
 var (
@@ -59,8 +60,9 @@ const (
 	maxAppWidth     = 120
 )
 
-// appVersion is shown on splash and help. Bump per shipped phase.
-const appVersion = "v0.7.0"
+// appVersion is shown on splash and help. Single source: update.Version —
+// bump there per tagged release, never here.
+var appVersion = update.Version
 
 // Model is the Bubble Tea app.
 type Model struct {

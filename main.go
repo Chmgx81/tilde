@@ -55,7 +55,13 @@ func main() {
 	providerFlag := flag.String("provider", "ollama", "Model provider: ollama | openai | anthropic | openrouter | gemini | opencode")
 	apiBase := flag.String("api-base", "", "OpenAI-compatible base URL (default $OPENAI_BASE_URL or https://api.openai.com/v1)")
 	apiKey := flag.String("api-key", "", "API key (default $OPENAI_API_KEY)")
+	versionFlag := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Println(update.Version)
+		return
+	}
 
 	// --prompt runs one headless goal; combining it with --resume/--eval
 	// would silently drop the latter — fail loud instead (exit 2).

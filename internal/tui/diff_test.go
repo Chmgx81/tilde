@@ -225,7 +225,7 @@ func firstArg(args map[string]any) string {
 func TestSetUpdateNotice(t *testing.T) {
 	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
 	splashN := m.splashN
-	note := "update available (a1b2c3d → e5f6a7b) — run tilde update"
+	note := "update available (v0.8.0 → v0.9.0) — run tilde update"
 	m.SetUpdateNotice(note)
 	if m.splashN != splashN+1 {
 		t.Fatal("notice must extend the pristine splash by exactly one line")

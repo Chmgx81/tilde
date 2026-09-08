@@ -2,11 +2,17 @@
 // silent, cached freshness check behind a startup notice, plus an
 // explicit `tilde update` that pulls, rebuilds, and reinstalls.
 //
+// Versions are release tags (vMAJOR.MINOR.PATCH): the freshness check
+// compares Version below against the newest remote tag and the notice
+// names both ends (v0.8.0 → v0.9.0). Commit SHAs survive only as a
+// fallback for a tagless remote and for builds that predate tags.
+//
 // Privacy: the only network use is one unauthenticated GitHub API read
-// per day (commit SHA of main — no identity, version, or telemetry
-// leaves the machine), and only in interactive TUI sessions. Anything
-// headless (--prompt, --eval) never phones home; TILDE_NO_UPDATE_CHECK=1
-// disables both the check and the notice entirely.
+// per day (newest tag — no identity, version, or telemetry leaves the
+// machine beyond the request itself), and only in interactive TUI
+// sessions. Anything headless (--prompt, --eval) never phones home;
+// TILDE_NO_UPDATE_CHECK=1 disables both the check and the notice
+// entirely.
 package update
 
 import (
@@ -18,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -27,6 +34,7 @@ const (
 	// check and the update pull.
 	repoURL = "https://github.com/Chmgx81/tilde"
 	apiURL  = "https://api.github.com/repos/Chmgx81/tilde/commits/main"
+	tagsURL = "https://api.github.com/repos/Chmgx81/tilde/tags?per_page=100"
 
 	// checkTTL bounds phone-home frequency: at most one API read per
 	// day no matter how often tilde starts.
@@ -44,6 +52,12 @@ const (
 	// must never do to itself.
 	envTarget = "TILDE_UPDATE_TARGET"
 )
+
+// Version is this binary's release version. Single source of truth:
+// the TUI splash/help and the MCP client handshake read it from here.
+// Bump on every tagged release; the freshness check compares it
+// against the newest remote tag.
+const Version = "v0.8.0"
 
 // LocalSHA reports the commit this binary was built from (stamped by
 // the Go toolchain for builds inside a git checkout), or "" when
@@ -68,6 +82,76 @@ func short(sha string) string {
 		return sha[:7]
 	}
 	return sha
+}
+
+// parseVersion splits vMAJOR.MINOR.PATCH (leading v optional) or
+// reports false — anything else is not a release version.
+func parseVersion(s string) (int, int, int, bool) {
+	s = strings.TrimPrefix(strings.TrimSpace(s), "v")
+	parts := strings.Split(s, ".")
+	if len(parts) != 3 {
+		return 0, 0, 0, false
+	}
+	nums := make([]int, 3)
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 0 {
+			return 0, 0, 0, false
+		}
+		nums[i] = n
+	}
+	return nums[0], nums[1], nums[2], true
+}
+
+// compareVersion orders two release versions (-1/0/+1). Non-version
+// input sorts below any version and compares unequal to each other
+// only by string — callers must gate on parseVersion first.
+func compareVersion(a, b string) int {
+	amaj, amin, apat, aok := parseVersion(a)
+	bmaj, bmin, bpat, bok := parseVersion(b)
+	if !aok || !bok {
+		switch {
+		case a == b:
+			return 0
+		case aok:
+			return 1
+		case bok:
+			return -1
+		default:
+			return strings.Compare(a, b)
+		}
+	}
+	for _, p := range [][2]int{{amaj, bmaj}, {amin, bmin}, {apat, bpat}} {
+		if p[0] != p[1] {
+			if p[0] < p[1] {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
+// ghTag is one entry of the GitHub tags API.
+type ghTag struct {
+	Name   string `json:"name"`
+	Commit struct {
+		SHA string `json:"sha"`
+	} `json:"commit"`
+}
+
+// newestTag returns the highest release version among tags plus its
+// commit SHA, or "" when no tag parses as a version.
+func newestTag(tags []ghTag) (tag, sha string) {
+	for _, t := range tags {
+		if _, _, _, ok := parseVersion(t.Name); !ok {
+			continue
+		}
+		if tag == "" || compareVersion(t.Name, tag) > 0 {
+			tag, sha = t.Name, t.Commit.SHA
+		}
+	}
+	return tag, sha
 }
 
 // stateDir is ~/.tilde, created on demand by writers (never by
@@ -97,9 +181,11 @@ func installPath() (string, error) {
 }
 
 type checkFile struct {
-	CheckedAt int64  `json:"checked_at"`
-	Available bool   `json:"available"`
-	Remote    string `json:"remote"`
+	CheckedAt int64 `json:"checked_at"`
+	Available bool  `json:"available"`
+	// Remote is the newest remote release tag (vX.Y.Z), or a commit
+	// SHA when the remote has no parseable tags (tagless fallback).
+	Remote string `json:"remote"`
 }
 
 type installFile struct {
@@ -146,10 +232,9 @@ func Notice() string {
 	if os.Getenv(envOptOut) == "1" {
 		return ""
 	}
-	local := LocalSHA()
-	if local == "" {
-		return ""
-	}
+	// Version is always stamped (a const, not VCS metadata), so even
+	// tarball builds without a build SHA get version notices; `tilde
+	// update` on those still fails closed with the reinstall guidance.
 	p, err := checkPath()
 	if err != nil {
 		return ""
@@ -162,27 +247,37 @@ func Notice() string {
 	if err := json.Unmarshal(data, &c); err != nil || !c.Available || c.Remote == "" {
 		return ""
 	}
-	return noticeFor(local, c)
+	return noticeFor(Version, LocalSHA(), c)
 }
 
-// noticeFor renders the notice from a local SHA and a parsed cache —
-// pure, so tests pin every shape without VCS metadata or HOME games.
-func noticeFor(local string, c checkFile) string {
-	if !c.Available || c.Remote == "" || c.Remote == local {
+// noticeFor renders the notice from this binary's version and a parsed
+// cache — pure, so tests pin every shape without network or HOME games.
+// Version remotes render as versions; a SHA remote (tagless fallback,
+// or a cache written before tags existed) renders the old short-SHA
+// shape against the local build SHA.
+func noticeFor(localVersion, localSHA string, c checkFile) string {
+	if !c.Available || c.Remote == "" {
 		return ""
 	}
-	return fmt.Sprintf("update available (%s → %s) — run tilde update", short(local), short(c.Remote))
+	if _, _, _, ok := parseVersion(c.Remote); ok {
+		if c.Remote == localVersion {
+			return ""
+		}
+		return fmt.Sprintf("update available (%s → %s) — run tilde update", localVersion, c.Remote)
+	}
+	if c.Remote == localSHA {
+		return ""
+	}
+	return fmt.Sprintf("update available (%s → %s) — run tilde update", short(localSHA), short(c.Remote))
 }
 
 // RefreshAsync re-checks freshness in the background when the cache is
 // stale. Fire-and-forget by design: every failure mode (offline,
-// rate-limited, unknown build, opted out) is silent — the next startup
-// simply shows whatever the cache last knew.
+// rate-limited, opted out) is silent — the next startup simply shows
+// whatever the cache last knew. Versions first (tags API), commit SHA
+// as fallback when the remote has no parseable tags.
 func RefreshAsync() {
 	if os.Getenv(envOptOut) == "1" {
-		return
-	}
-	if LocalSHA() == "" {
 		return
 	}
 	go func() {
@@ -198,22 +293,60 @@ func RefreshAsync() {
 				return
 			}
 		}
+		if tag, _, err := remoteVersion(ctx); err == nil && tag != "" {
+			writeCheck(p, checkFile{CheckedAt: time.Now().Unix(), Available: compareVersion(tag, Version) > 0, Remote: tag})
+			return
+		}
 		remote, err := remoteSHA(ctx)
 		if err != nil {
 			return
 		}
 		local := LocalSHA()
-		c := checkFile{CheckedAt: time.Now().Unix(), Available: remote != "" && remote != local, Remote: remote}
-		if dir, derr := stateDir(); derr == nil {
-			_ = os.MkdirAll(dir, 0o700)
-			data, _ := json.Marshal(c)
-			_ = os.WriteFile(p, append(data, '\n'), 0o600)
+		if local == "" {
+			return
 		}
+		writeCheck(p, checkFile{CheckedAt: time.Now().Unix(), Available: remote != "" && remote != local, Remote: remote})
 	}()
 }
 
+// writeCheck persists one freshness result. Best-effort: a failed
+// write only means the next startup re-checks sooner.
+func writeCheck(p string, c checkFile) {
+	if dir, derr := stateDir(); derr == nil {
+		_ = os.MkdirAll(dir, 0o700)
+		data, _ := json.Marshal(c)
+		_ = os.WriteFile(p, append(data, '\n'), 0o600)
+	}
+}
+
+// remoteVersion reads the newest release tag over the public API —
+// no auth, no identity. Returns ("","", nil) when the remote has no
+// parseable version tags (callers fall back to the commit-SHA check).
+func remoteVersion(ctx context.Context) (tag, sha string, err error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", tagsURL, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", "", fmt.Errorf("github api: status %d", resp.StatusCode)
+	}
+	var tags []ghTag
+	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+		return "", "", err
+	}
+	tag, sha = newestTag(tags)
+	return tag, sha, nil
+}
+
 // remoteSHA reads main's HEAD commit over the public API. No auth, no
-// identity: the request carries nothing but the URL.
+// identity: the request carries nothing but the URL. Tagless fallback
+// only — versions are the primary channel.
 func remoteSHA(ctx context.Context) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
@@ -274,12 +407,15 @@ func Run() error {
 		return fmt.Errorf("source tree at %s has uncommitted changes — commit or stash them, then retry (nothing was pulled)", dir)
 	}
 	fmt.Printf("tilde: pulling %s in %s\n", repoURL, dir)
+	if out, err := git("fetch", "--tags", "--prune"); err != nil {
+		return fmt.Errorf("fetch failed: %s — resolve it with git in %s, then retry", out, dir)
+	}
 	if out, err := git("pull", "--ff-only"); err != nil {
 		return fmt.Errorf("pull failed: %s — resolve it with git in %s, then retry", out, dir)
 	}
 	after, _ := git("rev-parse", "HEAD")
 	if after == before {
-		fmt.Printf("tilde: already up to date (%s)\n", short(before))
+		fmt.Printf("tilde: already up to date (%s)\n", describeVersion(dir, before))
 		return nil
 	}
 	fmt.Println("tilde: rebuilding…")
@@ -310,8 +446,25 @@ func Run() error {
 		return fmt.Errorf("reinstall failed: %v — fresh binary is at %s", err, filepath.Join(dir, "tilde"))
 	}
 	_ = RecordInstall(dir)
-	fmt.Printf("tilde: updated %s → %s — restart tilde to use it\n", short(before), short(after))
+	fmt.Printf("tilde: updated %s → %s — restart tilde to use it\n", describeVersion(dir, before), describeVersion(dir, after))
 	return nil
+}
+
+// describeVersion names one checkout state for humans: the release
+// tag pointing at it when there is one, else the short SHA. Never
+// fails loud — "unknown" beats a broken update receipt.
+func describeVersion(dir, sha string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	if out, err := exec.CommandContext(ctx, "git", "-C", dir, "describe", "--tags", "--abbrev=0").CombinedOutput(); err == nil {
+		if tag := strings.TrimSpace(string(out)); tag != "" {
+			return tag
+		}
+	}
+	if sha != "" {
+		return short(sha)
+	}
+	return "unknown"
 }
 
 // installBinary swaps the fresh binary over target atomically: write

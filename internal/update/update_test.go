@@ -29,18 +29,64 @@ func TestNoticeOptOut(t *testing.T) {
 func TestNoticeForShapes(t *testing.T) {
 	local := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	remote := "ffffffffffffffffffffffffffffffffffffffff"
-	if got := noticeFor(local, checkFile{Available: false, Remote: remote}); got != "" {
+	if got := noticeFor(Version, local, checkFile{Available: false, Remote: remote}); got != "" {
 		t.Fatalf("unavailable must stay silent, got %q", got)
 	}
-	if got := noticeFor(local, checkFile{Available: true}); got != "" {
+	if got := noticeFor(Version, local, checkFile{Available: true}); got != "" {
 		t.Fatalf("empty remote must stay silent, got %q", got)
 	}
-	if got := noticeFor(local, checkFile{Available: true, Remote: local}); got != "" {
+	if got := noticeFor(Version, local, checkFile{Available: true, Remote: Version}); got != "" {
+		t.Fatalf("same version must stay silent, got %q", got)
+	}
+	got := noticeFor("v0.8.0", local, checkFile{Available: true, Remote: "v0.9.0"})
+	if !strings.Contains(got, "tilde update") || !strings.Contains(got, "v0.8.0") || !strings.Contains(got, "v0.9.0") {
+		t.Fatalf("notice must name remedy + both versions, got %q", got)
+	}
+	if strings.Contains(got, "aaaaaaa") || strings.Contains(got, "fffffff") {
+		t.Fatalf("version notice must not leak SHAs, got %q", got)
+	}
+	// Tagless fallback: SHA remote keeps the old short-SHA shape.
+	got = noticeFor(Version, local, checkFile{Available: true, Remote: remote})
+	if !strings.Contains(got, "tilde update") || !strings.Contains(got, "aaaaaaa") || !strings.Contains(got, "fffffff") {
+		t.Fatalf("SHA fallback must name remedy + both ends, got %q", got)
+	}
+	if got := noticeFor(Version, local, checkFile{Available: true, Remote: local}); got != "" {
 		t.Fatalf("same SHA must stay silent, got %q", got)
 	}
-	got := noticeFor(local, checkFile{Available: true, Remote: remote})
-	if !strings.Contains(got, "tilde update") || !strings.Contains(got, "aaaaaaa") || !strings.Contains(got, "fffffff") {
-		t.Fatalf("notice must name remedy + both ends, got %q", got)
+}
+
+func TestCompareVersion(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"v0.8.0", "v0.9.0", -1},
+		{"v0.9.0", "v0.8.0", 1},
+		{"v0.8.0", "v0.8.0", 0},
+		{"v0.8.0", "v0.8.1", -1},
+		{"v1.0.0", "v0.9.9", 1},
+		{"v0.10.0", "v0.9.0", 1}, // numeric, not lexical
+	}
+	for _, c := range cases {
+		if got := compareVersion(c.a, c.b); got != c.want {
+			t.Errorf("compareVersion(%q,%q) = %d, want %d", c.a, c.b, got, c.want)
+		}
+	}
+	for _, bad := range []string{"", "main", "v1.2", "v1.2.3.4", "v1.x.0"} {
+		if _, _, _, ok := parseVersion(bad); ok {
+			t.Errorf("parseVersion(%q) must fail", bad)
+		}
+	}
+}
+
+func TestNewestTag(t *testing.T) {
+	tags := []ghTag{{Name: "not-a-version"}, {Name: "v0.9.0"}, {Name: "v0.10.0"}, {Name: "v0.8.0"}}
+	tag, _ := newestTag(tags)
+	if tag != "v0.10.0" {
+		t.Fatalf("must pick highest semver, got %q", tag)
+	}
+	if tag, _ := newestTag([]ghTag{{Name: "nope"}}); tag != "" {
+		t.Fatalf("no parseable tags must yield empty, got %q", tag)
 	}
 }
 

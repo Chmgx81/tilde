@@ -191,7 +191,7 @@ document, not to make a silent exception:
 Shown once per new session start (not on resume — see §2.13).
 
 ```
-                     ~/dev/tilde · tilde v0.7.0
+                     ~/dev/tilde · tilde v0.8.0
 
 ╭────────────────────────────────────────────────────────────────────────────╮
 │ Welcome to tilde.                                                          │
@@ -680,7 +680,7 @@ because this is a reference screen, not a log, and shouldn't compete with the
 timeline vocabulary it's explaining.
 
 ```
-  Keybindings                                                    tilde v0.7.0
+  Keybindings                                                    tilde v0.8.0
 
   Tab              Cycle mode: Plan → Build → Auto
   Ctrl+C           Quit when idle (running turns ignore it — see Esc Esc)

@@ -83,7 +83,7 @@ no identity or telemetry leaves the machine) and cache the answer. When
 an update exists, the welcome panel gains a dim line:
 
 ```text
-update available (a1b2c3d → e5f6a7b) — run tilde update
+update available (v0.8.0 → v0.9.0) — run tilde update
 ```
 
 ```sh

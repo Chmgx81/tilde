@@ -618,12 +618,12 @@ As of v0.6+:
 | Model-aware compaction budget | DONE — BudgetFor catalog window unless explicit |
 | Creds store inter-process lock | DONE — flock read-modify-write |
 | CI + ARCHITECTURE pointer | DONE — .github/workflows/ci.yml; docs/ARCHITECTURE.md |
-| Timeline action grouping (spec §2.20) | TODO — spec ready, not yet built |
-| Thinking-duration indicator (spec §2.20) | TODO — spec ready, not yet built |
-| Write-verb / new-file rendering (spec §2.10-2.11) | TODO — spec ready, not yet built |
-| Large-paste collapse (spec §2.21) | TODO — spec ready, not yet built |
+| Timeline action grouping (spec §2.20) | DONE — consecutive groupable pairs buffer, static render |
+| Thinking-duration indicator (spec §2.20) | DONE — `◆ Thought for Ns` receipt + rotating status verbs |
+| Write-verb / new-file rendering (spec §2.10-2.11) | DONE — `Write` verb + plain numbered listing |
+| Large-paste collapse (spec §2.21) | DONE — `[Pasted text #N +M lines]` token, `TILDE_PASTE_LINES` threshold |
 | Session export / brief (spec §2.22) | TODO — spec ready, not yet built |
-| Provider retry/backoff + error classification (§11) | TODO — not yet built |
+| Provider retry/backoff (spec §2.23) | DONE — exponential backoff + Retry-After + fail-fast auth (ollama/openai/anthropic, tested); error classification TODO |
 | Startup config validation, fail-closed before TUI (§11) | PARTIAL — sandbox already fails closed; policies.yaml parse errors not yet distinguished |
 | Crash-line + unclosed-session resume offer (§11) | PARTIAL — log is already append-only/resumable; no crash marker or resume prompt yet |
 | Classified exit codes (§11) | DONE — headless exits 0/2/3/4/5/1 per the spec §4 table (config/startup, provider-exhausted, handoff, deny-tier, other) |

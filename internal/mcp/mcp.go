@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"tilde/internal/update"
 )
 
 // ServerConfig launches one server.
@@ -237,7 +239,7 @@ func (m *Manager) startOne(ctx context.Context, name string, cfg ServerConfig) e
 	if err := s.call(sctx, "initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]any{},
-		"clientInfo":      map[string]any{"name": "tilde", "version": "v0.7.0"},
+		"clientInfo":      map[string]any{"name": "tilde", "version": update.Version},
 	}, &initResult); err != nil {
 		cmd.Process.Kill()
 		_ = cmd.Wait() // reap, never zombie on a failed handshake
