@@ -168,10 +168,11 @@ already does those jobs.
 | `ANTHROPIC_API_KEY` | `--provider anthropic` (native API; needs live-key verification) |
 | `OPENROUTER_API_KEY` | `--provider openrouter` (free `:free` models included) |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `--provider gemini` (either name works; free tier via AI Studio) |
+| `OPENCODE_API_KEY` | `--provider opencode` (Zen dashboard key; curated coding models) |
 
 ## Providers
 
-Five backends, one shape. No GPU is fine — cloud keys are first-class, and two
+Six backends, one shape. No GPU is fine — cloud keys are first-class, and three
 providers cost nothing to start.
 
 - `--provider ollama` (default) — localhost, private by construction.
@@ -182,6 +183,9 @@ providers cost nothing to start.
   (`:free` models, $0 per token — account and key still required).
 - `--provider gemini` — Google via its OpenAI-compatible endpoint; AI Studio
   serves these on a **free tier**, so a Google account is enough to start.
+- `--provider opencode` — OpenCode Zen: models the OpenCode team tested and
+  benchmarked for coding agents, behind one key (`OPENCODE_API_KEY`).
+  Ships coding-first picks plus a logged free-trial row.
 
 Keys resolve down a ladder — no silent fallbacks, a stored key owns its
 provider:
@@ -209,7 +213,7 @@ internal/tools/          read/edit/write/shell/grep/glob/git + registry,
 internal/sandbox/        bwrap isolation (fs + net, PID namespace)
 internal/policy/         deny/ask/allow + destructive-command parser
 internal/mode/           Plan/Build/Auto gate
-internal/provider/       5 backends + registry, credential ladder, model catalog
+internal/provider/       6 backends + registry, credential ladder, model catalog
 internal/compact/        80% auto-compaction with model summaries
 internal/session/        append-only JSONL transcripts, resume
 internal/skills/         progressive-disclosure loader + frontmatter lint

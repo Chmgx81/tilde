@@ -50,6 +50,7 @@ var Descriptions = []ProviderDesc{
 	{ID: "anthropic", Name: "Anthropic", NeedsKey: true, EnvKey: "ANTHROPIC_API_KEY"},
 	{ID: "openrouter", Name: "OpenRouter (incl. free models)", NeedsKey: true, EnvKey: "OPENROUTER_API_KEY"},
 	{ID: "gemini", Name: "Google Gemini (free tier)", NeedsKey: true, EnvKey: "GEMINI_API_KEY"},
+	{ID: "opencode", Name: "OpenCode Zen (curated for coding agents)", NeedsKey: true, EnvKey: "OPENCODE_API_KEY"},
 }
 
 // CloudIDs lists the backends /login accepts.
@@ -65,7 +66,9 @@ func CloudIDs() []string {
 
 // CatalogModel is one shipped catalog entry (spec §2.24): a model a
 // user can pick by name, with the window geometry the budget auto-size
-// needs. Prices are USD per million tokens; 0 means free/unreported.
+// needs. Prices are USD per million tokens; 0 means free, negative
+// means unreported pay-per-use (rendered as such — never as free). A 0
+// Context means unreported: budget auto-size skips the entry by design.
 type CatalogModel struct {
 	ID      string // wire model id
 	Name    string // human label
@@ -115,6 +118,21 @@ var Catalog = map[string][]CatalogModel{
 		{"gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite", 1048576, 0.10, 0.40},
 		{"gemini-2.5-pro", "Gemini 2.5 Pro", 1048576, 1.25, 10.00},
 		{"gemini-2.0-flash", "Gemini 2.0 Flash", 1048576, 0.10, 0.40},
+	},
+	// OpenCode Zen, verified live 2026-09-08 (docs + GET /v1/models = 70
+	// models). Only /v1/chat/completions models are listed — /responses
+	// and /messages rows need other protocols (see OpenCode doc above).
+	// Windows and prices are unreported by Zen (per-request billing on
+	// the dashboard): Context 0 skips budget auto-size by design, and
+	// negative prices render as pay-per-use, never as free. The one
+	// exception is the trial-free Nemotron row (0/0) — NVIDIA's free
+	// endpoint logs sessions, so it is NOT zero-retention like the rest.
+	"opencode": {
+		{"kimi-k2.7-code", "Kimi K2.7 Code", 0, -1, -1},
+		{"minimax-m3", "MiniMax M3", 0, -1, -1},
+		{"glm-5.3", "GLM 5.3", 0, -1, -1},
+		{"deepseek-v4-pro", "DeepSeek V4 Pro", 0, -1, -1},
+		{"nemotron-3-ultra-free", "Nemotron 3 Ultra (free trial, logged)", 0, 0, 0},
 	},
 }
 
@@ -219,7 +237,7 @@ func Factory(providerID, model, base, key string) (Provider, error) {
 	switch strings.ToLower(providerID) {
 	case "", "ollama":
 		return NewOllama(model), nil
-	case "openai", "anthropic", "openrouter", "gemini":
+	case "openai", "anthropic", "openrouter", "gemini", "opencode":
 		id := strings.ToLower(providerID)
 		if key == "" {
 			envKey := "OPENAI_API_KEY"
@@ -231,6 +249,9 @@ func Factory(providerID, model, base, key string) (Provider, error) {
 			}
 			if id == "gemini" {
 				envKey = "GEMINI_API_KEY"
+			}
+			if id == "opencode" {
+				envKey = "OPENCODE_API_KEY"
 			}
 			return nil, fmt.Errorf("no %s API key — run /login %s or set $%s", id, id, envKey)
 		}
@@ -247,6 +268,9 @@ func Factory(providerID, model, base, key string) (Provider, error) {
 		}
 		if id == "gemini" {
 			return NewGemini(model, base, key), nil
+		}
+		if id == "opencode" {
+			return NewOpenCode(model, base, key), nil
 		}
 		return NewAnthropic(model, base, key), nil
 	default:

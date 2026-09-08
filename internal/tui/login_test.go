@@ -103,7 +103,7 @@ func TestBareModelListsCatalog(t *testing.T) {
 	m := newLoginTestModel(t, "ollama/llama3.2")
 	m.switchModel("")
 	joined := strings.Join(m.lines, "\n")
-	for _, want := range []string{"openai/gpt-5.2", "anthropic/", "openrouter/", "gemini/", "/model <provider/model>"} {
+	for _, want := range []string{"openai/gpt-5.2", "anthropic/", "openrouter/", "gemini/", "opencode/", "/model <provider/model>"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("bare /model must list the catalog (missing %q):\n%s", want, joined)
 		}
@@ -145,6 +145,16 @@ func TestSwitchProviderGeminiHonorsModel(t *testing.T) {
 	}
 	if m.budget != 1048576 {
 		t.Fatalf("budget should auto-size to 1M window, got %d", m.budget)
+	}
+}
+
+func TestSwitchProviderOpenCodeHonorsModel(t *testing.T) {
+	m := newLoginTestModel(t, "ollama/llama3.2")
+	m.keyOverrides = map[string]string{"opencode": "test-key-1234"}
+	m.SetBudgetExplicit(true) // unreported window: nothing to adopt, explicit or not
+	m.switchProvider("opencode", "glm-5.3", "")
+	if m.model != "opencode/glm-5.3" {
+		t.Fatalf("requested model dropped: got %q", m.model)
 	}
 }
 

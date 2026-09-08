@@ -413,7 +413,14 @@ func (m *Model) listCatalog() {
 			if cm.InCost > 0 || cm.OutCost > 0 {
 				price = fmt.Sprintf("$%.2f/$%.2f per 1M in/out", cm.InCost, cm.OutCost)
 			}
-			m.append(fmt.Sprintf("%s%s/%s — %s, %dk ctx, %s", mark, d.ID, cm.ID, cm.Name, cm.Context/1000, price))
+			if cm.InCost < 0 || cm.OutCost < 0 {
+				price = "pay-per-use, see dashboard"
+			}
+			ctx := "window unreported"
+			if cm.Context > 0 {
+				ctx = fmt.Sprintf("%dk ctx", cm.Context/1000)
+			}
+			m.append(fmt.Sprintf("%s%s/%s — %s, %s, %s", mark, d.ID, cm.ID, cm.Name, ctx, price))
 		}
 	}
 	m.append("usage: /model <provider/model> or /model <name> (current backend) — custom ids allowed")
@@ -449,6 +456,8 @@ func (m *Model) setModelOnCurrent(model string) tea.Cmd {
 	case *provider.OpenRouter:
 		p.Model = model
 	case *provider.Gemini:
+		p.Model = model
+	case *provider.OpenCode:
 		p.Model = model
 	case *provider.Anthropic:
 		p.Model = model

@@ -21,7 +21,7 @@ func Validate(providerID, key, base string) (ok bool, networkErr bool, err error
 	var req *http.Request
 	var err2 error
 	switch providerID {
-	case "openai", "openrouter", "gemini":
+	case "openai", "openrouter", "gemini", "opencode":
 		url := strings.TrimRight(base, "/")
 		if url == "" {
 			url = "https://api.openai.com/v1"
@@ -30,6 +30,9 @@ func Validate(providerID, key, base string) (ok bool, networkErr bool, err error
 			}
 			if providerID == "gemini" {
 				url = DefaultGeminiBase
+			}
+			if providerID == "opencode" {
+				url = DefaultOpenCodeBase
 			}
 		}
 		req, err2 = http.NewRequest("GET", url+"/models", nil)
