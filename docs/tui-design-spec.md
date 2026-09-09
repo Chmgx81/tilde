@@ -737,12 +737,12 @@ timeline vocabulary it's explaining.
   Cell-motion mouse tracking is on: wheel motion (a touchpad two-finger
   scroll included) scrolls the transcript natively instead of reaching
   the app as bare ↑/↓ through alternate-scroll, where it recalled prompt
-  history from the live tail. Plain left-drag selects transcript rows
+  history from the live tail. Plain left-drag selects transcript characters
   in-app — the selection is transcript-absolute, so wheel scrolling
   mid-drag keeps the highlight glued to the content and holding the
   drag at a screen edge autoscrolls (a turn longer than the viewport
   is one gesture); inverse-video highlight follows the drag, release
-  copies the rows as plain text (ANSI stripped) through the clipboard
+  copies the selected characters as plain text (ANSI stripped) through the clipboard
   ladder and toasts the receipt; a bare click copies nothing. Collapsed
   pastes copy expanded (§2.21): tokens never leak into the clipboard.
   Shift+drag still reaches the terminal's own selection and is the

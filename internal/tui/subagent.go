@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Subagent / parallel-exploration rows (spec §2.19). Render-state only:
@@ -84,6 +85,7 @@ func (m *Model) pushSubagentRun(verb, text string) {
 // renderSubagentRunning styles one still-running row: `⋮` in fg-dim,
 // the whole row dim — it is pending, not yet a result.
 func renderSubagentRunning(typ, detail, model string) string {
+	typ, detail, model = ansi.Strip(typ), ansi.Strip(detail), ansi.Strip(model)
 	label := typ
 	if detail != "" {
 		label += " " + detail
@@ -151,6 +153,7 @@ func splitSubagentResult(body string, sp subSpawn) ([]subDone, string) {
 // status right-aligned — [done] in success, [failed] in danger (the same
 // right-aligned-status convention as [installed] in §2.17).
 func renderSubagentDone(task, typ, model string, failed bool, width int) string {
+	task, typ, model = ansi.Strip(task), ansi.Strip(typ), ansi.Strip(model)
 	status := "[done]"
 	st := lipgloss.NewStyle().Foreground(success)
 	if failed {
@@ -170,7 +173,7 @@ func renderSubagentDone(task, typ, model string, failed bool, width int) string 
 	} else {
 		mid, midPlain = mut.Render(suffix), suffix
 	}
-	pad := width - len([]rune("│ "+midPlain)) - len([]rune(status))
+	pad := width - ansi.StringWidth("│ "+midPlain) - ansi.StringWidth(status)
 	if pad < 1 {
 		pad = 1
 	}

@@ -1362,6 +1362,49 @@ func TestQuestionOpensHelpOnEmptyComposer(t *testing.T) {
 	}
 }
 
+func TestOverlaysStayInsideNarrowFrame(t *testing.T) {
+	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
+	m = nm.(Model)
+	for _, view := range []string{
+		m.View(),
+		helpView(m.vp.Width),
+		confirmFooter("shell_command", map[string]any{
+			"command": "git diff --check && git status --short --branch",
+			"reason":  "The model needs approval before running this command.",
+		}, m.vp.Width, false),
+	} {
+		for _, line := range strings.Split(view, "\n") {
+			if got := ansi.StringWidth(stripANSI(line)); got > m.vp.Width {
+				t.Fatalf("overlay line exceeds frame: %d > %d: %q", got, m.vp.Width, stripANSI(line))
+			}
+		}
+	}
+}
+
+func TestTruncMiddlePreservesUnicode(t *testing.T) {
+	got := truncMiddle("日本語のパス/文件.md", 10)
+	if !utf8.ValidString(got) || !strings.HasSuffix(got, "…") {
+		t.Fatalf("Unicode truncation must remain valid and show an ellipsis: %q", got)
+	}
+}
+
+func TestUntrustedTranscriptTextCannotInjectTerminalControls(t *testing.T) {
+	malicious := "before\x1b]52;c;SGVjcmV0\aafter\x1b[2J"
+	for name, got := range map[string]string{
+		"tool result": renderToolResult(malicious),
+		"thinking":    renderThinking(malicious),
+		"markdown":    renderMarkdownText(malicious, 60),
+	} {
+		if strings.Contains(got, "\x1b]52") || strings.Contains(got, "\x1b[2J") {
+			t.Fatalf("%s retained terminal control data: %q", name, got)
+		}
+		if !strings.Contains(stripANSI(got), "before") || !strings.Contains(stripANSI(got), "after") {
+			t.Fatalf("%s lost visible content while stripping controls: %q", name, got)
+		}
+	}
+}
+
 func TestPickReasonVerbCycle(t *testing.T) {
 	// Fixed order injected: 2s cadence, wraps — deterministic under test.
 	identity := []int{0, 1, 2, 3, 4, 5}

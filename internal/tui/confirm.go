@@ -2,10 +2,10 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"tilde/internal/agent"
 	"tilde/internal/policy"
@@ -111,26 +111,27 @@ func (m Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func confirmFooter(tool string, args map[string]any, width int, reasonHidden bool) string {
 	reason := "The active policy requires your approval before this action can run."
 	if supplied, ok := args["reason"].(string); ok && strings.TrimSpace(supplied) != "" {
-		reason = strings.TrimSpace(supplied)
+		reason = strings.TrimSpace(ansi.Strip(supplied))
 	}
 	lineWidth := width - 6 // rounded border + padding
-	if lineWidth < 20 {
-		lineWidth = 20
+	if lineWidth < 10 {
+		lineWidth = 10
 	}
-	foot := fmt.Sprintf("Confirm\n%s", policy.Describe(tool, args))
+	foot := "Confirm\n" + wrapLine(ansi.Strip(policy.Describe(tool, args)), lineWidth)
 	if !reasonHidden {
 		reasonLine := wrapLine("Reason: "+reason, lineWidth)
 		foot += "\n\n" + reasonLine
 	}
-	foot += "\n[y] once   [n] deny (default — Enter denies)   [r] "
+	hint := "[y] once   [n] deny (default — Enter denies)   [r] "
 	if reasonHidden {
-		foot += "show reason"
+		hint += "show reason"
 	} else {
-		foot += "hide reason"
+		hint += "hide reason"
 	}
 	if tool == "shell_command" {
-		foot += "   [a] always this session (exact command)"
+		hint += "   [a] always this session (exact command)"
 	}
+	foot += "\n" + wrapLine(hint, lineWidth)
 	return foot
 }
 

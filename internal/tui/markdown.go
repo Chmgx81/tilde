@@ -126,6 +126,7 @@ func trimLinePad(ln string) string {
 // renderMarkdownText is the one-shot variant for paths without a Model
 // (session resume rebuilds scrollback outside any live model).
 func renderMarkdownText(text string, width int) string {
+	text = stripANSI(text)
 	r := newMarkdownRenderer(width)
 	if r == nil {
 		return text
@@ -143,6 +144,7 @@ func renderMarkdownText(text string, width int) string {
 // Any render failure returns the raw text — styling must never eat
 // content.
 func (m *Model) renderMarkdown(text string, width int) string {
+	text = stripANSI(text)
 	r := m.mdRenderer(width)
 	if r == nil {
 		return text

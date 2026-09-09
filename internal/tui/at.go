@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type atRow struct {
@@ -34,7 +35,7 @@ func walkFiles(root string) []string {
 			}
 			return nil
 		}
-		out = append(out, rel)
+		out = append(out, ansi.Strip(rel))
 		if len(out) >= 20000 {
 			return filepath.SkipAll
 		}
@@ -153,6 +154,7 @@ func fuzzyScore(query, target string) (int, []int) {
 // batched into one style.Render per contiguous run instead of per rune,
 // which cuts SGR sequences by an order of magnitude on typical paths.
 func highlight(path string, idx []int) string {
+	path = ansi.Strip(path)
 	hit := map[int]bool{}
 	for _, i := range idx {
 		hit[i] = true
@@ -193,6 +195,7 @@ func highlight(path string, idx []int) string {
 // an already-styled string in a Background Render would let the inner
 // resets clear the fill mid-row, so the fill is composed per run here.
 func highlightSelected(path string, idx []int) string {
+	path = ansi.Strip(path)
 	hit := map[int]bool{}
 	for _, i := range idx {
 		hit[i] = true

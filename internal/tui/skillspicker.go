@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"tilde/internal/provider"
 	"tilde/internal/skills"
@@ -139,12 +140,13 @@ func (m Model) skillsView() string {
 	left := make([]string, len(rows))
 	maxLeft, maxScope := 0, 0
 	for i, sk := range rows {
-		num := fmt.Sprintf("%d. %-22s", i+1, sk.Name)
-		left[i] = "  " + num + "  " + truncMiddle(sk.Description, 44)
-		if w := len([]rune(left[i])); w > maxLeft {
+		name, description, scope := ansi.Strip(sk.Name), ansi.Strip(sk.Description), ansi.Strip(sk.Scope)
+		num := fmt.Sprintf("%d. %-22s", i+1, name)
+		left[i] = "  " + num + "  " + truncMiddle(description, 44)
+		if w := ansi.StringWidth(left[i]); w > maxLeft {
 			maxLeft = w
 		}
-		if w := len([]rune(sk.Scope)); w > maxScope {
+		if w := ansi.StringWidth(scope); w > maxScope {
 			maxScope = w
 		}
 	}
@@ -159,12 +161,13 @@ func (m Model) skillsView() string {
 		}
 	}
 	for i, sk := range rows {
-		row := padRunesRight(left[i], maxLeft) + "  " + padRunesLeft(sk.Scope, maxScope)
+		scope := ansi.Strip(sk.Scope)
+		row := padRunesRight(left[i], maxLeft) + "  " + padRunesLeft(scope, maxScope)
 		if i == m.skillsCursor {
 			row = lipgloss.NewStyle().Background(accentSelect).Render("→" + row[1:])
 		} else {
 			lp := padRunesRight(left[i], maxLeft)
-			sc := padRunesLeft(sk.Scope, maxScope)
+			sc := padRunesLeft(scope, maxScope)
 			row = " " + lipgloss.NewStyle().Foreground(fgMuted).Render(lp[1:]) +
 				"  " + lipgloss.NewStyle().Foreground(fgDim).Render(sc)
 		}
@@ -174,14 +177,14 @@ func (m Model) skillsView() string {
 	if len(rows) == 0 {
 		b.WriteString("  no skills match — backspace to clear the filter\n")
 	}
-	b.WriteString("  ↑↓ select · enter load · / search · esc cancel")
+	b.WriteString(truncANSI("  ↑↓ select · enter load · / search · esc cancel", m.vp.Width))
 	return b.String()
 }
 
-// padRunesRight pads s with spaces to exactly w runes (rune-aware:
-// len() counts bytes and would misalign rows with multibyte text).
+// padRunesRight pads s to exactly w terminal cells. Display width is not the
+// same as bytes or runes for CJK, emoji, and combining marks.
 func padRunesRight(s string, w int) string {
-	if d := w - len([]rune(s)); d > 0 {
+	if d := w - ansi.StringWidth(s); d > 0 {
 		return s + strings.Repeat(" ", d)
 	}
 	return s
@@ -189,7 +192,7 @@ func padRunesRight(s string, w int) string {
 
 // padRunesLeft is padRunesRight for right-aligned columns (scope tags).
 func padRunesLeft(s string, w int) string {
-	if d := w - len([]rune(s)); d > 0 {
+	if d := w - ansi.StringWidth(s); d > 0 {
 		return strings.Repeat(" ", d) + s
 	}
 	return s

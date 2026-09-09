@@ -124,7 +124,7 @@ func TestConfirmAlwaysUppercase(t *testing.T) {
 
 func TestConfirmFooterShellOnly(t *testing.T) {
 	shell := confirmFooter("shell_command", map[string]any{"command": "go test ./..."}, 100, false)
-	if !strings.Contains(shell, "[a] always this session (exact command)") {
+	if !strings.Contains(strings.ReplaceAll(shell, "\n", " "), "[a] always this session (exact command)") {
 		t.Fatalf("shell footer must offer [a]:\n%s", shell)
 	}
 	if !strings.Contains(shell, "[y] once") || !strings.Contains(shell, "[n] deny") {

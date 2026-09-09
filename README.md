@@ -124,7 +124,7 @@ a fresh clone instead.
 | Gesture | Action |
 |---|---|
 | Wheel / two-finger scroll | Scroll the transcript — even mid-drag or with a picker open |
-| Left-drag on the transcript | Select rows, release to copy. Edge autoscroll for long selections. A bare click copies nothing |
+| Left-drag on the transcript | Select characters, release to copy. Edge autoscroll for long selections. A bare click copies nothing |
 | `Shift` + drag | The terminal's own selection (recommended for arbitrary terminal copy) |
 | `Alt+M` | Pause mouse tracking for native selection; hint bar shows the state |
 

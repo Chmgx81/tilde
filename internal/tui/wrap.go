@@ -37,6 +37,7 @@ const maxThinkingLines = 60
 // matches trimRendered (one blank max); truncation is announced, never
 // silent. Callers append through m.append, so width wrapping applies.
 func renderThinking(text string) string {
+	text = ansi.Strip(text)
 	dim := lipgloss.NewStyle().Foreground(fgDim)
 	var lines []string
 	blanks := 0
@@ -82,6 +83,7 @@ func renderThinking(text string) string {
 // their highlighting inline; everything else is muted. Truncation is
 // announced, never silent.
 func renderToolResult(text string) string {
+	text = ansi.Strip(text)
 	body := strings.TrimRight(text, "\n")
 	if body == "" {
 		return lipgloss.NewStyle().Foreground(fgDim).Render("  ⎿ (no output)")

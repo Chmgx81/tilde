@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"tilde/internal/mode"
 	"tilde/internal/tools"
@@ -152,13 +153,14 @@ func renderTodoBlock(items []tools.TodoItem) string {
 	active := todoActiveIndex(items)
 	out := []string{head}
 	for i, it := range items {
+		text := ansi.Strip(it.Text)
 		mark, style := todoMark, todoText
 		if it.Done {
 			mark, style = doneMark, doneText
 		} else if i == active {
 			style = activeText
 		}
-		out = append(out, "  "+mark+" "+style.Render(it.Text))
+		out = append(out, "  "+mark+" "+style.Render(text))
 	}
 	return strings.Join(out, "\n")
 }

@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"tilde/internal/mode"
 	"tilde/internal/provider"
@@ -125,10 +126,13 @@ func relTime(t time.Time) string {
 
 func truncMiddle(s string, n int) string {
 	s = strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
-	if len(s) <= n {
+	if n <= 0 {
+		return ""
+	}
+	if ansi.StringWidth(s) <= n {
 		return s
 	}
-	return s[:n-1] + "…"
+	return ansi.Truncate(s, n, "…")
 }
 
 // updateResume navigates the session picker: ↑↓ select, enter resume,
@@ -179,7 +183,8 @@ func (m Model) resumeView() string {
 		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "  Resume a session                                          %d sessions\n\n", len(m.resumeItems))
+	b.WriteString(truncANSI(fmt.Sprintf("  Resume a session                                          %d sessions", len(m.resumeItems)), m.vp.Width))
+	b.WriteString("\n\n")
 	for i, it := range m.resumeItems {
 		id := truncMiddle(it.ID, idW)
 		row := "  " + padRunesRight(id, idW) + "  " + padRunesRight(relTime(it.When), tW) +
@@ -194,7 +199,7 @@ func (m Model) resumeView() string {
 		b.WriteString(row)
 		b.WriteString("\n")
 	}
-	b.WriteString("\n  ↑↓ select · enter resume · d delete · esc cancel")
+	b.WriteString("\n" + truncANSI("  ↑↓ select · enter resume · d delete · esc cancel", m.vp.Width))
 	return b.String()
 }
 

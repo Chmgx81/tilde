@@ -19,6 +19,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/term"
 
 	"tilde/internal/agent"
@@ -1109,7 +1110,7 @@ func (m Model) submit() (tea.Model, tea.Cmd) {
 		// text rather than a silent drop — never swallow user input.
 		_ = q
 	}
-	m.append(lipgloss.NewStyle().Foreground(m.modeColor()).Render("→ ") + goal)
+	m.append(lipgloss.NewStyle().Foreground(m.modeColor()).Render("→ ") + ansi.Strip(goal))
 	// Retain the paste bodies keyed to the echo line just appended, so
 	// copy paths can expand tokens back to real content later. The
 	// display keeps the collapsed token (§2.21); only copies expand.
@@ -1381,7 +1382,7 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 		m.toastAmber = true
 		return cmd
 	case "system":
-		m.append(lipgloss.NewStyle().Foreground(fgMuted).Render("● [system] " + e.Text))
+		m.append(lipgloss.NewStyle().Foreground(fgMuted).Render("● [system] " + ansi.Strip(e.Text)))
 	case "done":
 		// Receipt for real work only: a plain chat reply ending the turn
 		// needs no applause line — Done is for tool calls, commands, and
@@ -1404,6 +1405,7 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 // trade the glyph for a 2-space indent — same words, quieter gutter.
 // Callers append through m.append so wrapping still applies.
 func (m *Model) renderCallLine(text string, grouped bool, extra string) {
+	text = ansi.Strip(text)
 	verb, rest := splitVerb(text)
 	disp := toolDisplayVerb(verb)
 	if len(disp) < verbWidth {
@@ -1764,7 +1766,10 @@ func (m *Model) statusBar() string {
 	return lineLeft + strings.Repeat(" ", gap) + lineRight
 }
 
-func runeLen(s string) int { return len([]rune(s)) }
+// runeLen is the historical name used by the layout code; it returns
+// terminal cell width, not Go rune count, so CJK, emoji, and combining marks
+// cannot shift columns or overflow a frame.
+func runeLen(s string) int { return ansi.StringWidth(s) }
 
 // frameWidth maps a terminal width to the app frame width: terminals
 // wider than maxAppWidth get a centered content column instead of a
@@ -1853,7 +1858,7 @@ func (m Model) vpView() string {
 
 func (m Model) View() string {
 	if m.helpOpen {
-		return m.centerFrame(helpView())
+		return m.centerFrame(helpView(m.vp.Width))
 	}
 	if m.resumeOpen {
 		return m.centerFrame(m.resumeView())

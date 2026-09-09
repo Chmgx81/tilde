@@ -2,7 +2,6 @@ package tui
 
 import (
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -48,10 +47,10 @@ func gitBranch(root string) string {
 	return branch
 }
 
-var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
-
 // stripANSI removes SGR color codes for width math.
-func stripANSI(s string) string { return ansiRe.ReplaceAllString(s, "") }
+// It also removes OSC/CSI control sequences so hostile tool output cannot
+// survive into copied text or width calculations.
+func stripANSI(s string) string { return ansi.Strip(s) }
 
 // truncANSI truncates a styled string to a visible width (ANSI
 // sequences are preserved), marking the cut with an ellipsis.
