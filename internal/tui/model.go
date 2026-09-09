@@ -1992,7 +1992,8 @@ func atDropdown(items []atRow, cursor, width int) string {
 				w = 1
 			}
 			sel := lipgloss.NewStyle().Background(accentSelect)
-			b.WriteString(sel.Render(prefix) + truncANSI(highlightSelected(r.path, r.idx), w))
+			b.WriteString(sel.Render(prefix))
+			b.WriteString(truncANSI(highlightSelected(r.path, r.idx), w))
 			b.WriteString("\n")
 			continue
 		}

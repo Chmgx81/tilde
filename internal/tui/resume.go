@@ -199,7 +199,8 @@ func (m Model) resumeView() string {
 		b.WriteString(row)
 		b.WriteString("\n")
 	}
-	b.WriteString("\n" + truncANSI("  ↑↓ select · enter resume · d delete · esc cancel", m.vp.Width))
+	b.WriteString("\n")
+	b.WriteString(truncANSI("  ↑↓ select · enter resume · d delete · esc cancel", m.vp.Width))
 	return b.String()
 }
 
