@@ -187,8 +187,9 @@ Same tasks, repeated trials, fresh directories. Exits 1 if any task scores zero.
   or tighten approval — never rewire or auto-approve your user servers.
 - **Minimal hook env.** Hooks get `PATH/HOME/USER/SHELL/LANG/PWD` plus tool
   args only; `*_KEY/*_TOKEN/*_SECRET/*_PASSWORD` never pass through, output capped at 32KB and scrubbed.
-- **Signed updates.** `tilde update` verifies the release tag signature
-  before pulling; unsigned fails closed, nothing is pulled or built.
+- **Signed updates.** `tilde update` verifies a newer release tag signature
+  before pulling; unsigned releases fail closed, while an older unsigned tag
+  cannot block refreshing or rebuilding the current source checkout.
 - **Scrubbed at rest.** Session logs and the audit trail are secret-scrubbed
   on write (mode `0600`); the audit stores arg hashes, never raw args.
 

@@ -231,6 +231,17 @@ func TestVerifyTagHelperRefusesUnsigned(t *testing.T) {
 	}
 }
 
+func TestNeedsReleaseVerificationIgnoresCurrentOrOlderTags(t *testing.T) {
+	for _, tag := range []string{"", "v0.8.0", Version} {
+		if needsReleaseVerification(tag) {
+			t.Fatalf("tag %q must not block a refresh when it is not newer than %s", tag, Version)
+		}
+	}
+	if !needsReleaseVerification("v0.9.1") {
+		t.Fatal("newer release tags must require signature verification")
+	}
+}
+
 func TestRunRefusesUnsignedTag(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git required")

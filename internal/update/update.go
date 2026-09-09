@@ -409,6 +409,14 @@ func verifyTag(git func(args ...string) (string, error), tag string) error {
 	return nil
 }
 
+// needsReleaseVerification reports whether tag represents a release newer
+// than this binary. An old unsigned tag must not brick source refreshes or
+// rebuilding a stale binary when there is no newer release to install; a
+// newer release tag is always verified before pull/build.
+func needsReleaseVerification(tag string) bool {
+	return tag != "" && compareVersion(tag, Version) > 0
+}
+
 // Run pulls, rebuilds, and reinstalls tilde from its install source.
 // Fail-closed throughout: a dirty tree refuses (never stashes or
 // resets user work), a failed build or smoke test never touches the
@@ -446,7 +454,7 @@ func Run() error {
 	if out, err := git("fetch", "--tags", "--prune"); err != nil {
 		return fmt.Errorf("fetch failed: %s — resolve it with git in %s, then retry", out, dir)
 	}
-	if tag := latestLocalTag(git); tag != "" {
+	if tag := latestLocalTag(git); needsReleaseVerification(tag) {
 		if err := verifyTag(git, tag); err != nil {
 			return err
 		}

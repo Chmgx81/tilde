@@ -636,7 +636,7 @@ As of v0.6+:
 | Creds encryption (envelope) | DONE — AES-GCM `credentials.enc.json` sealed with machine-id key, legacy plaintext kept as compat |
 | Audit package | DONE — `internal/audit` append-only `audit.jsonl`, arg hashes never raw args, scrubbed, `0600` |
 | Release automation | DONE — `.goreleaser.yml` tag builds + SBOM + checksums, CI dry-run, `install.sh --from-release` sha256-verified |
-| Signed update verification | DONE — `verifyTag` refuses unsigned tags via `git verify-tag --raw` before pull |
+| Signed update verification | DONE — newer release tags are verified with `git verify-tag --raw` before pull; historical unsigned tags do not block current-source refreshes |
 | Session scrub at rest | DONE — `session.Append` scrubs via `tools.Scrub`, `0600` heal, crypto-random IDs |
 | Hook safe-env + session hooks | DONE — minimal env (no `*_KEY/*_TOKEN/*_SECRET/*_PASSWORD`), 32KB scrubbed output cap, `session_start`/`session_end` |
 | MCP user-authoritative merge | DONE — project config only adds servers or tightens approval; remote type + `headersFile`, SSRF-guarded URLs |
