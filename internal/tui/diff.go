@@ -140,12 +140,15 @@ func renderDiffPayload(lines []string) []string {
 func renderNewFilePayload(path string, n int, lines []string) []string {
 	bold := lipgloss.NewStyle().Foreground(fg).Bold(true)
 	dim := lipgloss.NewStyle().Foreground(fgDim)
-	plain := lipgloss.NewStyle().Foreground(fg)
 	mut := lipgloss.NewStyle().Foreground(fgMuted)
 	out := make([]string, 0, len(lines)+2)
 	out = append(out, "  "+bold.Render(fmt.Sprintf("%s (new file, %d lines)", path, n)),
 		"  "+dim.Render(diffRule))
-	for i, ln := range lines {
+	highlighted := highlightSourceLines(path, lines)
+	for i, ln := range highlighted {
+		if i >= len(lines) {
+			break
+		}
 		if ln == "" || strings.HasPrefix(ln, "[") {
 			// Blank or bracketed notice (the truncation marker):
 			// a ⎿ line, never a numbered "line" of the file.
@@ -155,7 +158,8 @@ func renderNewFilePayload(path string, n int, lines []string) []string {
 			out = append(out, "  "+mut.Render("⎿ "+ln))
 			continue
 		}
-		out = append(out, "  "+plain.Render(fmt.Sprintf("%4d   %s", i+1, ln)))
+		gutter := lipgloss.NewStyle().Foreground(fgDim).Render(fmt.Sprintf("%4d   ", i+1))
+		out = append(out, "  "+gutter+ln)
 	}
 	return out
 }

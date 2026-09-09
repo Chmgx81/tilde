@@ -2228,10 +2228,26 @@ func shellDropdown(width int) string {
 // is composed per highlight run (see highlightSelected) instead of the
 // plain truncMiddle path, which would drop the spans.
 func atDropdown(items []atRow, cursor, width int) string {
+	const maxRows = 7
+	if len(items) == 0 {
+		return ""
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= len(items) {
+		cursor = len(items) - 1
+	}
+	offset := 0
+	if cursor >= maxRows {
+		offset = cursor - maxRows + 1
+	}
+	end := min(offset+maxRows, len(items))
 	var b strings.Builder
-	for i, r := range items {
+	for i, r := range items[offset:end] {
+		realIndex := offset + i
 		prefix := "  "
-		if i == cursor {
+		if realIndex == cursor {
 			prefix = "→ "
 			w := width - 2
 			if w < 1 {
@@ -2247,5 +2263,15 @@ func atDropdown(items []atRow, cursor, width int) string {
 		b.WriteString(truncANSI(r.rendered, width-2))
 		b.WriteString("\n")
 	}
+	shown := fmt.Sprintf("  showing %d–%d of %d · ↑↓ select · Enter insert",
+		offset+1, end, len(items))
+	if offset > 0 {
+		shown = fmt.Sprintf("  ↑ more · showing %d–%d of %d · ↑↓ select · Enter insert",
+			offset+1, end, len(items))
+	}
+	if end < len(items) {
+		shown += " · ↓ more"
+	}
+	b.WriteString(lipgloss.NewStyle().Foreground(fgDim).Render(shown))
 	return strings.TrimSuffix(b.String(), "\n")
 }

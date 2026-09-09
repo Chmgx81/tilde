@@ -89,14 +89,14 @@ func TestFuzzyNoMatch(t *testing.T) {
 	}
 }
 
-func TestFuzzyCapNine(t *testing.T) {
+func TestFuzzyResultsRemainNavigable(t *testing.T) {
 	var files []string
 	for i := 0; i < 30; i++ {
 		files = append(files, filepath.Join("dir", strings.Repeat("a", 3)+string(rune('a'+i%26))+string(rune('a'+i/26))+".go"))
 	}
 	rows := matchFiles(files, "a")
-	if len(rows) > 9 {
-		t.Fatalf("expected cap of 9, got %d", len(rows))
+	if len(rows) != len(files) {
+		t.Fatalf("all matching files must remain navigable, got %d of %d", len(rows), len(files))
 	}
 }
 
@@ -2165,6 +2165,27 @@ func TestAtDropdownSelectedKeepsMatchSpans(t *testing.T) {
 		if !strings.Contains(got, "\x1b[1m") {
 			t.Fatalf("selected row dropped the bold match spans:\n%q", got)
 		}
+	}
+}
+
+func TestAtDropdownScrollsBeyondVisibleRows(t *testing.T) {
+	files := make([]string, 20)
+	for i := range files {
+		files[i] = fmt.Sprintf("pkg/file%02d.go", i)
+	}
+	rows := matchFiles(files, "file")
+	if len(rows) != len(files) {
+		t.Fatalf("expected every matching file, got %d of %d", len(rows), len(files))
+	}
+	got := stripANSI(atDropdown(rows, len(rows)-1, 80))
+	if !strings.Contains(got, "pkg/file19.go") {
+		t.Fatalf("last result must be reachable in the picker:\n%s", got)
+	}
+	if strings.Contains(got, "pkg/file00.go") {
+		t.Fatalf("picker should window results around the selected row:\n%s", got)
+	}
+	if !strings.Contains(got, "showing 14–20 of 20") || !strings.Contains(got, "↑ more") {
+		t.Fatalf("picker must explain its scroll position:\n%s", got)
 	}
 }
 

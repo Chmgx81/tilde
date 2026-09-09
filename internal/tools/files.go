@@ -148,7 +148,42 @@ func (t *ReadFile) Exec(_ context.Context, args map[string]any) (string, error) 
 	if note := AnnotateHighRisk(p); note != "" {
 		fmt.Fprintf(&b, "\n[%s]\n", note)
 	}
-	return Fence(b.String()), nil
+	return FenceCode(b.String(), sourceLanguage(p)), nil
+}
+
+func sourceLanguage(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".go":
+		return "go"
+	case ".py":
+		return "python"
+	case ".js", ".jsx":
+		return "javascript"
+	case ".ts", ".tsx":
+		return "typescript"
+	case ".rs":
+		return "rust"
+	case ".java":
+		return "java"
+	case ".c", ".h", ".cc", ".cpp", ".hpp":
+		return "cpp"
+	case ".sh", ".bash":
+		return "bash"
+	case ".json":
+		return "json"
+	case ".yaml", ".yml":
+		return "yaml"
+	case ".toml":
+		return "toml"
+	case ".sql":
+		return "sql"
+	case ".css":
+		return "css"
+	case ".html", ".htm":
+		return "html"
+	default:
+		return ""
+	}
 }
 
 // --- write_file (mutating) ---

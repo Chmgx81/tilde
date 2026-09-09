@@ -60,3 +60,13 @@ func TestCodeBlockKeepsContent(t *testing.T) {
 		}
 	}
 }
+
+func TestToolCodeFenceUsesMarkdownRenderer(t *testing.T) {
+	got := stripANSI(renderToolResult("--- begin untrusted output ---\n```go\nfunc main() {}\n```\n--- end untrusted output ---"))
+	if !strings.Contains(got, "func main() {}") {
+		t.Fatalf("fenced tool output lost code: %q", got)
+	}
+	if strings.Contains(got, "```go") {
+		t.Fatalf("code fence should be rendered, not shown as raw markup: %q", got)
+	}
+}

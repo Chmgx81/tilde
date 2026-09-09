@@ -1,12 +1,41 @@
 package tui
 
 import (
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/ansi"
 )
+
+func highlightSourceLines(path string, lines []string) []string {
+	lang := strings.TrimPrefix(filepath.Ext(path), ".")
+	if lang == "" || len(lines) == 0 {
+		return lines
+	}
+	switch strings.ToLower(lang) {
+	case "py":
+		lang = "python"
+	case "js", "jsx":
+		lang = "javascript"
+	case "ts", "tsx":
+		lang = "typescript"
+	case "rs":
+		lang = "rust"
+	case "yml":
+		lang = "yaml"
+	case "md":
+		lang = "markdown"
+	}
+	input := "```" + lang + "\n" + strings.Join(lines, "\n") + "\n```"
+	rendered := renderMarkdownText(input, 4096)
+	got := strings.Split(rendered, "\n")
+	if len(got) != len(lines) {
+		return lines
+	}
+	return got
+}
 
 // tildeMarkdownStyle maps Glamour's elements onto the spec §1.1 tokens:
 // prose in fg, strong/headings bold fg, code muted — and crucially no

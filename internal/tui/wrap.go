@@ -126,6 +126,23 @@ func renderToolResultLimit(text string, limit int) (string, bool) {
 	var out []string
 	i := 0
 	for i < len(lines) {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "```") {
+			j := i + 1
+			for j < len(lines) && !strings.HasPrefix(strings.TrimSpace(lines[j]), "```") {
+				j++
+			}
+			if j < len(lines) {
+				// Keep the trust-boundary markers muted, but render the
+				// fenced payload through the same palette-aware Markdown
+				// renderer used for assistant output.
+				code := renderMarkdownText(strings.Join(lines[i:j+1], "\n"), 4096)
+				for _, codeLine := range strings.Split(code, "\n") {
+					out = append(out, "  "+lipgloss.NewStyle().Foreground(fgMuted).Render("⎿ ")+codeLine)
+				}
+				i = j + 1
+				continue
+			}
+		}
 		if isDiffLine(lines[i]) {
 			j := i
 			for j < len(lines) && isDiffLine(lines[j]) {

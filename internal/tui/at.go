@@ -268,9 +268,6 @@ func matchFiles(files []string, query string) []atRow {
 		}
 		return ss[i].path < ss[j].path
 	})
-	if len(ss) > 9 {
-		ss = ss[:9]
-	}
 	out := make([]atRow, 0, len(ss))
 	for _, s := range ss {
 		out = append(out, atRow{path: s.path, rendered: highlight(s.path, s.idx), idx: s.idx})
