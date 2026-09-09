@@ -190,7 +190,7 @@ func (m Model) resumeView() string {
 		row := "  " + padRunesRight(id, idW) + "  " + padRunesRight(relTime(it.When), tW) +
 			"  " + padRunesRight(truncMiddle(it.Dir, dirW), dirW) + "  " + truncMiddle(it.First, msgW)
 		if i == m.resumeCursor {
-			row = lipgloss.NewStyle().Background(accentSelect).Render("→" + row[1:])
+			row = lipgloss.NewStyle().Foreground(fgOnSelect).Background(accentSelect).Render("→" + row[1:])
 		} else {
 			row = " " + lipgloss.NewStyle().Foreground(fgMuted).Render(row[1:])
 		}

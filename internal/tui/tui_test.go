@@ -603,6 +603,16 @@ func TestSplashPanelGeometry(t *testing.T) {
 	}
 }
 
+func TestSplashTinyWidthStaysContained(t *testing.T) {
+	for _, width := range []int{20, 24, 31} {
+		for _, line := range splashLines("/tmp/root", "ollama/m", 32000, width) {
+			if got := ansi.StringWidth(line); got > width {
+				t.Fatalf("width %d: tiny splash line too wide (%d): %q", width, got, stripANSI(line))
+			}
+		}
+	}
+}
+
 func TestSplashResizeRebuildsOnlyWhenFresh(t *testing.T) {
 	m := New(newTestLoop(), mode.Plan, "/tmp/root", "ollama/m", 32000)
 	if m.splashN <= 0 || len(m.lines) != m.splashN {

@@ -10,6 +10,7 @@ This directory contains the detailed design, operational, and research documents
 | [Master build plan](Plan.md) | product scope, decisions, and implementation status |
 | [Marketplace](marketplace.md) | plugins, skills, hooks, MCP, catalogs, and trust |
 | [TUI specification](tui-design-spec.md) | interaction patterns and terminal presentation |
+| [TUI audit](tui-audit.md) | current UI/UX findings, fixes, and next pass |
 | [Vision design](vision-design.md) | image support contract and current limitations |
 | [Sandbox image](sandbox-image.md) | reproducible Podman sandbox builds |
 | [2026 agent report](ai-agents-and-terminal-coding-agents-2026.md) | ecosystem research and security lessons |

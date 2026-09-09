@@ -411,7 +411,7 @@ func (m Model) marketplaceView() string {
 			padRunesRight(truncANSI("("+detail+")", right), right)
 		line = line + strings.Repeat(" ", max(width-ansi.StringWidth(line)-statusWidth, 1)) + statusStyle.Render(status)
 		if i == m.marketplaceCursor {
-			line = lipgloss.NewStyle().Background(accentSelect).Render(line)
+			line = lipgloss.NewStyle().Foreground(fgOnSelect).Background(accentSelect).Render(line)
 		} else {
 			line = lipgloss.NewStyle().Foreground(fgMuted).Render(line)
 		}

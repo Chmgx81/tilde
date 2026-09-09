@@ -164,7 +164,7 @@ func (m Model) skillsView() string {
 		scope := ansi.Strip(sk.Scope)
 		row := padRunesRight(left[i], maxLeft) + "  " + padRunesLeft(scope, maxScope)
 		if i == m.skillsCursor {
-			row = lipgloss.NewStyle().Background(accentSelect).Render("→" + row[1:])
+			row = lipgloss.NewStyle().Foreground(fgOnSelect).Background(accentSelect).Render("→" + row[1:])
 		} else {
 			lp := padRunesRight(left[i], maxLeft)
 			sc := padRunesLeft(scope, maxScope)

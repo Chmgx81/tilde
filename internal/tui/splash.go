@@ -14,6 +14,20 @@ import (
 // (RoundedBorder like composer/confirm/handoff, border-idle per §1.1).
 // Title is plain fg text, prose is fg-muted — no glyph, no bold (§§1.2/1.4).
 func splashPanel(width int) []string {
+	// At the hard floor, preserve a truthful, usable status card instead of
+	// letting long explanatory prose escape the terminal edge. The normal
+	// panel returns as soon as the terminal has enough room for its contract.
+	if width < 32 {
+		inner := max(width-2, 18)
+		box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
+			BorderForeground(borderIdle).Padding(0, 1).Width(inner).
+			Render("Welcome to tilde.\n\nsandbox protected\npress ? for help")
+		lines := strings.Split(box, "\n")
+		for i := range lines {
+			lines[i] = hardCut(lines[i], width)
+		}
+		return lines
+	}
 	// lipgloss Width covers content+padding; the border adds 2, so
 	// Width(width-2) lands the box exactly on the viewport width.
 	inner := max(width-2, 20)
@@ -69,6 +83,7 @@ func splashLines(root, modelName string, budget, width int) []string {
 	if w := runeLen(headerText); w < width {
 		header = strings.Repeat(" ", (width-w)/2) + headerText
 	}
+	header = hardCut(header, max(width, 1))
 	out := []string{
 		header,
 		"",
@@ -80,13 +95,17 @@ func splashLines(root, modelName string, budget, width int) []string {
 	// (notably when bubblewrap is missing). Keep the row inside the terminal
 	// width instead of allowing an exceptional startup state to break layout.
 	right = truncANSI(right, max(width-runeLen(left)-1, 1))
-	gap := width - runeLen(left) - runeLen(right)
-	if gap < 1 {
-		gap = 1
+	line := left + " " + right
+	if width >= 32 {
+		gap := width - runeLen(left) - runeLen(right)
+		if gap < 1 {
+			gap = 1
+		}
+		line = left + strings.Repeat(" ", gap) + right
 	}
 	out = append(out,
 		"",
-		left+strings.Repeat(" ", gap)+right,
+		hardCut(line, max(width, 1)),
 		"",
 	)
 	return out

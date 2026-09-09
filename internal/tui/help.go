@@ -8,6 +8,7 @@ func helpView(width int) string {
 		width = 20
 	}
 	rows := [][2]string{
+		{"Enter", "Send the prompt"},
 		{"Tab", "Cycle mode: Plan → Build → Auto"},
 		{"Ctrl+C", "Quit when idle"},
 		{"Esc Esc", "Cancel the running turn"},

@@ -200,8 +200,8 @@ func highlightSelected(path string, idx []int) string {
 	for _, i := range idx {
 		hit[i] = true
 	}
-	bold := lipgloss.NewStyle().Bold(true).Background(accentSelect)
-	mut := lipgloss.NewStyle().Foreground(fgMuted).Background(accentSelect)
+	bold := lipgloss.NewStyle().Foreground(fgOnSelect).Bold(true).Background(accentSelect)
+	mut := lipgloss.NewStyle().Foreground(fgOnSelect).Background(accentSelect)
 	var b strings.Builder
 	var run strings.Builder
 	runHit := false

@@ -136,7 +136,7 @@ func slashDropdown(items []slashRow, cursor, width int) string {
 			row += "  " + truncMiddle(r.desc, avail)
 		}
 		if i == cursor {
-			row = lipgloss.NewStyle().Background(accentSelect).Render("→" + row[1:])
+			row = lipgloss.NewStyle().Foreground(fgOnSelect).Background(accentSelect).Render("→" + row[1:])
 		} else {
 			row = " " + lipgloss.NewStyle().Foreground(fgMuted).Render(row[1:])
 		}

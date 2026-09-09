@@ -41,9 +41,34 @@ var (
 	fgDim        = lipgloss.Color("#565F71")
 	amber        = lipgloss.Color("#E5A00D")
 	accentSelect = lipgloss.Color("#7E22CE")
+	fgOnSelect   = lipgloss.Color("#FFFFFF")
 	success      = lipgloss.Color("#4CAF50")
 	danger       = lipgloss.Color("#F44747")
 )
+
+// configurePalette adapts semantic colors to the terminal background. A
+// fixed dark-theme foreground is unreadable in light terminals, while a
+// fixed light-theme foreground is equally poor on dark ones. Keep the
+// semantic roles stable and change only their contrast-safe values.
+func configurePalette() {
+	if os.Getenv("NO_COLOR") != "" || lipgloss.HasDarkBackground() {
+		borderPlan, borderBuild, borderAuto, borderIdle =
+			lipgloss.Color("#E5A00D"), lipgloss.Color("#E6E6E6"),
+			lipgloss.Color("#4FC3F7"), lipgloss.Color("#30363D")
+		fg, fgMuted, fgDim = lipgloss.Color("#E6E6E6"), lipgloss.Color("#8B95A6"), lipgloss.Color("#565F71")
+		amber, accentSelect = lipgloss.Color("#E5A00D"), lipgloss.Color("#7E22CE")
+		success, danger = lipgloss.Color("#4CAF50"), lipgloss.Color("#F44747")
+		fgOnSelect = lipgloss.Color("#FFFFFF")
+		return
+	}
+	borderPlan, borderBuild, borderAuto, borderIdle =
+		lipgloss.Color("#9A6700"), lipgloss.Color("#57606A"),
+		lipgloss.Color("#0969DA"), lipgloss.Color("#8C959F")
+	fg, fgMuted, fgDim = lipgloss.Color("#1F2328"), lipgloss.Color("#57606A"), lipgloss.Color("#6E7781")
+	amber, accentSelect = lipgloss.Color("#9A6700"), lipgloss.Color("#0969DA")
+	success, danger = lipgloss.Color("#1A7F37"), lipgloss.Color("#CF222E")
+	fgOnSelect = lipgloss.Color("#FFFFFF")
+}
 
 // Composer and transcript sizing limits. The composer grows with its
 // content up to maxComposerRows so a long multiline draft never swallows
@@ -248,6 +273,7 @@ func branchRefreshTickCmd() tea.Cmd {
 // New builds the TUI around a configured loop. The transcript opens with
 // the splash screen (fresh sessions only — resume loads history instead).
 func New(loop *agent.Loop, m mode.Mode, root, modelName string, budget int) Model {
+	configurePalette()
 	// Respect the de facto terminal convention without changing the normal
 	// adaptive/true-colour profile. This keeps copy/paste logs and monochrome
 	// terminals readable while the glyph and border vocabulary still carries
@@ -535,7 +561,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		// Overlays own the screen: a wheel over help / resume / skills /
 		// confirm must not scroll the transcript underneath.
-		if m.helpOpen || m.resumeOpen || m.skillsOpen || m.confirm != nil {
+		if m.helpOpen || m.resumeOpen || m.skillsOpen || m.marketplaceOpen || m.confirm != nil {
 			return m, nil
 		}
 		// While mouse passthrough is armed (Alt+M) every event is inert:
@@ -1973,7 +1999,7 @@ func (m Model) View() string {
 			Render(confirmFooter(m.confirm.Tool, m.confirm.Args, m.vp.Width, m.confirm.reasonHidden))
 		return m.centerFrame(m.vpView() + "\n" + p + "\n" + composer + dropdown + toast + "\n\n" + statusBar)
 	}
-	hint := lipgloss.NewStyle().Foreground(fgDim).Render("/ commands  •  @ files  •  ! shell  •  Drag select  •  Ctrl+Y copy  •  Tab mode  •  Esc×2 cancel" + m.sessionHint())
+	hint := lipgloss.NewStyle().Foreground(fgDim).Render("Enter send  •  / commands  •  @ files  •  ! shell  •  Drag select  •  Ctrl+Y copy  •  Tab mode  •  Esc×2 cancel" + m.sessionHint())
 	return m.centerFrame(m.vpView() + "\n" + composer + dropdown + toast + "\n\n" + statusBar + "\n\n" + m.centerHint(m.hintBar(hint)))
 }
 
