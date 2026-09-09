@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>tilde (~) — Security-first terminal coding agent</title>
+  <meta name="description" content="A local-first coding harness for real production codebases. Sandboxed shell, explicit approvals, resumable sessions. Not a toy demo.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface: { 0: '#0a0a0b', 1: '#111113', 2: '#18181b', 3: '#1f1f23' },
+            accent: '#6d5cff',
+            accentDim: '#5a4ad4',
+            success: '#22c55e',
+            danger: '#ef4444',
+            amber: '#f59e0b',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+          },
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { background: #0a0a0b; color: #e4e4e7; }
+    .glow { box-shadow: 0 0 80px 20px rgba(109,92,255,0.08); }
+    .terminal-window { background: #111113; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; }
+    .terminal-bar { background: #18181b; padding: 10px 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #27272a; }
+    .terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .fade-in { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .fade-in.visible { opacity: 1; transform: translateY(0); }
+    .code-block { background: #0a0a0b; border: 1px solid #27272a; border-radius: 8px; padding: 16px 20px; font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1.7; overflow-x: auto; }
+    .gradient-text { background: linear-gradient(135deg, #e4e4e7 0%, #a1a1aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .feature-card { background: #111113; border: 1px solid #27272a; border-radius: 12px; padding: 28px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+    .feature-card:hover { border-color: #3f3f46; box-shadow: 0 0 40px 0 rgba(109,92,255,0.05); }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 9999px; font-size: 13px; font-weight: 500; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+    .cursor-blink::after { content: '▊'; color: #6d5cff; animation: blink 1s step-end infinite; margin-left: 2px; }
+    .scanline { background: linear-gradient(180deg, transparent 0%, rgba(109,92,255,0.03) 50%, transparent 100%); height: 100%; position: absolute; top: 0; left: 0; right: 0; pointer-events: none; }
+  </style>
+</head>
+<body class="antialiased">
+
+  <!-- NAV -->
+  <nav class="fixed top-0 w-full z-50 border-b border-white/5" style="background: rgba(10,10,11,0.8); backdrop-filter: blur(12px);">
+    <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+      <a href="#" class="flex items-center gap-2 text-white font-semibold text-[15px]">
+        <span class="text-accent text-lg font-mono">~</span> tilde
+      </a>
+      <div class="flex items-center gap-6 text-sm text-zinc-400">
+        <a href="#features" class="hover:text-white transition-colors">Features</a>
+        <a href="#install" class="hover:text-white transition-colors">Install</a>
+        <a href="https://github.com/Chmgx81/tilde" class="hover:text-white transition-colors">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="relative min-h-screen flex items-center justify-center pt-14 overflow-hidden">
+    <div class="absolute inset-0 glow"></div>
+    <div class="scanline"></div>
+    <div class="relative max-w-4xl mx-auto px-6 text-center">
+      <div class="pill bg-accent/10 text-accent border border-accent/20 mb-8 mx-auto w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
+        v0.9.1 — sandboxed by default
+      </div>
+      <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1] mb-6">
+        <span class="gradient-text">The coding agent</span><br>
+        <span class="text-white">that doesn't lie to you.</span>
+      </h1>
+      <p class="text-lg md:text-xl text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+        A local-first terminal harness for engineers who need an agent in production codebases — not a chatbot that guesses at your repo. Sandboxed, inspectable, and honest about what it can't do.
+      </p>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="#install" class="bg-accent hover:bg-accentDim text-white font-semibold px-7 py-3 rounded-lg transition-colors text-[15px]">
+          Install in one command
+        </a>
+        <a href="https://github.com/Chmgx81/tilde" class="border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white font-medium px-7 py-3 rounded-lg transition-colors text-[15px]">
+          View source
+        </a>
+      </div>
+
+      <!-- Terminal preview -->
+      <div class="mt-16 terminal-window glow text-left max-w-3xl mx-auto">
+        <div class="terminal-bar">
+          <div class="terminal-dot" style="background:#ef4444;"></div>
+          <div class="terminal-dot" style="background:#f59e0b;"></div>
+          <div class="terminal-dot" style="background:#22c55e;"></div>
+          <span class="text-zinc-500 text-xs font-mono ml-2">~/my-project</span>
+        </div>
+        <div class="p-5 font-mono text-[13px] leading-relaxed">
+          <div class="text-zinc-500">~ <span class="text-zinc-300 cursor-blink">fix the failing test in auth module</span></div>
+          <div class="mt-3 text-zinc-500">◆ <span class="text-zinc-400">Thinking for 4s</span></div>
+          <div class="mt-2"><span class="text-zinc-500">●</span> <span class="text-white">Read</span> <span class="text-zinc-500">internal/auth/handler_test.go</span></div>
+          <div class="mt-1"><span class="text-zinc-500">●</span> <span class="text-white">Read</span> <span class="text-zinc-500">internal/auth/handler.go</span></div>
+          <div class="mt-2 text-zinc-300">Found the issue: <span class="text-zinc-100">token expiry check uses</span></div>
+          <div class="text-zinc-300"><span class="text-zinc-100">Before() instead of !After()</span> <span class="text-zinc-500">— off-by-one at midnight.</span></div>
+          <div class="mt-2"><span class="text-zinc-500">●</span> <span class="text-amber-400">Edit</span> <span class="text-zinc-500">internal/auth/handler.go</span></div>
+          <div class="text-zinc-600">⎿ <span class="text-green-400/80">+1 -1</span></div>
+          <div class="mt-2"><span class="text-zinc-500">●</span> <span class="text-red-400">Run</span> <span class="text-zinc-500">go test ./internal/auth/...</span></div>
+          <div class="text-green-400">ok  tilde/internal/auth  0.3s</div>
+          <div class="mt-2 text-green-400">✓ Done</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features" class="py-28 px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16">
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Built for real engineering.</h2>
+        <p class="text-zinc-400 text-lg max-w-xl mx-auto">Not a playground. Not a demo. A harness that runs alongside you in production codebases.</p>
+      </div>
+
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="feature-card fade-in">
+          <div class="text-accent text-2xl mb-3">◎</div>
+          <h3 class="text-white font-semibold text-[15px] mb-2">Sandboxed by default</h3>
+          <p class="text-zinc-400 text-sm leading-relaxed">Every shell call runs under bubblewrap on Linux — network egress denied, filesystem scoped. A compromised agent can't exfiltrate or destroy.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <div class="text-accent text-2xl mb-3">⊘</div>
+          <h3 class="text-white font-semibold text-[15px] mb-2">Explicit approvals</h3>
+          <p class="text-zinc-400 text-sm leading-relaxed">Destructive actions are gated. You see the exact command, the reason, and choose [y]es, [n]o, or [a]lways-this-session. Nothing runs without your say.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <div class="text-accent text-2xl mb-3">⊞</div>
+          <h3 class="text-white font-semibold text-[15px] mb-2">Three operating modes</h3>
+          <p class="text-zinc-400 text-sm leading-relaxed"><span class="text-white">Plan</span> for review. <span class="text-white">Build</span> for implementation. <span class="text-white">Auto</span> for bounded unattended work. The agent loop respects your boundaries.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <div class="text-accent text-2xl mb-3">⊟</div>
+          <h3 class="text-white font-semibold text-[15px] mb-2">Inspectable transcript</h3>
+          <p class="text-zinc-400 text-sm leading-relaxed">Every tool call, output, decision, and failure is rendered in the transcript. Session logs are append-only and resumable. No black boxes.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <div class="text-accent text-2xl mb-3">⊞</div>
+          <h3 class="text-white font-semibold text-[15px] mb-2">Plugin ecosystem</h3>
+          <p class="text-zinc-400 text-sm leading-relaxed">Skills, plugins, hooks, MCP servers, and agent manifests. Staged installs, atomic upgrades, rollback support. Extensions can't silently widen permissions.</p>
+        </div>
+        <div class="feature-card fade-in">
+          <div class="text-accent text-2xl mb-3">⊡</div>
+          <h3 class="text-white font-semibold text-[15px] mb-2">Local-first</h3>
+          <p class="text-zinc-400 text-sm leading-relaxed">Your code, session history, and approvals stay on your machine. No telemetry, no cloud dependency. Works offline with local models via Ollama.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section class="py-28 px-6 border-t border-white/5">
+    <div class="max-w-6xl mx-auto">
+      <div class="grid lg:grid-cols-2 gap-16 items-center">
+        <div>
+          <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">Layered by design.</h2>
+          <p class="text-zinc-400 text-lg leading-relaxed mb-8">
+            Every component has an explicit boundary. Policy decides <em class="text-zinc-200 not-italic">whether</em> work may execute. Sandbox decides <em class="text-zinc-200 not-italic">where</em>. Tools decide <em class="text-zinc-200 not-italic">what</em>. No layer can bypass another.
+          </p>
+          <div class="space-y-4">
+            <div class="flex items-start gap-3">
+              <span class="text-accent font-mono text-sm mt-0.5">01</span>
+              <div>
+                <div class="text-white font-medium text-[15px]">Policy gate</div>
+                <div class="text-zinc-500 text-sm">Deny by default. Every tool call passes through.</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="text-accent font-mono text-sm mt-0.5">02</span>
+              <div>
+                <div class="text-white font-medium text-[15px]">Sandbox boundary</div>
+                <div class="text-zinc-500 text-sm">bwrap / podman isolation. Network, filesystem, process scoped.</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="text-accent font-mono text-sm mt-0.5">03</span>
+              <div>
+                <div class="text-white font-medium text-[15px]">Tool execution</div>
+                <div class="text-zinc-500 text-sm">Bounded capabilities. Output scrubbed. Failures surfaced.</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="text-accent font-mono text-sm mt-0.5">04</span>
+              <div>
+                <div class="text-white font-medium text-[15px]">Append-only log</div>
+                <div class="text-zinc-500 text-sm">Everything recorded. Resumable sessions. Crash-safe.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="code-block font-mono text-[13px] leading-loose text-zinc-400">
+<span class="text-zinc-600">CLI / TUI</span>
+  <span class="text-zinc-600">└─</span> session + transcript
+      <span class="text-zinc-600">└─</span> agent loop + budgets
+          <span class="text-zinc-600">├─</span> <span class="text-accent">policy / approval</span>
+          <span class="text-zinc-600">├─</span> tool registry
+          <span class="text-zinc-600">│</span>   <span class="text-zinc-600">├─</span> built-in tools
+          <span class="text-zinc-600">│</span>   <span class="text-zinc-600">├─</span> MCP servers
+          <span class="text-zinc-600">│</span>   <span class="text-zinc-600">└─</span> plugins / hooks / skills
+          <span class="text-zinc-600">├─</span> provider adapters
+          <span class="text-zinc-600">└─</span> <span class="text-zinc-500">append-only session log</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODES -->
+  <section class="py-28 px-6 border-t border-white/5">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-bold text-white text-center mb-16">You choose how much it does.</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-surface-1 border border-white/5 rounded-xl p-7 text-center">
+          <div class="text-zinc-400 font-mono text-sm mb-3">plan</div>
+          <div class="text-2xl font-bold text-white mb-2">Review</div>
+          <p class="text-zinc-500 text-sm leading-relaxed">Inspect, read, grep, search. Proposes changes. Nothing written until you approve.</p>
+        </div>
+        <div class="bg-surface-1 border border-accent/20 rounded-xl p-7 text-center relative">
+          <div class="absolute -top-3 left-1/2 -translate-x-1/2 pill bg-accent/10 text-accent border border-accent/20 text-xs">default</div>
+          <div class="text-accent font-mono text-sm mb-3">build</div>
+          <div class="text-2xl font-bold text-white mb-2">Implement</div>
+          <p class="text-zinc-500 text-sm leading-relaxed">Execute approved work. Edits, writes, shell — all visible in the transcript.</p>
+        </div>
+        <div class="bg-surface-1 border border-white/5 rounded-xl p-7 text-center">
+          <div class="text-zinc-400 font-mono text-sm mb-3">auto</div>
+          <div class="text-2xl font-bold text-white mb-2">Automate</div>
+          <p class="text-zinc-500 text-sm leading-relaxed">Bounded unattended runs. Narrower approval rules. For CI, eval, and batch tasks.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECURITY -->
+  <section class="py-28 px-6 border-t border-white/5">
+    <div class="max-w-6xl mx-auto">
+      <div class="bg-surface-1 border border-white/5 rounded-2xl p-8 md:p-12">
+        <div class="grid lg:grid-cols-2 gap-12">
+          <div>
+            <h2 class="text-3xl font-bold text-white mb-6">Security isn't a feature.<br>It's the architecture.</h2>
+            <p class="text-zinc-400 leading-relaxed mb-6">
+              tilde assumes every tool call is adversarial until proven otherwise. Policy denies by default. Sandbox restricts execution. Output is scrubbed. Extensions can't silently widen permissions.
+            </p>
+            <ul class="space-y-3 text-sm text-zinc-400">
+              <li class="flex items-start gap-2"><span class="text-green-400 mt-0.5">✓</span> Bubblewrap sandbox — network egress denied by default</li>
+              <li class="flex items-start gap-2"><span class="text-green-400 mt-0.5">✓</span> Slopsquatting detection — hallucinated package installs flagged</li>
+              <li class="flex items-start gap-2"><span class="text-green-400 mt-0.5">✓</span> Trust boundary enforcement — nested MCP calls approval-gated</li>
+              <li class="flex items-start gap-2"><span class="text-green-400 mt-0.5">✓</span> Output scrubbing — secrets never leak into transcripts</li>
+              <li class="flex items-start gap-2"><span class="text-green-400 mt-0.5">✓</span> Atomic plugin installs — staged, verified, rollback-capable</li>
+              <li class="flex items-start gap-2"><span class="text-green-400 mt-0.5">✓</span> Fail-closed defaults — misconfiguration blocks startup, not execution</li>
+            </ul>
+          </div>
+          <div class="code-block font-mono text-[12px] leading-relaxed">
+<span class="text-zinc-600"># tilde's policy catches this:</span>
+<span class="text-red-400">✗ denied by policy:</span>
+<span class="text-zinc-400">unverified package name in</span>
+<span class="text-zinc-400">"pip install pyjwt-extras-fips"</span>
+
+<span class="text-zinc-600"># Shell injection — fails closed:</span>
+<span class="text-red-400">✗ denied by policy:</span>
+<span class="text-zinc-400">segment contains command</span>
+<span class="text-zinc-400">substitution ($(...))</span>
+
+<span class="text-zinc-600"># Destructive rm — requires approval:</span>
+<span class="text-amber-400">? approve:</span>
+<span class="text-zinc-400">shell_command rm -rf ./build</span>
+<span class="text-zinc-400">[y] approve  [n] deny  [a] always</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section id="install" class="py-28 px-6 border-t border-white/5">
+    <div class="max-w-3xl mx-auto text-center">
+      <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">Start in one command.</h2>
+      <p class="text-zinc-400 text-lg mb-10">No Go toolchain required. Downloads the latest release binary for your platform.</p>
+
+      <div class="code-block text-left mb-8 relative group">
+        <button onclick="navigator.clipboard.writeText('curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh')" class="absolute top-3 right-3 text-zinc-600 hover:text-zinc-300 text-xs font-mono opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded border border-white/10">
+          copy
+        </button>
+        <span class="text-accent">$</span> <span class="text-zinc-200">curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh</span>
+      </div>
+
+      <div class="grid sm:grid-cols-3 gap-6 text-left">
+        <div>
+          <div class="text-zinc-500 text-xs font-mono mb-2">linux</div>
+          <div class="text-zinc-300 text-sm">amd64, arm64</div>
+          <div class="text-zinc-600 text-xs mt-1">bubblewrap sandbox</div>
+        </div>
+        <div>
+          <div class="text-zinc-500 text-xs font-mono mb-2">macos</div>
+          <div class="text-zinc-300 text-sm">amd64, arm64</div>
+          <div class="text-zinc-600 text-xs mt-1">no sandbox (opt-in)</div>
+        </div>
+        <div>
+          <div class="text-zinc-500 text-xs font-mono mb-2">providers</div>
+          <div class="text-zinc-300 text-sm">ollama, openai, anthropic</div>
+          <div class="text-zinc-600 text-xs mt-1">openrouter, gemini</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="py-12 px-6 border-t border-white/5">
+    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="text-zinc-600 text-sm">
+        <span class="text-zinc-500 font-mono">~</span> tilde · built for engineers who read the diff before approving it
+      </div>
+      <div class="flex items-center gap-6 text-sm text-zinc-500">
+        <a href="https://github.com/Chmgx81/tilde" class="hover:text-zinc-300 transition-colors">GitHub</a>
+        <a href="https://github.com/Chmgx81/tilde/blob/main/docs/ARCHITECTURE.md" class="hover:text-zinc-300 transition-colors">Docs</a>
+        <span class="font-mono text-zinc-600">v0.9.1</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Intersection observer for fade-in
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>
