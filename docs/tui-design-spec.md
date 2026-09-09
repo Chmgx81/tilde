@@ -228,6 +228,10 @@ Notes:
   status bar, and hint bar are chrome rendered below the viewport, never
   transcript lines (echoing their wording as transcript content would
   double-render them on the first frame).
+- **Resize preserves reading state:** a terminal resize refits the transcript
+  and composer without forcing a history reader to the live tail. Follow-tail
+  remains enabled only when the user was already at the bottom; fresh splash
+  content is the one deliberate exception and is rebuilt to the new width.
 - The safety notice is **prose, not a glyph'd line** — it's the one place a
   full paragraph outranks the log format, because it's read exactly once and
   needs to be read as language, not scanned as a status line.
@@ -1242,6 +1246,9 @@ the single most common cloud-auth support question.
   machinery as §2.4); `/logout` lists and removes. With an argument, the
   composer becomes the key entry field: border amber, input masked as
   `●` glyphs.
+- While the masked key field is open it owns the complete keyboard surface:
+  bracketed paste enters the key field (never the underlying draft), Escape
+  cancels and clears it, and resize updates its width with the content column.
 - **Keys are never echoed, never rendered into the transcript, and never
   written to the session file** — the session stores only that a login
   happened. Status display shows the last four characters only.

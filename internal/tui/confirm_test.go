@@ -135,3 +135,18 @@ func TestConfirmFooterShellOnly(t *testing.T) {
 		t.Fatalf("non-shell footer must not offer [a]:\n%s", mcp)
 	}
 }
+
+func TestConfirmPreemptsAllComposerPickers(t *testing.T) {
+	m := New(&agent.Loop{}, mode.Plan, t.TempDir(), "ollama/m", 32000)
+	m.slashOpen = true
+	m.atOpen = true
+	done := make(chan bool, 1)
+	nm, _ := m.Update(showConfirmMsg{Tool: "shell_command", Args: map[string]any{"command": "printf ok"}, Done: done})
+	after := nm.(Model)
+	if after.confirm == nil {
+		t.Fatal("approval message must open the confirm surface")
+	}
+	if after.slashOpen || after.atOpen {
+		t.Fatal("approval surface must close composer pickers so they cannot intercept y/n")
+	}
+}

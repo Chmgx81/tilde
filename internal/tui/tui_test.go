@@ -1028,6 +1028,34 @@ func TestMouseWheelScrolls(t *testing.T) {
 	}
 }
 
+func TestResizePreservesHistoryPosition(t *testing.T) {
+	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	for i := 0; i < 80; i++ {
+		m.append(fmt.Sprintf("history line %d", i))
+	}
+	m.stick = false
+	m.vp.ScrollUp(8)
+	before := m.vp.YOffset
+	if m.vp.AtBottom() {
+		t.Fatal("fixture must be scrolled away from the tail")
+	}
+
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 70, Height: 18})
+	after := nm.(Model)
+	if after.stick {
+		t.Fatal("resize must not re-pin a user reading history")
+	}
+	if after.vp.AtBottom() {
+		t.Fatalf("resize moved history reader to the tail: before=%d after=%d", before, after.vp.YOffset)
+	}
+
+	oldOffset := after.vp.YOffset
+	after.append("new live output")
+	if after.vp.YOffset != oldOffset {
+		t.Fatalf("live output must not yank a scrolled reader: before=%d after=%d", oldOffset, after.vp.YOffset)
+	}
+}
+
 func TestWheelMatchesShiftArrowPinDiscipline(t *testing.T) {
 	// One wheel tick moves three rows — the same distance as three
 	// Shift+↑/↓ presses — and both obey the same pin discipline:

@@ -287,6 +287,10 @@ func (m *Model) BindProgram(pp **tea.Program) { m.progPtr = pp }
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		// Resizing must preserve the user's reading position. Re-anchoring
+		// every resize to the tail makes a user who is reading history lose
+		// their place as soon as a terminal pane changes size.
+		followTail := m.stick && m.vp.AtBottom()
 		m.termW, m.termH = msg.Width, msg.Height
 		// Size from the frame width, not the raw terminal: on wide
 		// screens the content column is capped (see maxAppWidth) and
@@ -299,7 +303,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// window) to land the box exactly on the transcript width.
 		m.ta.SetWidth(max(m.vp.Width-4, 20))
 		m.syncComposer()
-		m.stick = true // resizes re-anchor to the tail
+		if m.keyProvider != "" {
+			m.keyInput.Width = max(m.vp.Width-6, 24)
+		}
+		m.stick = followTail
 		if m.splashN > 0 && len(m.lines) == m.splashN {
 			m.lines = m.freshLines(m.vp.Width)
 			if m.updateNote != "" {
@@ -307,7 +314,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.splashN = len(m.lines)
 			m.vp.SetContent(strings.Join(m.lines, "\n"))
-			m.vp.GotoBottom() // resizes re-anchor to the tail (see stick above)
+			m.vp.GotoBottom()
 		}
 		return m, nil
 	case toastTickMsg:
@@ -330,6 +337,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Approvals preempt everything: an open overlay must never
 		// starve a blocked agent turn of its y/n answer.
 		m.helpOpen, m.resumeOpen, m.skillsOpen = false, false, false
+		m.slashOpen, m.atOpen = false, false
 		m.confirm = &confirmState{Tool: msg.Tool, Args: msg.Args, Done: msg.Done}
 		return m, nil
 	case tea.KeyMsg:
@@ -351,6 +359,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.confirm != nil {
 			return m.updateConfirm(msg)
+		}
+		// The masked login field is a true modal surface. It must receive
+		// every key, including Escape, arrows, and bracketed paste, before
+		// history, scrolling, pickers, or global shortcuts inspect them.
+		if m.overlayKeyEntry() {
+			switch msg.Type {
+			case tea.KeyEnter:
+				return m, validateKeyCmd(m.keyProvider, m.keyInput.Value(), "")
+			case tea.KeyEsc:
+				m.cancelKeyEntry()
+				return m, nil
+			case tea.KeyCtrlC:
+				return m, tea.Quit
+			}
+			var cmd tea.Cmd
+			m.keyInput, cmd = m.keyInput.Update(msg)
+			return m, cmd
 		}
 		// Alt+M toggles mouse passthrough. Every overlay owns all keys
 		// (the gates above returned), so the toggle lives below them: it
@@ -409,24 +434,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Paste {
 			m.insertPaste(string(msg.Runes))
 			return m, nil
-		}
-		// Masked key entry (§2.24): the login box owns the keyboard
-		// while open — nothing reaches the composer, pickers, or the
-		// global bindings. Esc cancels without storing anything.
-		if m.overlayKeyEntry() {
-			switch msg.Type {
-			case tea.KeyEnter:
-				return m, validateKeyCmd(m.keyProvider, m.keyInput.Value(), "")
-			case tea.KeyEsc:
-				m.keyProvider, m.keyErr = "", ""
-				m.keyInput.Reset()
-				return m, nil
-			case tea.KeyCtrlC:
-				return m, tea.Quit
-			}
-			var cmd tea.Cmd
-			m.keyInput, cmd = m.keyInput.Update(msg)
-			return m, cmd
 		}
 		// "?" on an empty composer opens the help overlay (spec §2.16).
 		// Pickers own every other key; typing keeps flowing into the box.

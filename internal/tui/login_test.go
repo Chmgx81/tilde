@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"tilde/internal/agent"
 	"tilde/internal/mode"
 	"tilde/internal/provider"
@@ -97,6 +99,38 @@ func TestFinishKeyEntryNeverStoresUnvalidated(t *testing.T) {
 	// carries the rejection instead.
 	joined := strings.Join(m.lines, "\n")
 	_ = joined
+}
+
+func TestKeyEntryOwnsPasteAndEscape(t *testing.T) {
+	m := newLoginTestModel(t, "ollama/llama3.2")
+	m.ta.SetValue("draft that must not receive the key")
+	m.startKeyEntry("openai")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("secret-key"), Paste: true})
+	after := nm.(Model)
+	if after.keyInput.Value() != "secret-key" {
+		t.Fatalf("bracketed paste must enter the masked field, got %q", after.keyInput.Value())
+	}
+	if after.ta.Value() != "draft that must not receive the key" {
+		t.Fatalf("key paste leaked into composer, got %q", after.ta.Value())
+	}
+
+	nm, _ = after.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	after = nm.(Model)
+	if after.keyProvider != "" || after.keyInput.Value() != "" {
+		t.Fatal("Escape must cancel and clear the masked key entry")
+	}
+}
+
+func TestKeyEntryResizesItsInput(t *testing.T) {
+	m := newLoginTestModel(t, "ollama/llama3.2")
+	m.startKeyEntry("openai")
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	after := nm.(Model)
+	want := max(after.vp.Width-6, 24)
+	if after.keyInput.Width != want {
+		t.Fatalf("key input width must follow the content column: got %d want %d", after.keyInput.Width, want)
+	}
 }
 
 func TestBareModelListsCatalog(t *testing.T) {
