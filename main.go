@@ -250,6 +250,16 @@ func main() {
 	if skErr != nil {
 		fmt.Fprintf(os.Stderr, "tilde: warning: %v\n", skErr)
 	}
+	// Bundled skills are immutable, instruction-only capabilities shipped in
+	// the binary. They are always available; user/project skills remain behind
+	// their existing trust gates and cannot silently replace a bundled skill.
+	if builtins, err := skills.Bundled(); err != nil {
+		fmt.Fprintf(os.Stderr, "tilde: warning: bundled skills unavailable: %v\n", err)
+	} else {
+		for _, sk := range builtins {
+			skIx.AddBuiltin(sk)
+		}
+	}
 	reg.Register(&skills.LoadTool{Index: skIx})
 	mcpMgr := startMCP(root, *mcpProject || os.Getenv("TILDE_MCP_PROJECT") == "1") // nil when unconfigured; lazy gateway
 	if mcpMgr != nil {
