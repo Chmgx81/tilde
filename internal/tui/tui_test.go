@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tilde/internal/agent"
+	"tilde/internal/marketplace"
 	"tilde/internal/mode"
 	"tilde/internal/sandbox"
 	"tilde/internal/skills"
@@ -1422,6 +1423,32 @@ func TestOverlaysStayInsideNarrowFrame(t *testing.T) {
 		for _, line := range strings.Split(view, "\n") {
 			if got := ansi.StringWidth(stripANSI(line)); got > m.vp.Width {
 				t.Fatalf("overlay line exceeds frame: %d > %d: %q", got, m.vp.Width, stripANSI(line))
+			}
+		}
+	}
+}
+
+func TestMarketplaceOverlaysWrapUntrustedLongMetadata(t *testing.T) {
+	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 44, Height: 24})
+	m = nm.(Model)
+	item := &marketplace.Item{
+		Name:        "remote-plugin-with-a-long-name",
+		Version:     "2026.09.09",
+		Source:      "https://example.invalid/catalogue/plugins/remote-plugin-with-a-very-long-path",
+		Scope:       "workspace",
+		Description: strings.Repeat("description from a remote catalogue ", 5),
+		Kind:        marketplace.Plugins,
+	}
+	m.marketplaceDetail = item
+	m.marketplacePending = item
+	for name, view := range map[string]string{
+		"detail":  m.marketplaceDetailView(),
+		"confirm": m.marketplaceConfirmView(),
+	} {
+		for _, line := range strings.Split(view, "\n") {
+			if got := ansi.StringWidth(stripANSI(line)); got > m.vp.Width {
+				t.Fatalf("%s overlay line exceeds frame: %d > %d: %q", name, got, m.vp.Width, stripANSI(line))
 			}
 		}
 	}
@@ -3011,5 +3038,22 @@ func TestLongToolOutputUsesExpandablePreview(t *testing.T) {
 	full := stripANSI(strings.Join(after.lines, "\n"))
 	if !strings.Contains(full, "entry-16") || strings.Contains(full, "more lines") || after.toolOverflow != nil {
 		t.Fatalf("Ctrl+O must reveal the full result once:\n%s", full)
+	}
+}
+
+func TestExpandableToolOutputSurvivesPlanBannerRemoval(t *testing.T) {
+	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	m.vp.Width = 40
+	var b strings.Builder
+	for i := 0; i < toolPreviewLines+2; i++ {
+		fmt.Fprintf(&b, "line-%02d\n", i)
+	}
+	m.renderEvent(agent.Event{Kind: "tool_result", Text: b.String()})
+	m.handleModeCmd("build")
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	after := nm.(Model)
+	full := stripANSI(strings.Join(after.lines, "\n"))
+	if !strings.Contains(full, "line-13") || after.toolOverflow != nil {
+		t.Fatalf("expansion anchor must survive removal of the Plan banner:\n%s", full)
 	}
 }

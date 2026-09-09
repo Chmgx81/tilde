@@ -167,6 +167,16 @@ func renderSubagentDone(task, typ, model string, failed bool, width int) string 
 	if model != "" {
 		suffix += " · " + model
 	}
+	// Preserve the right-aligned outcome marker. Long task/model labels are
+	// metadata; they must yield space before the status rather than wrapping
+	// the row and destroying the scan pattern.
+	statusWidth := ansi.StringWidth(status)
+	contentWidth := max(width-ansi.StringWidth("│ ")-statusWidth-1, 1)
+	if ansi.StringWidth(suffix)+2 >= contentWidth {
+		suffix = ansi.Truncate(suffix, max(contentWidth-2, 1), "…")
+	}
+	maxTask := max(contentWidth-ansi.StringWidth(suffix)-2, 1)
+	task = truncMiddle(task, maxTask)
 	var mid, midPlain string
 	if task != "" {
 		mid, midPlain = full.Render(task)+mut.Render("  "+suffix), task+"  "+suffix

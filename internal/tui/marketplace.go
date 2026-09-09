@@ -366,11 +366,15 @@ func (m *Model) loadSkillByName(name string) {
 func (m Model) marketplaceView() string {
 	rows := m.marketplaceItems.Items(marketplaceTabs[m.marketplaceTab], m.marketplaceQuery)
 	var b strings.Builder
-	b.WriteString("  Hooks   Plugins   Marketplace   Skills   MCP Servers\n")
-	b.WriteString("  " + strings.Repeat(" ", tabOffset(m.marketplaceTab)) + "^\n")
-	b.WriteString("  / to search                                      Workspace ▾\n")
+	width := m.vp.Width
+	if width <= 0 {
+		width = 80
+	}
+	b.WriteString(truncANSI("  Hooks   Plugins   Marketplace   Skills   MCP Servers", width) + "\n")
+	b.WriteString(truncANSI("  "+strings.Repeat(" ", tabOffset(m.marketplaceTab))+"^", width) + "\n")
+	b.WriteString(truncANSI("  / to search                                      Workspace ▾", width) + "\n")
 	if m.marketplaceQuery != "" {
-		fmt.Fprintf(&b, "  /%s\n", safeMarketplaceText(m.marketplaceQuery))
+		b.WriteString(truncANSI("  /"+safeMarketplaceText(m.marketplaceQuery), width) + "\n")
 	}
 	for i, item := range rows {
 		status := "[installed]"
@@ -398,10 +402,6 @@ func (m Model) marketplaceView() string {
 		if detail == "" {
 			detail = safeMarketplaceText(item.Source)
 		}
-		width := m.vp.Width
-		if width <= 0 {
-			width = 80
-		}
 		statusWidth := ansi.StringWidth(status)
 		prefix := fmt.Sprintf("  %s ", map[bool]string{true: "›", false: " "}[i == m.marketplaceCursor])
 		available := max(width-ansi.StringWidth(prefix)-statusWidth-3, 12)
@@ -420,7 +420,7 @@ func (m Model) marketplaceView() string {
 	if len(rows) == 0 {
 		b.WriteString("  no matching items\n")
 	}
-	b.WriteString("  ←→ tabs · ↑↓ select · enter open · / search · esc close")
+	b.WriteString(truncANSI("  ←→ tabs · ↑↓ select · enter open · / search · esc close", width))
 	return b.String()
 }
 
@@ -434,17 +434,21 @@ func (m Model) marketplaceConfirmView() string {
 	if action == "" {
 		action = string(marketplaceActionInstall)
 	}
-	fmt.Fprintf(&b, "%s marketplace item?\n\n", strings.Title(action))
-	fmt.Fprintf(&b, "  %s v%s\n", safeMarketplaceText(item.Name), safeMarketplaceText(item.Version))
-	fmt.Fprintf(&b, "  source: %s\n", safeMarketplaceText(item.Source))
-	fmt.Fprintf(&b, "  scope: %s\n", safeMarketplaceText(item.Scope))
+	width := m.vp.Width
+	if width <= 0 {
+		width = 80
+	}
+	b.WriteString(truncANSI(strings.Title(action)+" marketplace item?", width) + "\n\n")
+	b.WriteString(marketplaceWrappedField("  ", safeMarketplaceText(item.Name)+" v"+safeMarketplaceText(item.Version), width))
+	b.WriteString("\n" + marketplaceWrappedField("  source: ", safeMarketplaceText(item.Source), width))
+	b.WriteString("\n" + marketplaceWrappedField("  scope: ", safeMarketplaceText(item.Scope), width))
 	if item.Description != "" {
-		fmt.Fprintf(&b, "  %s\n", safeMarketplaceText(item.Description))
+		b.WriteString("\n" + marketplaceWrappedField("  ", safeMarketplaceText(item.Description), width))
 	}
 	if action == string(marketplaceActionInstall) || action == string(marketplaceActionUpdate) {
-		b.WriteString("\n  This changes the hash-pinned local plugin installation.\n")
+		b.WriteString("\n" + marketplaceWrappedField("  ", "This changes the hash-pinned local plugin installation.", width) + "\n")
 	}
-	fmt.Fprintf(&b, "  y/enter %s · n/esc cancel", action)
+	b.WriteString("\n" + truncANSI("  y/enter "+action+" · n/esc cancel", width))
 	return b.String()
 }
 
@@ -453,34 +457,52 @@ func (m Model) marketplaceDetailView() string {
 	if item == nil {
 		return m.marketplaceView()
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s", safeMarketplaceText(item.Name))
-	if item.Version != "" {
-		fmt.Fprintf(&b, " v%s", safeMarketplaceText(item.Version))
+	width := m.vp.Width
+	if width <= 0 {
+		width = 80
 	}
-	b.WriteString("\n\n")
-	fmt.Fprintf(&b, "kind: %s\nscope: %s\nsource: %s\n", safeMarketplaceText(string(item.Kind)), safeMarketplaceText(item.Scope), safeMarketplaceText(item.Source))
-	fmt.Fprintf(&b, "installed: %t · verified: %t · enabled: %t\n", item.Installed, item.Verified, item.Enabled)
+	var b strings.Builder
+	title := safeMarketplaceText(item.Name)
+	if item.Version != "" {
+		title += " v" + safeMarketplaceText(item.Version)
+	}
+	b.WriteString(truncANSI(title, width))
+	b.WriteString("\n\n" + marketplaceWrappedField("kind: ", safeMarketplaceText(string(item.Kind)), width))
+	b.WriteString("\n" + marketplaceWrappedField("scope: ", safeMarketplaceText(item.Scope), width))
+	b.WriteString("\n" + marketplaceWrappedField("source: ", safeMarketplaceText(item.Source), width))
+	b.WriteString("\n" + truncANSI(fmt.Sprintf("installed: %t · verified: %t · enabled: %t", item.Installed, item.Verified, item.Enabled), width))
 	if item.Description != "" {
-		fmt.Fprintf(&b, "\n%s\n", safeMarketplaceText(item.Description))
+		b.WriteString("\n\n" + marketplaceWrappedField("", safeMarketplaceText(item.Description), width))
 	}
 	for _, d := range item.Diagnostics {
-		fmt.Fprintf(&b, "\nwarning: %s", safeMarketplaceText(d))
+		b.WriteString("\n\n" + marketplaceWrappedField("warning: ", safeMarketplaceText(d), width))
 	}
 	if len(item.Skills) > 0 {
-		fmt.Fprintf(&b, "\n\nskills: %s", safeMarketplaceText(strings.Join(item.Skills, ", ")))
+		b.WriteString("\n\n" + marketplaceWrappedField("skills: ", safeMarketplaceText(strings.Join(item.Skills, ", ")), width))
 	}
-	b.WriteString("\n\nenter/esc back")
+	b.WriteString("\n\n" + truncANSI("enter/esc back", width))
 	if item.Kind == marketplace.Plugins && item.Installed {
-		b.WriteString(" · e enable/disable · r remove")
+		actions := " · e enable/disable · r remove"
 		if item.UpdatePath != "" {
-			b.WriteString(" · u update")
+			actions += " · u update"
 		}
+		b.WriteString(truncANSI(actions, width))
 	}
 	if item.Kind == marketplace.Marketplace && item.Installable && !item.Installed {
 		b.WriteString(" · i install")
 	}
 	return b.String()
+}
+
+// marketplaceWrappedField keeps detail and confirmation overlays inside the
+// frame even when a remote catalog supplies a very long path, description, or
+// diagnostic. Continuations are intentionally plain: this is metadata, not a
+// table, and wrapping is safer than allowing centerFrame to widen the app.
+func marketplaceWrappedField(label, value string, width int) string {
+	if width < 1 {
+		width = 1
+	}
+	return wrapLine(label+value, width)
 }
 
 func safeMarketplaceText(s string) string {

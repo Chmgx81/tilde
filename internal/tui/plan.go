@@ -30,8 +30,8 @@ const planBannerBody = "tilde is researching. No files will be changed in this m
 // amber border — the read-only/caution token per §1.1). Lines are cut to w
 // so a narrow terminal can never push the box past the frame.
 func planBanner(w int) []string {
-	if w < 20 {
-		w = 20
+	if w < 4 {
+		w = 4
 	}
 	bSt := lipgloss.NewStyle().Foreground(borderPlan)
 	titleSt := lipgloss.NewStyle().Foreground(borderPlan).Bold(true)
@@ -74,12 +74,16 @@ func (m *Model) appendPlanBanner() {
 // that happens to mention the title.
 func (m *Model) removePlanBanner() {
 	var out []string
+	removedBeforeOverflow := 0
 	for i := 0; i < len(m.lines); i++ {
 		line := strings.TrimSpace(stripANSI(m.lines[i]))
 		if strings.Contains(line, planBannerTitle) && strings.HasPrefix(line, "┌") && i+2 < len(m.lines) {
 			next := strings.TrimSpace(stripANSI(m.lines[i+1]))
 			bottom := strings.TrimSpace(stripANSI(m.lines[i+2]))
 			if strings.HasPrefix(next, "│") && strings.HasPrefix(bottom, "└") {
+				if m.toolOverflow != nil && i < m.toolOverflow.start {
+					removedBeforeOverflow += 3
+				}
 				i += 2
 				continue
 			}
@@ -92,6 +96,10 @@ func (m *Model) removePlanBanner() {
 	}
 	wasBottom := m.vp.AtBottom()
 	m.lines = out
+	if m.toolOverflow != nil && removedBeforeOverflow > 0 {
+		m.toolOverflow.start -= removedBeforeOverflow
+		m.toolOverflow.end -= removedBeforeOverflow
+	}
 	m.vp.SetContent(strings.Join(m.lines, "\n"))
 	if wasBottom {
 		m.vp.GotoBottom()

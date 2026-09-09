@@ -1449,7 +1449,7 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 		if truncated {
 			extra := max(len(strings.Split(strings.TrimRight(ansi.Strip(e.Text), "\n"), "\n"))-toolPreviewLines, 1)
 			m.append(lipgloss.NewStyle().Foreground(fgDim).Render(
-				fmt.Sprintf("  ↳ %d more lines · Ctrl+O to expand", extra)))
+				fmt.Sprintf("  ↳ %d more lines · Ctrl+O expands latest output", extra)))
 			m.toolOverflow = &toolOverflow{start: start, end: len(m.lines), raw: e.Text}
 		}
 		// A todo_write result keeps its raw rendering (audit trail) and
@@ -1483,7 +1483,7 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 		panel := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 			BorderForeground(danger).Padding(0, 1).Render(
 			"Handoff to Plan\n" +
-				"✗ " + firstLine(e.Text) + "\n" +
+				"✗ " + truncANSI(ansi.Strip(firstLine(e.Text)), max(m.vp.Width-6, 1)) + "\n" +
 				"Reverting to Plan mode. Nothing further will be changed.\n" +
 				"Partial diff and full history are preserved below.")
 		for _, ln := range strings.Split(panel, "\n") {

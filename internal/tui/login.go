@@ -41,7 +41,8 @@ func (m *Model) composerView(box lipgloss.Style) string {
 			Render("API key for " + m.keyProvider + " — input masked, never logged")
 		body := m.keyInput.View()
 		if m.keyErr != "" {
-			body += "\n" + lipgloss.NewStyle().Foreground(amber).Render(m.keyErr)
+			body += "\n" + lipgloss.NewStyle().Foreground(amber).Render(
+				wrapLine(m.keyErr, max(m.vp.Width-6, 1)))
 		}
 		body += "\n" + lipgloss.NewStyle().Foreground(fgDim).
 			Render("Enter verify & store · Esc cancel")
