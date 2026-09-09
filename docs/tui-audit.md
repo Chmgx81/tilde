@@ -161,7 +161,7 @@ state visibility and cancellation, not animation volume.
 | 120+ columns | Content is capped and centered to avoid an unreadable full-width status gap. |
 | 80×24 | Normal splash, composer, status, and hint fit; long content scrolls in the viewport. |
 | 60-column split | Rows truncate rather than wrap; pickers retain their action footer; transcript remains the dominant surface. |
-| 20–31 columns | Splash collapses to a compact card and hard-cuts status text without overflow. The app remains truthful but intentionally terse. |
+| 20–31 columns | The normal frame is suspended and a bounded `terminal too small` message requests at least 32×10; no composer or clipped approval controls are shown. |
 
 ## Verification performed
 

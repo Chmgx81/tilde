@@ -85,6 +85,8 @@ const (
 	maxComposerRows = 8
 	maxInputChars   = 16000
 	maxAppWidth     = 120
+	minTUIWidth     = 32
+	minTUIHeight    = 10
 )
 
 // appVersion is shown on splash and help. It includes the source revision for
@@ -384,15 +386,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// screens the content column is capped (see maxAppWidth) and
 		// View centers it, so the viewport/composer must match the
 		// column — never the full bleed.
-		m.vp.Width = max(frameWidth(msg.Width)-4, 20)
+		m.vp.Width = max(frameWidth(msg.Width)-4, 1)
 		m.fitViewport()
 		// The composer box adds padding(0,1) + border(2) = 4 columns on
 		// top of the textarea width, so size from the viewport (not the
 		// window) to land the box exactly on the transcript width.
-		m.ta.SetWidth(max(m.vp.Width-4, 20))
+		m.ta.SetWidth(max(m.vp.Width-4, 1))
 		m.syncComposer()
 		if m.keyProvider != "" {
-			m.keyInput.Width = max(m.vp.Width-6, 24)
+			m.keyInput.Width = max(m.vp.Width-6, 1)
 		}
 		m.stick = followTail
 		if m.splashN > 0 && len(m.lines) == m.splashN {
@@ -2042,6 +2044,9 @@ func (m Model) vpView() string {
 }
 
 func (m Model) View() string {
+	if m.termW > 0 && m.termH > 0 && (m.termW < minTUIWidth || m.termH < minTUIHeight) {
+		return m.tooSmallView()
+	}
 	if m.helpOpen {
 		return m.centerFrame(helpView(m.vp.Width))
 	}
@@ -2113,6 +2118,23 @@ func (m Model) View() string {
 	}
 	hint := lipgloss.NewStyle().Foreground(fgDim).Render("Enter send  •  / commands  •  @ files  •  ! shell  •  Drag select  •  Ctrl+Y copy  •  Tab mode  •  Esc×2 cancel" + m.sessionHint())
 	return m.centerFrame(m.vpView() + "\n" + composer + dropdown + toast + "\n\n" + statusBar + "\n\n" + m.centerHint(m.hintBar(hint)))
+}
+
+// tooSmallView is deliberately plain and bounded. Rendering the normal
+// composer at this size would be dishonest: its minimum input width and
+// borders cannot fit, so a compact resize instruction is safer than clipped
+// controls or invisible actions.
+func (m Model) tooSmallView() string {
+	w := max(m.termW, 1)
+	lines := []string{
+		"terminal too small",
+		fmt.Sprintf("resize to at least %d×%d", minTUIWidth, minTUIHeight),
+		fmt.Sprintf("current size: %d×%d", m.termW, m.termH),
+	}
+	for i, line := range lines {
+		lines[i] = hardCut(line, w)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // centerHint centers the keybind hint bar within the frame: it is the

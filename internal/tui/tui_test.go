@@ -1428,6 +1428,21 @@ func TestOverlaysStayInsideNarrowFrame(t *testing.T) {
 	}
 }
 
+func TestTooSmallTerminalUsesTruthfulBoundedView(t *testing.T) {
+	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 24, Height: 8})
+	m = nm.(Model)
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "terminal too small") || !strings.Contains(view, "32×10") {
+		t.Fatalf("small terminal must explain the required resize: %q", view)
+	}
+	for _, line := range strings.Split(view, "\n") {
+		if got := ansi.StringWidth(line); got > 24 {
+			t.Fatalf("small-terminal view exceeds terminal width: %d > 24: %q", got, line)
+		}
+	}
+}
+
 func TestMarketplaceOverlaysWrapUntrustedLongMetadata(t *testing.T) {
 	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 44, Height: 24})
