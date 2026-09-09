@@ -215,6 +215,13 @@ type Model struct {
 	streamText    string
 	streamBaseLen int
 	streamActive  bool
+	toolOverflow  *toolOverflow
+}
+
+type toolOverflow struct {
+	start int
+	end   int
+	raw   string
 }
 
 type confirmState struct {
@@ -560,6 +567,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// so help/resume/pickers/confirm never see it — and the
 			// textarea has no Ctrl+Y binding to fight over.
 			return m, m.copyLastResponse()
+		case tea.KeyCtrlO:
+			if m.toolOverflow != nil {
+				return m, m.expandToolOutput()
+			}
 		case tea.KeyBackspace:
 			// Collapsed-paste tokens delete as one unit (see
 			// deletePasteToken); anything else falls through to the
@@ -1432,7 +1443,15 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 			return nil
 		}
 		m.flushGroup()
-		m.append(renderToolResult(e.Text))
+		preview, truncated := renderToolResultLimit(e.Text, toolPreviewLines)
+		start := len(m.lines)
+		m.append(preview)
+		if truncated {
+			extra := max(len(strings.Split(strings.TrimRight(ansi.Strip(e.Text), "\n"), "\n"))-toolPreviewLines, 1)
+			m.append(lipgloss.NewStyle().Foreground(fgDim).Render(
+				fmt.Sprintf("  ↳ %d more lines · Ctrl+O to expand", extra)))
+			m.toolOverflow = &toolOverflow{start: start, end: len(m.lines), raw: e.Text}
+		}
 		// A todo_write result keeps its raw rendering (audit trail) and
 		// then earns the structured §2.9 block from live manager state —
 		// skipped when the state hasn't changed since the last block.
@@ -1501,6 +1520,31 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 		m.append(lipgloss.NewStyle().Foreground(fgDim).Render("● " + e.Text))
 	}
 	return nil
+}
+
+func (m *Model) expandToolOutput() tea.Cmd {
+	if m.toolOverflow == nil {
+		return nil
+	}
+	b := m.toolOverflow
+	if b.start < 0 || b.end < b.start || b.end > len(m.lines) {
+		m.toolOverflow = nil
+		return m.setToast("full output is no longer available in this view")
+	}
+	full, _ := renderToolResultLimit(b.raw, 0)
+	replacement := make([]string, 0)
+	for _, line := range strings.Split(full, "\n") {
+		replacement = append(replacement, wrapLine(line, m.vp.Width-1))
+	}
+	lines := make([]string, 0, len(m.lines)-b.end+b.start+len(replacement))
+	lines = append(lines, m.lines[:b.start]...)
+	lines = append(lines, replacement...)
+	lines = append(lines, m.lines[b.end:]...)
+	m.lines = lines
+	m.vp.SetContent(strings.Join(m.lines, "\n"))
+	m.vp.GotoBottom()
+	m.toolOverflow = nil
+	return m.setToast("showing full tool output")
 }
 
 // renderAssistantDelta keeps one provisional assistant block at the tail of

@@ -506,6 +506,10 @@ anything else, so its consistency matters more than its cleverness.
   success with nothing worth surfacing gets no `⎿` line at all; don't manufacture
   one just for rhythm's sake.
 - Tool output is secret-scrubbed centrally (`<<REDACTED:name>>`); reads of sensitive paths (`.env`, `*.pem`, `id_*`, …) carry a warn-notice instead of raw content (same discipline as the §2.22 export rule).
+- Long results use a 12-line transcript preview with an explicit `↳ N more
+  lines · Ctrl+O to expand` affordance. `Ctrl+O` replaces that one preview
+  with the complete result; output is never silently discarded, and the
+  session log remains the authoritative full record.
 - Final `✓ Done` (or `✗ Failed`) closes the group — this is the only place
   `✓`/`✗` appear outside of individual test/check results, reserved for "this
   whole unit of work is over."

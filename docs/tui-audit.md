@@ -81,6 +81,13 @@ now use an opaque adaptive background, a dedicated `Actions` section, a blank
 separator row, and semantic highlighting for approve, deny, reason, and
 session-approval keys.
 
+### High — long-output containment
+
+Long command results previously remained visible up to a high global cap and
+could dominate the viewport. Tool results now show a compact 12-line preview
+with the number of hidden lines and a `Ctrl+O` expansion path. The complete
+result is restored in place on demand, while the session log remains complete.
+
 ## State-by-state review
 
 ### Splash and onboarding

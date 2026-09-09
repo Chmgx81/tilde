@@ -2988,3 +2988,28 @@ func TestAssistantStreamingPreviewCommitsAndRollsBack(t *testing.T) {
 		t.Fatalf("failed stream preview must be removed: active=%v lines=%q", m.streamActive, m.lines)
 	}
 }
+
+func TestLongToolOutputUsesExpandablePreview(t *testing.T) {
+	m := New(newTestLoop(), mode.Build, t.TempDir(), "ollama/m", 32000)
+	m.vp.Width = 40
+	m.lines = nil
+	m.vp.SetContent("")
+	var b strings.Builder
+	for i := 0; i < toolPreviewLines+5; i++ {
+		fmt.Fprintf(&b, "entry-%02d\n", i)
+	}
+	m.renderEvent(agent.Event{Kind: "tool_result", Text: b.String()})
+	preview := stripANSI(strings.Join(m.lines, "\n"))
+	if !strings.Contains(preview, "more lines") || !strings.Contains(preview, "Ctrl+O") {
+		t.Fatalf("long output must expose an expand affordance:\n%s", preview)
+	}
+	if strings.Contains(preview, "entry-16") {
+		t.Fatal("preview must not render the full result before expansion")
+	}
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	after := nm.(Model)
+	full := stripANSI(strings.Join(after.lines, "\n"))
+	if !strings.Contains(full, "entry-16") || strings.Contains(full, "more lines") || after.toolOverflow != nil {
+		t.Fatalf("Ctrl+O must reveal the full result once:\n%s", full)
+	}
+}

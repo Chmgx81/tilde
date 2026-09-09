@@ -26,6 +26,10 @@ func wrapLine(s string, w int) string {
 // presentation only.
 const maxToolResultLines = 400
 
+// toolPreviewLines keeps long command output from taking over the first
+// screen. Ctrl+O reveals the complete result on demand.
+const toolPreviewLines = 12
+
 // maxThinkingLines bounds a reasoning trace in the transcript; the
 // session log always keeps the full text for audit, and the notice says
 // so. Model-visible context is unaffected — this is presentation only.
@@ -83,35 +87,42 @@ func renderThinking(text string) string {
 // their highlighting inline; everything else is muted. Truncation is
 // announced, never silent.
 func renderToolResult(text string) string {
+	out, _ := renderToolResultLimit(text, maxToolResultLines)
+	return out
+}
+
+// renderToolResultLimit renders a result with an optional transcript cap.
+// limit == 0 means no presentation cap. The session log is never affected.
+func renderToolResultLimit(text string, limit int) (string, bool) {
 	text = ansi.Strip(text)
 	body := strings.TrimRight(text, "\n")
 	if body == "" {
-		return lipgloss.NewStyle().Foreground(fgDim).Render("  ⎿ (no output)")
+		return lipgloss.NewStyle().Foreground(fgDim).Render("  ⎿ (no output)"), false
 	}
 	lines := strings.Split(body, "\n")
 	if stat, ok := splitDiffStat(lines[0]); ok {
-		rest, truncated := capResultLines(lines[1:])
+		rest, truncated := capResultLinesLimit(lines[1:], limit)
 		out := []string{statResultLine(stat)}
 		out = append(out, renderDiffPayload(rest)...)
 		if truncated {
 			out = append(out, truncResultLine())
 		}
-		return strings.Join(out, "\n")
+		return strings.Join(out, "\n"), truncated
 	}
 	if n, path, ok := splitNewFileStat(lines[0]); ok {
-		rest, truncated := capResultLines(lines[1:])
+		rest, truncated := capResultLinesLimit(lines[1:], limit)
 		out := []string{statResultLine(fmt.Sprintf("+%d (new file)", n))}
 		out = append(out, renderNewFilePayload(path, n, rest)...)
 		if truncated {
 			out = append(out, truncResultLine())
 		}
-		return strings.Join(out, "\n")
+		return strings.Join(out, "\n"), truncated
 	}
 	if len(lines) == 1 && !isDiffLine(body) {
 		return lipgloss.NewStyle().Foreground(fgDim).Render("  ⎿ ") +
-			lipgloss.NewStyle().Foreground(fgMuted).Render(body)
+			lipgloss.NewStyle().Foreground(fgMuted).Render(body), false
 	}
-	lines, truncated := capResultLines(lines)
+	lines, truncated := capResultLinesLimit(lines, limit)
 	var out []string
 	i := 0
 	for i < len(lines) {
@@ -130,15 +141,19 @@ func renderToolResult(text string) string {
 	if truncated {
 		out = append(out, truncResultLine())
 	}
-	return strings.Join(out, "\n")
+	return strings.Join(out, "\n"), truncated
 }
 
 // capResultLines bounds a result body for the transcript; the session
 // log always keeps everything. Shared by the diff/new-file branches
 // and the generic path below — one cap, one notice, no forks.
 func capResultLines(lines []string) (kept []string, truncated bool) {
-	if len(lines) > maxToolResultLines {
-		return lines[:maxToolResultLines], true
+	return capResultLinesLimit(lines, maxToolResultLines)
+}
+
+func capResultLinesLimit(lines []string, limit int) (kept []string, truncated bool) {
+	if limit > 0 && len(lines) > limit {
+		return lines[:limit], true
 	}
 	return lines, false
 }
