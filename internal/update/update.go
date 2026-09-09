@@ -82,11 +82,22 @@ func LocalSHA() string {
 }
 
 // BuildVersion identifies the release line and exact source revision for VCS
-// builds. Version remains separate because update checks compare release tags,
-// while users need --version to distinguish post-release rebuilds.
+// builds. It runs git describe --tags to auto-derive the version from the
+// latest tag plus distance (e.g. "v0.9.1-3-g43766b8"), so the binary
+// always reflects the latest tag without manual bumps. Falls back to
+// the const Version for tarball/go-run builds without VCS metadata.
 func BuildVersion() string {
-	if sha := LocalSHA(); sha != "" {
-		return Version + "+g" + short(sha)
+	if _, err := exec.LookPath("git"); err != nil {
+		return Version
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "git", "describe", "--tags", "--always").CombinedOutput()
+	if err != nil {
+		return Version
+	}
+	if v := strings.TrimSpace(string(out)); v != "" {
+		return v
 	}
 	return Version
 }
