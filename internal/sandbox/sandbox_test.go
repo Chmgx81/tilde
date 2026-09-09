@@ -16,6 +16,21 @@ func requireBwrap(t *testing.T) {
 	if Disabled() {
 		t.Skip("TILDE_NO_SANDBOX=1 — containment deliberately off")
 	}
+	// Some hosted Ubuntu runners expose bubblewrap but prohibit the network
+	// namespace capability it needs to initialize loopback. Keep those hosts
+	// from turning a capability limitation into a false code failure; the
+	// production path still fails closed when bwrap cannot execute.
+	cmd, err := (&Config{Root: t.TempDir()}).Command(context.Background(), "true")
+	if err != nil {
+		t.Skipf("bwrap unavailable: %v", err)
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		text := string(out)
+		if strings.Contains(text, "RTM_NEWADDR") || strings.Contains(text, "Operation not permitted") {
+			t.Skipf("bwrap host capability unavailable: %s", strings.TrimSpace(text))
+		}
+		t.Fatalf("bwrap probe failed: %v: %s", err, text)
+	}
 }
 
 func run(t *testing.T, root, cmd string) string {
