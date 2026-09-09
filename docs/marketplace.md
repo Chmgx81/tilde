@@ -9,6 +9,11 @@ Hooks   Plugins   Marketplace   Skills   MCP Servers
 The registry is a read-only discovery surface. Opening it never executes a
 hook, starts an MCP server, loads a skill body, or installs a package.
 
+Hook rows come from the project and user hook configuration files
+(`.tilde/hooks.yaml` and `~/.tilde/hooks.yaml`). Installed plugins also expose
+their declared hook and MCP manifests as capability rows. These rows describe
+what is available; they do not grant trust or enable execution.
+
 ## Local marketplace catalog
 
 Marketplace packages are declared by a project-owned catalog at:

@@ -323,8 +323,7 @@ cap, bold match highlight), session-resume picker (`/sessions` and
 overlay, transient mode toasts (Tab + auto-demotion share one shape),
 per-mode composer placeholders, `!` shell escape through the same
 sandbox/confirm tier as model calls, Ctrl+J newline. Deliberately not
-built: skill picker + marketplace (blocked on Phase 6), subagent view
-(deferred), multi-question prompts (no trigger yet), `/vim` (no vim
+built: multi-question prompts (no trigger yet), `/vim` (no vim
 engine — Ctrl+J instead). Spec status table updated to match.
 **Done when:** the TUI matches the spec file screen-for-screen
 (minus the deferred/blocked items above).
@@ -385,7 +384,11 @@ but follows standing instructions weakly — mechanism proven, model is the
 ceiling. Project skills also load via recorded `tilde trust`
 (missing/corrupt store = untrusted); loader is
 `skills.Scan(root, allowProject)`, flag `--skills-project` /
-`TILDE_SKILLS_PROJECT`. Marketplace/registry proper stays future work.
+`TILDE_SKILLS_PROJECT`. Marketplace registry is now live: `/plugins` and
+`/marketplace` expose one read-only registry across hooks, plugins,
+marketplace packages, skills, and MCP servers; local YAML/JSON catalogs are
+validated without execution, and installs require confirmation plus a
+hash-pinned plugin manifest.
 
 ### Phase 7 — Evaluation & consistency (done, first measurement 2026-09-05)
 A small trajectory-level eval suite (not just unit tests on harness
@@ -612,7 +615,7 @@ As of v0.6+:
 | Splash / fuzzy search / session picker UI | DONE — Phase 4 |
 | Skills loader | DONE — Phase 6 |
 | MCP client | DONE — Phase 6 |
-| Trajectory-level eval suite | DONE — Phase 7 (7/15 → 22/24 final, costs + paths tracked) |
+| Trajectory-level eval suite | DONE — Phase 7 (historical 7/15 → 22/24 result; current runs report task set, trials, costs + paths) |
 | todo_write / ask_user / web_fetch (ask-tier) | DONE — buildHarness-registered; web_fetch also needs TILDE_ALLOW_NET |
 | Secret scrubber + high-risk path notes | DONE — Dispatch Scrub, read annotate |
 | Project trust gate (`tilde trust`/`untrust`) | DONE — skills fallback, deny on missing/corrupt store |

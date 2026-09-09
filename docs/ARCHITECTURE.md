@@ -8,7 +8,7 @@ main.go (composition root) -> internal/* (flat packages)
 
 - `main.go` wires everything; `internal/*` holds flat, single-purpose
   packages (agent, audit, compact, creds, eval, export, hooks, ide,
-  mcp, mode, plugin, policy, provider, repair, rules, sandbox,
+  mcp, marketplace, mode, plugin, policy, provider, repair, rules, sandbox,
   schedule, scrub, session, skills, tools, trust, tui, update, vec).
 - Dependency direction rule: `main.go` may import `internal/*`;
   `internal/*` packages must not import `main.go`, and new

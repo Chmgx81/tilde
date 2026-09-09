@@ -32,7 +32,8 @@ release check per day unless you set `TILDE_NO_UPDATE_CHECK=1`.
   daily GitHub release check, nothing leaves your machine unless you point
   tilde at a cloud endpoint.
 - **Measured.** Same tasks, repeated trials, fresh directories, trajectory
-  scoring — not demo applause. Qwen3.8-4b scores **22/24 ≈ 92%** built in.
+  scoring — not demo applause. The documented historical Qwen3.8-4b result is
+  **22/24 ≈ 92%**; run `tilde --eval --trials 5+` for a current result.
 
 ## Quickstart
 
@@ -89,13 +90,19 @@ update available (v0.8.0 → v0.9.0) — run tilde update
 ```
 
 ```sh
-tilde update   # pull --ff-only, rebuild, smoke-test, reinstall, restart
+tilde update   # update the source checkout recorded by install.sh, then rebuild
 tilde --version
 ```
 
 VCS builds report the release line plus their short source revision (for
 example, `v0.9.0+g5f94724`), so a rebuilt binary is distinguishable even
 before the next release tag.
+
+Source installs update the checkout recorded in `~/.tilde/install.json`; the
+checkout's configured remote must be the repository you intend to update.
+GitHub is the canonical upstream, but `tilde update` does not clone over an
+existing project or discard local work. A clean clone is the simplest setup:
+`git clone https://github.com/Chmgx81/tilde.git && cd tilde && ./install.sh`.
 
 Fail-closed like everything else: a dirty source tree refuses (commit or
 stash first — nothing is stashed or reset for you), and a failed build
@@ -151,6 +158,7 @@ tilde --prompt "..." --output json   # JSONL events + result object with token u
 tilde run-due [--yes] [dir]   # run due .tilde/schedule.yaml entries headlessly (cron/systemd wakes it)
 tilde audit [--since 24h] [--tool shell_command] [--json]   # read the governance trail
 tilde plugin install <dir> [--upgrade] | verify <name> | list   # hash-pinned local plugins
+tilde                         # /plugins and /marketplace browse the unified local registry
 tilde models [provider]   # print the model catalog (windows + prices), no network
 tilde ide-bridge          # serve line-delimited JSON over stdio for IDE hosts
 tilde prune --sessions 30d --audit 90d --yes   # enforce retention (dry run without --yes)
@@ -311,6 +319,7 @@ internal/export/         distilled /export briefs
 internal/audit/          append-only tool decision trail (hashes, never raw args)
 internal/skills/         progressive-disclosure loader + frontmatter lint
 internal/plugin/         hash-pinned local plugin installs (manifest v1 + lockfile)
+internal/marketplace/    unified local registry and safe catalog discovery
 internal/schedule/       due-checker for .tilde/schedule.yaml (no daemon; run-due reexecs headless)
 internal/rules/          project rules auto-load (AGENTS.md/CLAUDE.md/.tilde/RULES.md, trust-gated)
 internal/vec/            vector memory engine (TF-IDF default, Ollama embeddings optional)

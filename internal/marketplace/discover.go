@@ -59,8 +59,14 @@ func Discover(root, pluginDir string, ix *skills.Index, mcpNames []string) (Regi
 				errs = append(errs, err)
 				continue
 			}
-			r.Add(Item{Kind: Plugins, Name: m.Name, Version: m.Version, Scope: "workspace",
+			r.Add(Item{Kind: Plugins, Name: m.Name, Version: m.Version, Scope: "user",
 				Description: m.Description, Source: dir, Installed: true, Verified: plugin.Verify(dir), Skills: append([]string(nil), m.Skills...)})
+			if m.Hooks != "" {
+				r.Add(Item{Kind: Hooks, Name: m.Name + "/hooks", Version: m.Version, Scope: "user", Source: filepath.Join(dir, filepath.FromSlash(m.Hooks)), Installed: true, Verified: plugin.Verify(dir), Description: "plugin hook manifest"})
+			}
+			if m.MCP != "" {
+				r.Add(Item{Kind: MCPServers, Name: m.Name + "/mcp", Version: m.Version, Scope: "user", Source: filepath.Join(dir, filepath.FromSlash(m.MCP)), Installed: true, Verified: plugin.Verify(dir), Description: "plugin MCP manifest"})
+			}
 			for _, rel := range m.Skills {
 				path := filepath.Join(dir, filepath.FromSlash(rel))
 				sk, err := skills.ParseFile(path, "workspace")
@@ -68,7 +74,7 @@ func Discover(root, pluginDir string, ix *skills.Index, mcpNames []string) (Regi
 					errs = append(errs, err)
 					continue
 				}
-				r.Add(Item{Kind: Skills, Name: sk.Name, Version: sk.Version, Scope: "workspace", Description: sk.Description, Source: path, Installed: true, Verified: plugin.Verify(dir)})
+				r.Add(Item{Kind: Skills, Name: sk.Name, Version: sk.Version, Scope: "user", Description: sk.Description, Source: path, Installed: true, Verified: plugin.Verify(dir)})
 			}
 		}
 	}

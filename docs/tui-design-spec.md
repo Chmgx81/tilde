@@ -766,7 +766,7 @@ timeline vocabulary it's explaining.
   full-width space fill is stripped at the render boundary), so copies
   contain only visible characters.
 
-  Slash commands: /mode /compact /clear /copy /sandbox /diff /undo /sessions /export /model /login /logout /skills /quit /help
+  Slash commands: /mode /compact /clear /copy /sandbox /diff /undo /sessions /export /model /login /logout /skills /plugins /marketplace /quit /help
 
                                                            press esc to close
 ```
@@ -793,11 +793,10 @@ marketplace-sourced items) by kind.
   → install browser-review
 ```
 
-- tilde only needs two tabs at launch — **Skills** and **MCP Servers** —
-  since hooks and a public marketplace are both explicitly deferred
-  (Plan.md §8). The row layout itself (name, version, scope tag,
-  right-aligned action button) is worth locking in now regardless, so it
-  doesn't need a redesign the day MCP ships.
+- Tilde currently exposes all five registry tabs. Hooks and MCP servers are
+  discovery-only; public remote marketplace fetching remains deferred. The
+  row layout is shared across every kind so a future remote source does not
+  require a UI redesign.
 - `[install]` renders in `accent-select` and is interactive; `[installed]`
   renders in `success` and is inert — the color alone tells you a row's
   state without reading the word, same principle as the todo checkboxes
@@ -1462,7 +1461,7 @@ new section per version:
 | Session resume list | DONE (picker UI exists) |
 | Help overlay | DONE |
 | Headless flag parity | DONE (`--mode`/`--model`/`--yes`/`--skill` all exist) |
-| Plugin/extension marketplace (§2.17) | TODO — blocked on skills loader + MCP (Plan.md Phase 6) |
+| Plugin/extension marketplace (§2.17) | DONE — unified local registry, compatible JSON/YAML catalogs, explicit install confirmation, path containment, manifest lockfile |
 | Structured multi-question prompts (§2.18) | TODO — no current trigger; spec ready for first-run setup |
 | Subagent exploration view (§2.19) | DONE (render-state) — `⋮ type · model` running rows, `│ task type · model [done|failed]` completions, prose synthesis below batch; no focus model, no toggles |
 | Thinking indicator (§2.20) | DONE — live rotating microcopy (2s tick while running) + post-turn `◆ Thought for 3.4s · 38 tok/s` receipt on success (rate omitted when provider tokens unknown; shell escapes receipt-free) |

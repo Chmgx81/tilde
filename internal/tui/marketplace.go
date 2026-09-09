@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"tilde/internal/hooks"
 	"tilde/internal/marketplace"
 	"tilde/internal/mcp"
 	"tilde/internal/plugin"
@@ -47,24 +48,48 @@ func (m *Model) openMarketplace() {
 	for _, e := range errs {
 		m.append("⚠ " + e.Error())
 	}
-	// Hooks are registry metadata only. They are never executed by opening
-	// this browser, which keeps discovery outside the action boundary.
-	for _, dir := range []struct{ path, scope string }{
-		{filepath.Join(home, ".tilde", "hooks"), "user"},
-		{filepath.Join(m.root, ".tilde", "hooks"), "project"},
-	} {
-		entries, _ := os.ReadDir(dir.path)
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") && !strings.HasSuffix(entry.Name(), ".yml") {
-				continue
-			}
-			reg.Add(marketplace.Item{Kind: marketplace.Hooks, Name: strings.TrimSuffix(strings.TrimSuffix(entry.Name(), ".yaml"), ".yml"), Scope: dir.scope, Source: filepath.Join(dir.path, entry.Name()), Installed: true})
-		}
-	}
+	// Hook configs are registry metadata only. They are never executed by
+	// opening this browser, which keeps discovery outside the action boundary.
+	addHookRows(&reg, filepath.Join(m.root, ".tilde", "hooks.yaml"), "project", true)
+	addHookRows(&reg, filepath.Join(home, ".tilde", "hooks.yaml"), "user", true)
 	m.marketplaceItems = reg
 	m.marketplaceCursor, m.marketplaceQuery = 0, ""
 	m.marketplaceTab = 0
 	m.marketplaceOpen = true
+}
+
+func addHookRows(reg *marketplace.Registry, path, scope string, installed bool) {
+	cfg, err := hooks.LoadFile(path)
+	if err != nil {
+		return
+	}
+	counts := map[string]int{}
+	add := func(phase, tool string) {
+		base := phase + ":" + tool
+		counts[base]++
+		name := scope + "/" + base
+		if counts[base] > 1 {
+			name = fmt.Sprintf("%s#%d", base, counts[base])
+			name = scope + "/" + name
+		}
+		reg.Add(marketplace.Item{Kind: marketplace.Hooks, Name: name, Scope: scope, Source: path, Description: fmt.Sprintf("%s hook for %s", phase, tool), Installed: installed})
+	}
+	for tool, commands := range cfg.Before {
+		for range commands {
+			add("before", tool)
+		}
+	}
+	for tool, commands := range cfg.After {
+		for range commands {
+			add("after", tool)
+		}
+	}
+	for range cfg.SessionStart {
+		add("session_start", "session")
+	}
+	for range cfg.SessionEnd {
+		add("session_end", "session")
+	}
 }
 
 func (m *Model) updateMarketplace(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

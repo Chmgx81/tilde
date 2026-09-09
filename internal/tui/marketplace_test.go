@@ -37,6 +37,28 @@ func TestMarketplaceBrowserHasUnifiedTabsAndDeduplicatedSkills(t *testing.T) {
 	}
 }
 
+func TestMarketplaceBrowserDiscoversConfiguredHooksWithoutExecutingThem(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".tilde"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hooks := "before:\n  write_file:\n    - echo guard\nafter:\n  write_file:\n    - echo observe\n"
+	if err := os.WriteFile(filepath.Join(root, ".tilde", "hooks.yaml"), []byte(hooks), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := New(newTestLoop(), mode.Plan, root, "ollama/m", 32000)
+	m.openMarketplace()
+	rows := m.marketplaceItems.Items(marketplace.Hooks, "project/")
+	if len(rows) != 2 {
+		t.Fatalf("expected two configured hook rows, got %+v", rows)
+	}
+	for _, row := range rows {
+		if row.Source != filepath.Join(root, ".tilde", "hooks.yaml") || !row.Installed {
+			t.Fatalf("unexpected hook row: %+v", row)
+		}
+	}
+}
+
 func TestMarketplaceInstallRequiresConfirmation(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "browser-review")
