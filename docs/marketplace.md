@@ -1,0 +1,59 @@
+# Tilde marketplace and extension registry
+
+`/plugins` and `/marketplace` open one registry with five filters:
+
+```text
+Hooks   Plugins   Marketplace   Skills   MCP Servers
+```
+
+The registry is a read-only discovery surface. Opening it never executes a
+hook, starts an MCP server, loads a skill body, or installs a package.
+
+## Local marketplace catalog
+
+Marketplace packages are declared by a project-owned catalog at:
+
+```text
+.tilde/marketplace/catalog.yaml
+```
+
+Sources must be local directories containing a valid `tilde-plugin.yaml`.
+Remote URLs are intentionally rejected. A catalog item is installable only
+when its name and version exactly match the source manifest.
+
+Example:
+
+```yaml
+items:
+  - name: browser-review
+    version: 0.8.2
+    description: Review browser flows with audited UI and accessibility checks.
+    source: packages/browser-review
+```
+
+The source path is relative to the project root. A plugin may use the
+progressive-disclosure layout from the Agent Skills standard: `skills/` for
+entrypoints, `references/` for conditional reading, `scripts/` for reviewed
+deterministic helpers, and `assets/` for output templates. Tilde copies only
+manifest-listed files and never executes scripts during discovery or install.
+
+The user selects the row and presses `i` to perform the explicit install. The
+existing plugin installer then copies only manifest-listed files and creates a
+SHA-256 lockfile. Installation never executes installed content.
+
+Press Enter on a plugin to inspect its listed skills. Press Enter on a skill to
+load its body into the current session. Skill names are deduplicated by the
+underlying registry, so project, user, bundled, and plugin-provided copies do
+not create duplicate rows.
+
+## Layout contract
+
+- `/` focuses search.
+- Left/right or Tab changes the registry kind.
+- Up/down changes the selected row.
+- Enter opens a skill or shows a plugin's skills.
+- `i` installs only a verified local marketplace source.
+- Esc clears search first, then closes the browser.
+
+This keeps hooks, plugins, marketplace packages, skills, and MCP servers in
+one spatial model while preserving their different action boundaries.

@@ -55,7 +55,9 @@ const (
 	// MaxSkillFiles caps how many .md skills one plugin may list.
 	MaxSkillFiles = 32
 	// MaxSkillBytes caps each skill file at 64KB.
-	MaxSkillBytes = 64 * 1024
+	MaxSkillBytes    = 64 * 1024
+	MaxResourceBytes = 256 * 1024
+	MaxResourceFiles = 128
 )
 
 var (
@@ -71,6 +73,9 @@ type Manifest struct {
 	Version     string   `yaml:"version"`
 	Description string   `yaml:"description"`
 	Skills      []string `yaml:"skills"`
+	Scripts     []string `yaml:"scripts,omitempty"`
+	References  []string `yaml:"references,omitempty"`
+	Assets      []string `yaml:"assets,omitempty"`
 	Hooks       string   `yaml:"hooks,omitempty"`
 	MCP         string   `yaml:"mcp,omitempty"`
 }
@@ -149,6 +154,16 @@ func (m *Manifest) Validate(dir string) error {
 			return fmt.Errorf("plugin %q: skill %q: %v", m.Name, rel, err)
 		}
 	}
+	for label, files := range map[string][]string{"scripts": m.Scripts, "references": m.References, "assets": m.Assets} {
+		if len(files) > MaxResourceFiles {
+			return fmt.Errorf("plugin %q: %s has %d files (cap %d)", m.Name, label, len(files), MaxResourceFiles)
+		}
+		for _, rel := range files {
+			if err := checkResourceFile(dir, m.Name, label, rel); err != nil {
+				return err
+			}
+		}
+	}
 	if m.Hooks != "" {
 		if !strings.HasSuffix(m.Hooks, ".yaml") && !strings.HasSuffix(m.Hooks, ".yml") {
 			return fmt.Errorf("plugin %q: hooks %q must end in .yaml or .yml", m.Name, m.Hooks)
@@ -172,6 +187,9 @@ func (m *Manifest) Validate(dir string) error {
 func (m *Manifest) Files() []string {
 	out := []string{ManifestFileName}
 	out = append(out, m.Skills...)
+	out = append(out, m.Scripts...)
+	out = append(out, m.References...)
+	out = append(out, m.Assets...)
 	if m.Hooks != "" {
 		out = append(out, m.Hooks)
 	}
@@ -179,6 +197,27 @@ func (m *Manifest) Files() []string {
 		out = append(out, m.MCP)
 	}
 	return out
+}
+
+func checkResourceFile(dir, pluginName, kind, rel string) error {
+	abs, err := resolveInside(dir, rel)
+	if err != nil {
+		return fmt.Errorf("plugin %q: %s %q: %v", pluginName, kind, rel, err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return fmt.Errorf("plugin %q: %s %q: cannot read: %v", pluginName, kind, rel, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("plugin %q: %s %q is not a regular file", pluginName, kind, rel)
+	}
+	if info.Size() > MaxResourceBytes {
+		return fmt.Errorf("plugin %q: %s %q is %d bytes (cap %d)", pluginName, kind, rel, info.Size(), MaxResourceBytes)
+	}
+	if err := checkLinkInside(dir, abs); err != nil {
+		return fmt.Errorf("plugin %q: %s %q: %v", pluginName, kind, rel, err)
+	}
+	return nil
 }
 
 // checkListedFile verifies one non-skill listed file (hooks/mcp): contained,

@@ -125,6 +125,27 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
+func TestProgressiveDisclosureResourcesArePinned(t *testing.T) {
+	src := t.TempDir()
+	m := validManifest()
+	m.Skills = []string{"skills/a.md"}
+	m.Hooks, m.MCP = "", ""
+	m.Scripts = []string{"scripts/check.py"}
+	m.References = []string{"references/advanced.md"}
+	m.Assets = []string{"assets/template.txt"}
+	writePlugin(t, src, m)
+	writeFile(t, src, "skills/a.md", "---\nname: a\ndescription: skill A does things here\n---\nBody\n")
+	writeFile(t, src, "scripts/check.py", "print('ok')\n")
+	writeFile(t, src, "references/advanced.md", "details\n")
+	writeFile(t, src, "assets/template.txt", "template\n")
+	dest, err := Install(src, t.TempDir())
+	if err != nil { t.Fatalf("Install: %v", err) }
+	if !Verify(dest) { t.Fatal("resource-backed plugin did not verify") }
+	for _, rel := range m.Files() {
+		if _, err := os.Stat(filepath.Join(dest, filepath.FromSlash(rel))); err != nil { t.Errorf("missing pinned resource %q: %v", rel, err) }
+	}
+}
+
 func TestBadName(t *testing.T) {
 	for _, name := range []string{"", "Bad_Name!", "UPPER", "has space", "dot.name", "sla/sh", "../x"} {
 		src := t.TempDir()

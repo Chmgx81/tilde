@@ -32,6 +32,8 @@ var slashCommands = []slashRow{
 	{"/logout [provider]", "Remove stored provider auth"},
 	{"/mode <plan|build|auto>", "Set mode explicitly (same as Tab)"},
 	{"/skills", "Browse and load a skill"},
+	{"/plugins", "Browse hooks, plugins, skills, and MCP servers"},
+	{"/marketplace", "Search the unified extension registry"},
 	{"/compact [focus]", "Summarize older turns to reclaim context"},
 	{"/clear", "Start a new session"},
 	{"/copy [n]", "Copy transcript (or line n) to the clipboard"},
@@ -257,6 +259,9 @@ func (m *Model) runSlash(cmd, args string, selected slashRow) tea.Cmd {
 		return nil
 	case "/skills":
 		m.openSkills()
+		return nil
+	case "/plugins", "/marketplace":
+		m.openMarketplace()
 		return nil
 	default:
 		m.append(fmt.Sprintf("✗ unknown command %q — type / to browse the palette.", cmd))

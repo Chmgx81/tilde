@@ -112,7 +112,7 @@ a fresh clone instead.
 | Input | Action |
 |---|---|
 | `Tab` | Cycle Plan → Build → Auto |
-| `/` | Palette: `/mode /compact /clear /copy /sandbox /diff /undo /sessions /export /model /login /logout /skills /help /quit` |
+| `/` | Palette: `/mode /compact /clear /copy /sandbox /diff /undo /sessions /export /model /login /logout /skills /plugins /marketplace /help /quit` |
 | `@file` | Fuzzy file reference (respects `.gitignore`) |
 | `!cmd` | Shell escape — same sandbox and confirm tier as the agent |
 | `Ctrl+Y` | Copy the latest assistant response (raw markdown) |
