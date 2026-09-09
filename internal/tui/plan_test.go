@@ -60,6 +60,25 @@ func TestPlanBannerOnceAtSessionStart(t *testing.T) {
 	}
 }
 
+func TestPlanBannerAndUpdateNoticeStaySingleAndWellFormed(t *testing.T) {
+	m := New(&agent.Loop{}, mode.Plan, t.TempDir(), "test-model", 32000)
+	m.SetUpdateNotice("update available (old → new) — run tilde update")
+	if got := countBanner(m); got != 1 {
+		t.Fatalf("update notice must not duplicate the live Plan banner, got %d", got)
+	}
+	m.handleModeCmd("build")
+	m.handleModeCmd("plan")
+	if got := countBanner(m); got != 1 {
+		t.Fatalf("Plan re-entry must keep one banner beside the update notice, got %d", got)
+	}
+	for _, ln := range m.lines {
+		plain := stripANSI(ln)
+		if strings.Contains(plain, planBannerTitle) && runeLen(plain) != m.vp.Width {
+			t.Fatalf("Plan title line was wrapped or truncated: width=%d want=%d line=%q", runeLen(plain), m.vp.Width, plain)
+		}
+	}
+}
+
 func TestPlanBannerAbsentOutsidePlan(t *testing.T) {
 	m := New(&agent.Loop{}, mode.Build, t.TempDir(), "test-model", 32000)
 	if m.planBannerShown {
@@ -107,6 +126,11 @@ func TestDemotionPostsBannerBesideToast(t *testing.T) {
 	m.handleModeCmd("plan")
 	if n := countBanner(m); n != 1 || !m.planBannerShown {
 		t.Fatalf("re-entering Plan must restore the live banner, got count=%d shown=%v", n, m.planBannerShown)
+	}
+	for _, ln := range planBanner(m.vp.Width) {
+		if got := runeLen(stripANSI(ln)); got != m.vp.Width {
+			t.Fatalf("re-entered Plan banner must not be soft-wrapped: width=%d want=%d line=%q", got, m.vp.Width, stripANSI(ln))
+		}
 	}
 }
 

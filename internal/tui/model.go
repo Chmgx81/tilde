@@ -110,10 +110,12 @@ type Model struct {
 	// via edge autoscroll. selActive is true between a left press and
 	// its release; selMoved separates a bare click (no copy) from a
 	// real drag.
-	selAnchor int
-	selHead   int
-	selActive bool
-	selMoved  bool
+	selAnchor  int
+	selHead    int
+	selAnchorX int
+	selHeadX   int
+	selActive  bool
+	selMoved   bool
 	// pasteEcho retains submitted large-paste bodies keyed to the echo
 	// line that carries their token. Display stays collapsed (spec
 	// §2.21) but every copy path expands tokens back to the real
@@ -774,7 +776,7 @@ func (m *Model) toggleMouse() tea.Cmd {
 }
 
 // updateSelection runs the in-app drag-select: press anchors, motion
-// extends, release copies the selected transcript lines to the clipboard
+// extends, release copies the selected transcript characters to the clipboard
 // (OSC 52 included, so it works without xclip) and toasts. Anchor and
 // head are transcript-absolute lines, so wheel scrolling mid-drag keeps
 // the highlight on the same content and drags past the screen edge
@@ -783,6 +785,7 @@ func (m *Model) toggleMouse() tea.Cmd {
 // dismiss command when one fired — wheel and stray-button events fall
 // through to scrolling.
 func (m *Model) updateSelection(msg tea.MouseMsg) (bool, tea.Cmd) {
+	x := m.transcriptX(msg.X)
 	switch {
 	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
 		if msg.Y >= 0 && msg.Y < m.vp.Height && len(m.lines) > 0 {
@@ -790,6 +793,8 @@ func (m *Model) updateSelection(msg tea.MouseMsg) (bool, tea.Cmd) {
 			m.selMoved = false
 			m.selAnchor = min(m.vp.YOffset+msg.Y, len(m.lines)-1)
 			m.selHead = m.selAnchor
+			m.selAnchorX = x
+			m.selHeadX = m.selAnchorX
 		}
 		return true, nil
 	case msg.Action == tea.MouseActionMotion && m.selActive:
@@ -798,14 +803,17 @@ func (m *Model) updateSelection(msg tea.MouseMsg) (bool, tea.Cmd) {
 			// Autoscroll up: hold the drag at the top edge.
 			m.scrollRows(true, 2)
 			m.selHead = m.vp.YOffset
+			m.selHeadX = x
 		case msg.Y >= m.vp.Height-1 && !m.vp.AtBottom():
 			// Autoscroll down: hold the drag at the bottom edge.
 			m.scrollRows(false, 2)
 			m.selHead = min(m.vp.YOffset+m.vp.Height-1, len(m.lines)-1)
+			m.selHeadX = x
 		default:
 			m.selHead = min(m.vp.YOffset+msg.Y, len(m.lines)-1)
+			m.selHeadX = x
 		}
-		if m.selHead != m.selAnchor {
+		if m.selHead != m.selAnchor || m.selHeadX != m.selAnchorX {
 			m.selMoved = true
 		}
 		return true, nil
@@ -822,16 +830,26 @@ func (m *Model) updateSelection(msg tea.MouseMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-// selectedText joins the highlighted transcript lines. Anchor and head
-// are transcript-absolute indexes, so a selection may span more than one
-// screenful. Each line renders in its copy form (paste tokens expand
-// back to real content); ANSI is stripped — copies are plain text.
+// transcriptX converts terminal coordinates to the left-aligned transcript
+// column. Wide terminals center the capped frame; without this correction a
+// drag would copy characters several columns to the right of the pointer.
+func (m Model) transcriptX(x int) int {
+	if m.termW > maxAppWidth && m.vp.Width > 0 {
+		x -= max((m.termW-m.vp.Width)/2, 0)
+	}
+	return max(x, 0)
+}
+
+// selectedText returns the character range between the drag endpoints.
+// Anchor and head are transcript-absolute indexes, so a selection may span
+// more than one screenful. Paste tokens expand and ANSI is stripped.
 func (m *Model) selectedText() string {
 	total := len(m.lines)
-	lo, hi := m.selAnchor, m.selHead
-	if lo > hi {
-		lo, hi = hi, lo
+	startRow, startX, endRow, endX := m.selAnchor, m.selAnchorX, m.selHead, m.selHeadX
+	if startRow > endRow || (startRow == endRow && startX > endX) {
+		startRow, startX, endRow, endX = endRow, endX, startRow, startX
 	}
+	lo, hi := startRow, endRow
 	if lo < 0 {
 		lo = 0
 	}
@@ -843,7 +861,18 @@ func (m *Model) selectedText() string {
 	}
 	out := make([]string, 0, hi-lo+1)
 	for i := lo; i <= hi; i++ {
-		out = append(out, m.copyLineForm(i))
+		line := []rune(m.copyLineForm(i))
+		from, to := 0, len(line)
+		if i == startRow {
+			from = min(max(startX, 0), len(line))
+		}
+		if i == endRow {
+			to = min(max(endX, 0), len(line))
+		}
+		if from > to {
+			from, to = to, from
+		}
+		out = append(out, string(line[from:to]))
 	}
 	return strings.TrimRight(strings.Join(out, "\n"), " \t\n")
 }
@@ -878,10 +907,41 @@ func (m *Model) copySelected(text string) tea.Cmd {
 	return cmd
 }
 
-// selVisible reports whether a drag highlight should be drawn for
-// viewport row y — the two-cell inverse-video bar following the drag.
+// selectionRange returns the half-open rune range selected on an absolute
+// transcript row. Rendering this range makes the visual selection agree with
+// the text that will actually be copied.
+func (m *Model) selectionRange(row int) (int, int, bool) {
+	if !m.selActive || len(m.lines) == 0 {
+		return 0, 0, false
+	}
+	startRow, startX, endRow, endX := m.selAnchor, m.selAnchorX, m.selHead, m.selHeadX
+	if startRow > endRow || (startRow == endRow && startX > endX) {
+		startRow, startX, endRow, endX = endRow, endX, startRow, startX
+	}
+	if row < startRow || row > endRow {
+		return 0, 0, false
+	}
+	lineLen := len([]rune(m.copyLineForm(row)))
+	from, to := 0, lineLen
+	if row == startRow {
+		from = min(max(startX, 0), lineLen)
+	}
+	if row == endRow {
+		to = min(max(endX, 0), lineLen)
+	}
+	if from > to {
+		from, to = to, from
+	}
+	return from, to, from != to || startRow != endRow
+}
+
+// selVisible is retained for callers that only need to know whether a row is
+// part of the live selection (tests and lightweight layout checks).
 func (m *Model) selVisible(y int) bool {
-	return m.selActive && y >= min(m.selAnchor, m.selHead) && y <= max(m.selAnchor, m.selHead)
+	if !m.selActive {
+		return false
+	}
+	return y >= min(m.selAnchor, m.selHead) && y <= max(m.selAnchor, m.selHead)
 }
 
 // pasteSeg is one collapsed large paste: token is the bracket text
@@ -1774,14 +1834,17 @@ func (m Model) vpView() string {
 	lines := strings.Split(m.vp.View(), "\n")
 	for i, ln := range lines {
 		ln = trimLinePad(ln)
-		if m.selVisible(i) {
-			// Live drag highlight: inverse video, minimum two cells so
-			// the bar stays findable on empty rows. Cosmetic only — the
-			// copied text always comes from the transcript itself.
-			if w := runeLen(stripANSI(ln)); w < 2 {
-				ln += strings.Repeat(" ", 2-w)
+		if from, to, ok := m.selectionRange(m.vp.YOffset + i); ok {
+			// Selection is rendered from the plain copy form so ANSI styling
+			// cannot swallow or shift the selected cells. Losing syntax colour
+			// for the selected row is preferable to showing a highlight that
+			// copies different text than it appears to select.
+			plain := []rune(m.copyLineForm(m.vp.YOffset + i))
+			from = min(from, len(plain))
+			to = min(to, len(plain))
+			if from < to {
+				ln = string(plain[:from]) + inverseSel.Render(string(plain[from:to])) + string(plain[to:])
 			}
-			ln = inverseSel.Render(ln)
 		}
 		lines[i] = ln
 	}
@@ -1838,7 +1901,7 @@ func (m Model) View() string {
 			Render(confirmFooter(m.confirm.Tool, m.confirm.Args, m.vp.Width, m.confirm.reasonHidden))
 		return m.centerFrame(m.vpView() + "\n" + p + "\n" + composer + dropdown + toast + "\n\n" + statusBar)
 	}
-	hint := lipgloss.NewStyle().Foreground(fgDim).Render("/ commands  •  @ files  •  ! shell  •  Ctrl+Y copy  •  Shift+drag copy  •  Tab mode  •  Esc×2 cancel" + m.sessionHint())
+	hint := lipgloss.NewStyle().Foreground(fgDim).Render("/ commands  •  @ files  •  ! shell  •  Drag select  •  Ctrl+Y copy  •  Tab mode  •  Esc×2 cancel" + m.sessionHint())
 	return m.centerFrame(m.vpView() + "\n" + composer + dropdown + toast + "\n\n" + statusBar + "\n\n" + m.centerHint(m.hintBar(hint)))
 }
 

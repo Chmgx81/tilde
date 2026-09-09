@@ -17,6 +17,7 @@ func helpView() string {
 		{"Shift+↑↓", "Scroll transcript, even while a picker is open"},
 		{"PgUp/PgDn · Ctrl+U/D", "Scroll transcript by half a screen"},
 		{"Wheel / touchpad", "Scroll transcript, even while a picker is open"},
+		{"Drag", "Select transcript text and copy on release"},
 		{"Alt+M", "Mouse passthrough: terminal-native select + copy (rectangles, terminal chords); wheel pauses"},
 		{"Home/End", "Jump to top of history / back to live"},
 		{"esc", "Dismiss overlay or picker"},

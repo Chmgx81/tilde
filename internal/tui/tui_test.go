@@ -1142,7 +1142,7 @@ func TestMouseMotionDoesNotScroll(t *testing.T) {
 
 func TestDragSelectCopiesOnRelease(t *testing.T) {
 	// In-app drag-select: left press anchors, motion extends, release
-	// copies the selected transcript rows (plain text, ANSI stripped)
+	// copies the selected character range (plain text, ANSI stripped)
 	// and toasts — no Alt+M, no terminal-native selection involved.
 	old := clipboardWrite
 	defer func() { clipboardWrite = old }()
@@ -1197,8 +1197,8 @@ func TestDragSelectCopiesOnRelease(t *testing.T) {
 	// "Copied selection" toast on screen for good.
 	nm, relCmd := drag.Update(tea.MouseMsg{X: 9, Y: mid + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	done := nm.(Model)
-	if !strings.HasSuffix(got, "middle line\ntail line") || strings.Contains(got, "plain red") || strings.ContainsRune(got, '\x1b') {
-		t.Fatalf("release must copy the selected rows as plain text, got %q", got)
+	if !strings.HasSuffix(got, "e line\ntail line") || strings.Contains(got, "plain red") || strings.ContainsRune(got, '\x1b') {
+		t.Fatalf("release must copy the selected character range as plain text, got %q", got)
 	}
 	if !strings.Contains(done.toast, "Copied selection") {
 		t.Fatalf("release must toast receipt, got %q", done.toast)

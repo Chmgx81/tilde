@@ -55,8 +55,13 @@ func (m *Model) appendPlanBanner() {
 	if w <= 0 {
 		w = 78
 	}
-	for _, ln := range planBanner(w) {
-		m.append(ln)
+	// The banner is already sized to the viewport. Passing it through
+	// append would soft-wrap the closing cell at w-1, splitting the box.
+	stick := m.stick || m.vp.AtBottom()
+	m.lines = append(m.lines, planBanner(w)...)
+	m.vp.SetContent(strings.Join(m.lines, "\n"))
+	if stick {
+		m.vp.GotoBottom()
 	}
 	m.planBannerShown = true
 }
