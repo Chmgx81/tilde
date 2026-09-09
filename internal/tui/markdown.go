@@ -10,11 +10,11 @@ import (
 )
 
 // reBareNumber matches a line that starts with a number immediately
-// followed by a non-digit, non-space letter — the pattern LLMs emit
-// for numbered lists when they omit the dot and space ("1Dead branch"
-// instead of "1. Dead branch"). Lines that already have proper
-// markdown list syntax ("1. text" or "1) text") are left alone.
-var reBareNumber = regexp.MustCompile(`^(\d+)([A-Za-z])`)
+// followed by an uppercase letter — the pattern LLMs emit for numbered
+// lists when they omit the dot and space ("1Dead branch" instead of
+// "1. Dead branch"). Lines with lowercase letters after the number
+// ("3am", "2nd") are not list items and pass through unchanged.
+var reBareNumber = regexp.MustCompile(`^(\d+)([A-Z])`)
 
 // normalizeOrderedListItems fixes bare numbered lines that lack the
 // dot-space separator Glamour needs to recognise them as ordered lists.

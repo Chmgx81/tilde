@@ -189,11 +189,13 @@ func statResultLine(stat string) string {
 		out += mut.Render(rest[:i])
 		rest = rest[i:]
 	}
-	if i := strings.Index(rest, "-"); i > 0 {
-		out += green.Render(rest[:i])
-		rest = rest[i:]
+	// Find the -M separator: must be preceded by a space to avoid
+	// matching inside a note like "+3 (new file)".
+	if i := strings.Index(rest, " -"); i >= 0 {
+		out += green.Render(rest[:i]) + " "
+		rest = rest[i+1:] // skip the space, keep the -
 	}
-	if i := strings.Index(rest, "("); i > 0 {
+	if i := strings.Index(rest, "("); i >= 0 {
 		out += red.Render(rest[:i])
 		out += dim.Render(rest[i:])
 	} else {

@@ -100,3 +100,12 @@ func TestNormalizeOrderedListBareNumbers(t *testing.T) {
 		t.Fatalf("item text must survive normalisation: %q", got)
 	}
 }
+
+func TestNormalizeSkipsNonListNumbers(t *testing.T) {
+	// Lowercase after number: not a list item (e.g. "3am", "2nd place").
+	in := "It was 3am when it happened\nHe came 2nd in the race"
+	got := renderMarkdownText(in, 60)
+	if strings.Contains(got, "3. am") || strings.Contains(got, "2. nd") {
+		t.Fatalf("lowercase after number must not be normalised: %q", got)
+	}
+}
