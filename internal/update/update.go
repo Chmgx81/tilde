@@ -61,7 +61,7 @@ const (
 
 // Version is this binary's release version. It is the comparison value for
 // remote release tags and must only change when a release is tagged.
-const Version = "v0.9.0"
+const Version = "v0.9.1"
 
 // LocalSHA reports the commit this binary was built from (stamped by
 // the Go toolchain for builds inside a git checkout), or "" when
