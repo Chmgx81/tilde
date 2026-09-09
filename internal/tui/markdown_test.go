@@ -70,3 +70,17 @@ func TestToolCodeFenceUsesMarkdownRenderer(t *testing.T) {
 		t.Fatalf("code fence should be rendered, not shown as raw markup: %q", got)
 	}
 }
+
+func TestOrderedListNumbersHaveSeparator(t *testing.T) {
+	md := "1. First item\n2. Second item\n3. Third item"
+	got := stripANSI(renderMarkdownText(md, 60))
+	if !strings.Contains(got, "1. First item") {
+		t.Fatalf("ordered list 1 missing dot separator: %q", got)
+	}
+	if !strings.Contains(got, "2. Second item") {
+		t.Fatalf("ordered list 2 missing dot separator: %q", got)
+	}
+	if strings.Contains(got, "1First") || strings.Contains(got, "1First item") {
+		t.Fatalf("numbers must not glue to text: %q", got)
+	}
+}

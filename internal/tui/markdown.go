@@ -110,6 +110,7 @@ func tildeMarkdownStyle() ansi.StyleConfig {
 		},
 		Link: ansi.StylePrimitive{Color: &mutStr, Underline: &bold},
 		Item: ansi.StylePrimitive{Color: &fgStr},
+		Enumeration: ansi.StylePrimitive{Color: &fgStr, BlockPrefix: ". "},
 	}
 }
 
