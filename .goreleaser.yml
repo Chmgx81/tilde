@@ -23,7 +23,7 @@ archives:
   - id: tilde
     # .Tag keeps the leading v so install.sh --from-release=v0.9.0
     # resolves tilde_v0.9.0_linux_amd64.tar.gz on the release page.
-    name_template: "tilde_{{ .Tag }}_linux_{{ .Arch }}.tar.gz"
+    name_template: "tilde_{{ .Tag }}_linux_{{ .Arch }}"
     files: [LICENSE, README.md]
 
 checksum:
