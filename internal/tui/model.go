@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 	"golang.org/x/term"
 
 	"tilde/internal/agent"
@@ -84,10 +85,9 @@ type Model struct {
 	costOut            float64 // cached per-1M USD out-price for m.model
 	costOK             bool    // false = unknown price → cost readout hidden, never fabricated
 	budget             int
-	ctx                string // "41% (13.1k/32k)"
-	ctxHot             bool   // true past 80% — status text turns amber, never a popup
-	branch             string // cached `main [+2]` (10s TTL — never a git call per frame)
-	branchAt           time.Time
+	ctx                string      // "41% (13.1k/32k)"
+	ctxHot             bool        // true past 80% — status text turns amber, never a popup
+	branch             string      // asynchronously refreshed `main [+2]`; never computed during View
 	turnStart          time.Time   // zero when idle; drives the Working Ns indicator
 	turnDidWork        bool        // any tool_call dispatched this turn — gates the ✓ Done receipt
 	turnBaseCompletion int         // provider completion tokens at turn start (per-turn tok/s math)
@@ -222,9 +222,30 @@ func tickVerbCmd() tea.Cmd {
 
 type compactDoneMsg struct{ Marker string }
 
+// branchRefreshMsg carries the result of the background git status probe.
+// Rendering must never start a subprocess: a large repository or a locked
+// index must not freeze typing, scrolling, or approval prompts.
+type branchRefreshMsg struct{ value string }
+type branchRefreshTickMsg struct{}
+
+func branchRefreshCmd(root string) tea.Cmd {
+	return func() tea.Msg { return branchRefreshMsg{value: gitBranch(root)} }
+}
+
+func branchRefreshTickCmd() tea.Cmd {
+	return tea.Tick(10*time.Second, func(time.Time) tea.Msg { return branchRefreshTickMsg{} })
+}
+
 // New builds the TUI around a configured loop. The transcript opens with
 // the splash screen (fresh sessions only — resume loads history instead).
 func New(loop *agent.Loop, m mode.Mode, root, modelName string, budget int) Model {
+	// Respect the de facto terminal convention without changing the normal
+	// adaptive/true-colour profile. This keeps copy/paste logs and monochrome
+	// terminals readable while the glyph and border vocabulary still carries
+	// state semantically.
+	if os.Getenv("NO_COLOR") != "" {
+		lipgloss.SetColorProfile(termenv.Ascii)
+	}
 	ta := textarea.New()
 	ta.Focus()
 	// Spec §2.3: the composer is a plain single-line box — placeholder
@@ -280,7 +301,9 @@ func (m *Model) setToast(s string) tea.Cmd {
 	return tea.Tick(600*time.Millisecond, func(time.Time) tea.Msg { return toastTickMsg{} })
 }
 
-func (m Model) Init() tea.Cmd { return textarea.Blink }
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(textarea.Blink, branchRefreshCmd(m.root))
+}
 
 // BindProgram wires the running program so background agent events
 // can Send messages back onto the render thread. Pass a pointer to the
@@ -289,6 +312,11 @@ func (m *Model) BindProgram(pp **tea.Program) { m.progPtr = pp }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case branchRefreshMsg:
+		m.branch = msg.value
+		return m, branchRefreshTickCmd()
+	case branchRefreshTickMsg:
+		return m, branchRefreshCmd(m.root)
 	case tea.WindowSizeMsg:
 		// Resizing must preserve the user's reading position. Re-anchoring
 		// every resize to the tail makes a user who is reading history lose
@@ -739,7 +767,17 @@ func (m *Model) fitViewport() {
 	if m.termH <= 0 {
 		return
 	}
-	m.vp.Height = max(m.termH-6-m.ta.Height(), 5)
+	height := m.termH - 6 - m.ta.Height()
+	if m.confirm != nil {
+		// The approval panel replaces the one-line hint bar and adds a
+		// wrapped bordered block. Reserve its rendered height here so the
+		// action keys remain visible on small terminals.
+		panel := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
+			BorderForeground(borderPlan).Padding(1, 1).
+			Render(confirmFooter(m.confirm.Tool, m.confirm.Args, m.vp.Width, m.confirm.reasonHidden))
+		height -= strings.Count(panel, "\n") + 1
+	}
+	m.vp.Height = max(height, 1)
 }
 
 // syncComposer keeps the textarea's height in step with its content
@@ -841,7 +879,7 @@ func (m Model) transcriptX(x int) int {
 	return max(x, 0)
 }
 
-// selectedText returns the character range between the drag endpoints.
+// selectedText returns the cell range between the drag endpoints.
 // Anchor and head are transcript-absolute indexes, so a selection may span
 // more than one screenful. Paste tokens expand and ANSI is stripped.
 func (m *Model) selectedText() string {
@@ -862,18 +900,19 @@ func (m *Model) selectedText() string {
 	}
 	out := make([]string, 0, hi-lo+1)
 	for i := lo; i <= hi; i++ {
-		line := []rune(m.copyLineForm(i))
-		from, to := 0, len(line)
+		line := m.copyLineForm(i)
+		lineWidth := ansi.StringWidth(line)
+		from, to := 0, lineWidth
 		if i == startRow {
-			from = min(max(startX, 0), len(line))
+			from = min(max(startX, 0), lineWidth)
 		}
 		if i == endRow {
-			to = min(max(endX, 0), len(line))
+			to = min(max(endX, 0), lineWidth)
 		}
 		if from > to {
 			from, to = to, from
 		}
-		out = append(out, string(line[from:to]))
+		out = append(out, ansi.Cut(line, from, to))
 	}
 	return strings.TrimRight(strings.Join(out, "\n"), " \t\n")
 }
@@ -908,7 +947,7 @@ func (m *Model) copySelected(text string) tea.Cmd {
 	return cmd
 }
 
-// selectionRange returns the half-open rune range selected on an absolute
+// selectionRange returns the half-open cell range selected on an absolute
 // transcript row. Rendering this range makes the visual selection agree with
 // the text that will actually be copied.
 func (m *Model) selectionRange(row int) (int, int, bool) {
@@ -922,7 +961,7 @@ func (m *Model) selectionRange(row int) (int, int, bool) {
 	if row < startRow || row > endRow {
 		return 0, 0, false
 	}
-	lineLen := len([]rune(m.copyLineForm(row)))
+	lineLen := ansi.StringWidth(m.copyLineForm(row))
 	from, to := 0, lineLen
 	if row == startRow {
 		from = min(max(startX, 0), lineLen)
@@ -1678,7 +1717,7 @@ func shuffleVerbs(r *rand.Rand) []int {
 // counts drop first, then the dirty count, then the branch name, then the
 // root shortens — the mode word is never dropped. Right side docks right.
 func (m *Model) statusBar() string {
-	root, ctx, branch := m.root, m.ctx, m.branchInfo()
+	root, ctx, branch := m.root, m.ctx, m.branch
 	right := func() string {
 		if !m.turnStart.IsZero() {
 			if v, ok := m.reasonVerb(); ok {
@@ -1815,16 +1854,6 @@ func (m Model) centerFrame(s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// branchInfo returns cached `main [+2]` (10s TTL). Branch + dirty count
-// are the slowest-changing status elements — never a git fork per frame.
-func (m *Model) branchInfo() string {
-	if time.Since(m.branchAt) < 10*time.Second {
-		return m.branch
-	}
-	m.branch, m.branchAt = gitBranch(m.root), time.Now()
-	return m.branch
-}
-
 // vpView renders the transcript viewport with trailing padding stripped
 // per line. Bubbles pads short lines to the full viewport width with
 // spaces — invisible on screen, but every one of those spaces rides
@@ -1844,11 +1873,12 @@ func (m Model) vpView() string {
 			// cannot swallow or shift the selected cells. Losing syntax colour
 			// for the selected row is preferable to showing a highlight that
 			// copies different text than it appears to select.
-			plain := []rune(m.copyLineForm(m.vp.YOffset + i))
-			from = min(from, len(plain))
-			to = min(to, len(plain))
+			plain := m.copyLineForm(m.vp.YOffset + i)
+			lineWidth := ansi.StringWidth(plain)
+			from = min(from, lineWidth)
+			to = min(to, lineWidth)
 			if from < to {
-				ln = string(plain[:from]) + inverseSel.Render(string(plain[from:to])) + string(plain[to:])
+				ln = ansi.Cut(plain, 0, from) + inverseSel.Render(ansi.Cut(plain, from, to)) + ansi.Cut(plain, to, lineWidth)
 			}
 		}
 		lines[i] = ln
@@ -1901,6 +1931,15 @@ func (m Model) View() string {
 		toast = "\n" + lipgloss.NewStyle().Foreground(c).Render("  "+m.toast)
 	}
 	if m.confirm != nil {
+		// View is a value receiver, so this also protects callers that set a
+		// confirmation state directly (tests and non-agent shell paths) before
+		// the next Update has a chance to refit the viewport. Keep the live
+		// transcript at the tail when the panel takes rows away.
+		followTail := m.stick || m.vp.AtBottom()
+		m.fitViewport()
+		if followTail {
+			m.vp.GotoBottom()
+		}
 		p := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 			BorderForeground(borderPlan).Padding(1, 1).
 			Render(confirmFooter(m.confirm.Tool, m.confirm.Args, m.vp.Width, m.confirm.reasonHidden))

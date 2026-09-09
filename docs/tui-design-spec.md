@@ -271,6 +271,11 @@ up through history.
 - This line never wraps. If the terminal is too narrow, drop the raw token
   count before dropping anything else; drop the branch dirty-count before the
   branch name; never drop the mode word.
+- Git branch and dirty-count status is refreshed asynchronously on startup and
+  on a 10-second cadence. Rendering never launches `git`, so a slow repository
+  or locked index cannot freeze typing, scrolling, streaming output, or an
+  approval decision. The first frame may omit the branch for one render while
+  the background result is pending.
 - One blank spacer separates the composer box from the status bar (2026-09-07)
   — the three footer elements read as distinct bands, not one cramped block.
   The viewport gives up exactly one row for it, so the frame still lands on
@@ -1414,6 +1419,10 @@ the event text itself (tool-result error lines, `ERROR (handoff…)`), and
 exit codes carry the machine-readable verdict. Action grouping (§2.20) also degrades: headless mode
 prints one line per action, ungrouped, since the point of grouping is visual
 density and a script parsing output wants one event per line regardless.
+
+Interactive TUI sessions honor `NO_COLOR` as well. Borders, mode state, risk,
+and completion remain understandable through their fixed glyph and layout
+vocabulary when color is unavailable.
 
 **Exit codes are classified, not a bare `1` for every failure** (§2.23) — a
 script needs to tell "bad config" from "rate limited" from "agent got stuck"

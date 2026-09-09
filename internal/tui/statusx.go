@@ -9,7 +9,7 @@ import (
 )
 
 // gitBranch returns `main [+2]` for root, or "" outside a repo / on error.
-// One fork per call — always go through branchInfo's TTL cache.
+// The TUI calls this only from a Bubble Tea command, never from View.
 // --no-optional-locks: the bar must never contend with real git work
 // (a status refresh colliding with a snapshot write was observed live).
 func gitBranch(root string) string {

@@ -1220,6 +1220,26 @@ func TestDragSelectCopiesOnRelease(t *testing.T) {
 	}
 }
 
+func TestDragSelectionUsesTerminalCellsForUnicode(t *testing.T) {
+	// Mouse coordinates are terminal cells, not Go rune indexes: 界 is two
+	// cells and 🙂 is two cells. Copy and highlight must therefore use the
+	// same half-open cell range or the pointer and clipboard disagree.
+	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	m.lines = []string{"a界🙂z"}
+	m.pasteEcho = map[int][]pasteSeg{}
+	m.selActive = true
+	m.selAnchor, m.selHead = 0, 0
+	m.selAnchorX, m.selHeadX = 1, 5 // the two wide glyphs, excluding a/z
+
+	if got := m.selectedText(); got != "界🙂" {
+		t.Fatalf("cell selection copied %q, want %q", got, "界🙂")
+	}
+	from, to, ok := m.selectionRange(0)
+	if !ok || from != 1 || to != 5 {
+		t.Fatalf("cell selection range = (%d, %d, %v), want (1, 5, true)", from, to, ok)
+	}
+}
+
 func TestDragSelectBareClickCopiesNothing(t *testing.T) {
 	// A click without drag is navigation, not a copy — no clipboard
 	// touch, no toast, selection cleanly reset.
@@ -1649,6 +1669,21 @@ func TestViewportPinsChromeToBottom(t *testing.T) {
 	rows = strings.Count(after.View(), "\n") + 1
 	if rows != 30 {
 		t.Fatalf("multiline composer must refit, got %d rows for height 30", rows)
+	}
+}
+
+func TestApprovalFrameFitsSmallTerminal(t *testing.T) {
+	// Approval is the highest-risk screen: a wrapped model reason must not
+	// push the decision controls below the terminal or hide them in scrollback.
+	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = nm.(Model)
+	m.confirm = &confirmState{Tool: "shell_command", Args: map[string]any{
+		"command": "git diff --check && git status --short --branch",
+		"reason":  strings.Repeat("Please verify the repository state before making this change. ", 4),
+	}}
+	if rows := strings.Count(m.View(), "\n") + 1; rows > 24 {
+		t.Fatalf("approval frame overflows 24-row terminal: %d rows", rows)
 	}
 }
 
