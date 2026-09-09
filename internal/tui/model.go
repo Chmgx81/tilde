@@ -24,7 +24,6 @@ import (
 	"tilde/internal/agent"
 	"tilde/internal/creds"
 	"tilde/internal/mode"
-	"tilde/internal/policy"
 	"tilde/internal/skills"
 	"tilde/internal/update"
 )
@@ -177,9 +176,10 @@ type Model struct {
 }
 
 type confirmState struct {
-	Tool string
-	Args map[string]any
-	Done chan bool
+	Tool         string
+	Args         map[string]any
+	Done         chan bool
+	reasonHidden bool
 }
 
 // groupItem is one buffered read-only call + its result, waiting to see
@@ -1835,7 +1835,7 @@ func (m Model) View() string {
 	if m.confirm != nil {
 		p := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 			BorderForeground(borderPlan).Padding(1, 1).
-			Render(fmt.Sprintf("Confirm\n%s\n%s", policy.Describe(m.confirm.Tool, m.confirm.Args), confirmFooter(m.confirm.Tool, m.confirm.Args, m.vp.Width)))
+			Render(confirmFooter(m.confirm.Tool, m.confirm.Args, m.vp.Width, m.confirm.reasonHidden))
 		return m.centerFrame(m.vpView() + "\n" + p + "\n" + composer + dropdown + toast + "\n\n" + statusBar)
 	}
 	hint := lipgloss.NewStyle().Foreground(fgDim).Render("/ commands  •  @ files  •  ! shell  •  Ctrl+Y copy  •  Shift+drag copy  •  Tab mode  •  Esc×2 cancel" + m.sessionHint())

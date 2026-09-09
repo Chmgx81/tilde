@@ -1457,6 +1457,13 @@ func TestTabCyclesModeViaUpdate(t *testing.T) {
 		if m.toast == "" {
 			t.Fatalf("tab %d: mode change must toast", i)
 		}
+		wantBanners := 0
+		if want == mode.Plan {
+			wantBanners = 1
+		}
+		if got := countBanner(m); got != wantBanners {
+			t.Fatalf("tab %d: banner count=%d, want %d for mode %s", i, got, wantBanners, want)
+		}
 	}
 	// Tab while running is no longer a silent swallow: it surfaces the
 	// working toast instead.

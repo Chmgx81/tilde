@@ -97,8 +97,16 @@ func TestDemotionPostsBannerBesideToast(t *testing.T) {
 	}
 	// Promotions never banner.
 	m.handleModeCmd("build")
-	if n := countBanner(m); n != 1 {
-		t.Fatalf("Plan→Build promotion must not post the banner, got %d", n)
+	if n := countBanner(m); n != 0 || m.planBannerShown {
+		t.Fatalf("leaving Plan must remove the live banner, got count=%d shown=%v", n, m.planBannerShown)
+	}
+	m.handleModeCmd("auto")
+	if n := countBanner(m); n != 0 {
+		t.Fatalf("Build→Auto must remain banner-free, got %d", n)
+	}
+	m.handleModeCmd("plan")
+	if n := countBanner(m); n != 1 || !m.planBannerShown {
+		t.Fatalf("re-entering Plan must restore the live banner, got count=%d shown=%v", n, m.planBannerShown)
 	}
 }
 

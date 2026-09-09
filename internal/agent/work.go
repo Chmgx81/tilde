@@ -88,6 +88,7 @@ func (t *SpawnWorkTool) Schema() map[string]any {
 			"task":   map[string]any{"type": "string", "description": "What to implement in the worktree"},
 			"path":   map[string]any{"type": "string", "description": "New worktree dir (repo-relative or absolute, default .tilde-work/w<N>)"},
 			"branch": map[string]any{"type": "string", "description": "Branch to check out (created with -B if missing)"},
+			"reason": map[string]any{"type": "string", "description": "Optional concise reason shown in the approval prompt; informational only"},
 		}, "required": []string{"task"}}
 }
 
@@ -210,7 +211,8 @@ func (t *DiscardWorkTool) Description() string {
 func (t *DiscardWorkTool) Schema() map[string]any {
 	return map[string]any{"type": "object",
 		"properties": map[string]any{
-			"path": map[string]any{"type": "string", "description": "Worktree dir from spawn_work"},
+			"path":   map[string]any{"type": "string", "description": "Worktree dir from spawn_work"},
+			"reason": map[string]any{"type": "string", "description": "Optional concise reason shown in the approval prompt; informational only"},
 		}, "required": []string{"path"}}
 }
 

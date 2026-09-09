@@ -58,6 +58,39 @@ func (m *Model) appendPlanBanner() {
 	for _, ln := range planBanner(w) {
 		m.append(ln)
 	}
+	m.planBannerShown = true
+}
+
+// removePlanBanner removes the current-mode banner when leaving Plan. The
+// banner is live mode chrome, not a historical transcript event: retaining it
+// after switching to Build/Auto makes the screen claim the session is still
+// read-only. Only remove the recognizable three-line box, never user text
+// that happens to mention the title.
+func (m *Model) removePlanBanner() {
+	var out []string
+	for i := 0; i < len(m.lines); i++ {
+		line := strings.TrimSpace(stripANSI(m.lines[i]))
+		if strings.Contains(line, planBannerTitle) && strings.HasPrefix(line, "┌") && i+2 < len(m.lines) {
+			next := strings.TrimSpace(stripANSI(m.lines[i+1]))
+			bottom := strings.TrimSpace(stripANSI(m.lines[i+2]))
+			if strings.HasPrefix(next, "│") && strings.HasPrefix(bottom, "└") {
+				i += 2
+				continue
+			}
+		}
+		out = append(out, m.lines[i])
+	}
+	if len(out) == len(m.lines) {
+		m.planBannerShown = false
+		return
+	}
+	wasBottom := m.vp.AtBottom()
+	m.lines = out
+	m.vp.SetContent(strings.Join(m.lines, "\n"))
+	if wasBottom {
+		m.vp.GotoBottom()
+	}
+	m.planBannerShown = false
 }
 
 // freshLines rebuilds a pristine-session transcript: splash plus, when the

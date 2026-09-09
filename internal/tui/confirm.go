@@ -31,6 +31,14 @@ func (m Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch strings.ToLower(msg.String()) {
+	case "r":
+		// Reason is explanatory model output, not an authorization signal.
+		// Keep it collapsible so a long rationale never dominates the bounded
+		// approval surface; the exact action and y/n decision stay visible.
+		if m.confirm != nil {
+			m.confirm.reasonHidden = !m.confirm.reasonHidden
+		}
+		return m, nil
 	case "y":
 		if m.pendingShell != "" {
 			cmd := m.pendingShell
@@ -100,7 +108,7 @@ func (m Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // offered for shell_command only — never for mcp/tools, where an
 // "always" approval would be a pattern-shaped hole. Wire it at the
 // confirm panel (model.go View): Confirm + "\n" + confirmFooter(…).
-func confirmFooter(tool string, args map[string]any, width int) string {
+func confirmFooter(tool string, args map[string]any, width int, reasonHidden bool) string {
 	reason := "The active policy requires your approval before this action can run."
 	if supplied, ok := args["reason"].(string); ok && strings.TrimSpace(supplied) != "" {
 		reason = strings.TrimSpace(supplied)
@@ -109,8 +117,17 @@ func confirmFooter(tool string, args map[string]any, width int) string {
 	if lineWidth < 20 {
 		lineWidth = 20
 	}
-	reasonLine := wrapLine("Reason: "+reason, lineWidth)
-	foot := fmt.Sprintf("Confirm\n%s\n\n%s\n[y] once   [n] deny (default — Enter denies)", policy.Describe(tool, args), reasonLine)
+	foot := fmt.Sprintf("Confirm\n%s", policy.Describe(tool, args))
+	if !reasonHidden {
+		reasonLine := wrapLine("Reason: "+reason, lineWidth)
+		foot += "\n\n" + reasonLine
+	}
+	foot += "\n[y] once   [n] deny (default — Enter denies)   [r] "
+	if reasonHidden {
+		foot += "show reason"
+	} else {
+		foot += "hide reason"
+	}
 	if tool == "shell_command" {
 		foot += "   [a] always this session (exact command)"
 	}

@@ -617,6 +617,9 @@ func (m *Model) handleModeCmd(s string) tea.Cmd {
 	if before == m.curMode {
 		return nil
 	}
+	if before == mode.Plan && m.curMode != mode.Plan {
+		m.removePlanBanner()
+	}
 	// Toast registers the transition as an event, then collapses back
 	// into the status bar — it never lingers as chrome. A demotion into
 	// Plan additionally re-posts the §2.9 read-only banner beside the

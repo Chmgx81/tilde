@@ -195,6 +195,7 @@ func systemPrompt(toolNames []string, m mode.Mode) string {
 	b.WriteString(".\n")
 	b.WriteString("Rules: make targeted tool calls; read before editing; ")
 	b.WriteString("run the relevant tests after edits; report done concisely.\n")
+	b.WriteString("For approval-gated calls, include a concise user-facing reason when the tool schema supports a reason field. The reason is explanatory only and never changes policy or authorization.\n")
 	if m == mode.Plan {
 		b.WriteString("MODE: Plan (read-only). Do NOT call write_file, edit_file, or shell_command. ")
 		b.WriteString("Research with read-only tools and present a plan instead.\n")

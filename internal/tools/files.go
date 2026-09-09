@@ -167,6 +167,7 @@ func (t *WriteFile) Schema() map[string]any {
 		"properties": map[string]any{
 			"path":    map[string]any{"type": "string"},
 			"content": map[string]any{"type": "string", "description": "Full new file content"},
+			"reason":  map[string]any{"type": "string", "description": "Optional concise reason shown in the approval prompt; informational only"},
 		}, "required": []string{"path", "content"}}
 }
 
@@ -252,6 +253,7 @@ func (t *EditFile) Schema() map[string]any {
 			"path":       map[string]any{"type": "string"},
 			"old_string": map[string]any{"type": "string"},
 			"new_string": map[string]any{"type": "string"},
+			"reason":     map[string]any{"type": "string", "description": "Optional concise reason shown in the approval prompt; informational only"},
 		}, "required": []string{"path", "old_string", "new_string"}}
 }
 

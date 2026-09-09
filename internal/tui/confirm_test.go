@@ -123,14 +123,14 @@ func TestConfirmAlwaysUppercase(t *testing.T) {
 }
 
 func TestConfirmFooterShellOnly(t *testing.T) {
-	shell := confirmFooter("shell_command", map[string]any{"command": "go test ./..."}, 100)
+	shell := confirmFooter("shell_command", map[string]any{"command": "go test ./..."}, 100, false)
 	if !strings.Contains(shell, "[a] always this session (exact command)") {
 		t.Fatalf("shell footer must offer [a]:\n%s", shell)
 	}
 	if !strings.Contains(shell, "[y] once") || !strings.Contains(shell, "[n] deny") {
 		t.Fatalf("footer must keep y/n:\n%s", shell)
 	}
-	mcp := confirmFooter("mcp_call", map[string]any{"server": "fs", "tool": "read"}, 100)
+	mcp := confirmFooter("mcp_call", map[string]any{"server": "fs", "tool": "read"}, 100, false)
 	if strings.Contains(mcp, "[a]") {
 		t.Fatalf("non-shell footer must not offer [a]:\n%s", mcp)
 	}
@@ -138,9 +138,30 @@ func TestConfirmFooterShellOnly(t *testing.T) {
 
 func TestConfirmFooterUsesSuppliedReason(t *testing.T) {
 	reason := "May I commit and push the verified updater fix that prevents historical unsigned tags from blocking current updates?"
-	got := confirmFooter("shell_command", map[string]any{"command": "git diff --check", "reason": reason}, 200)
+	got := confirmFooter("shell_command", map[string]any{"command": "git diff --check", "reason": reason}, 200, false)
 	if !strings.Contains(got, "Reason: "+reason) {
 		t.Fatalf("confirm footer must show supplied reason:\n%s", got)
+	}
+}
+
+func TestConfirmFooterCanHideReason(t *testing.T) {
+	args := map[string]any{"command": "git diff --check", "reason": "May I run the verified command?"}
+	got := confirmFooter("shell_command", args, 100, true)
+	if strings.Contains(got, "Reason:") || !strings.Contains(got, "[r] show reason") {
+		t.Fatalf("collapsed footer must hide reason and advertise expansion:\n%s", got)
+	}
+}
+
+func TestConfirmReasonToggle(t *testing.T) {
+	m := New(&agent.Loop{}, mode.Plan, t.TempDir(), "ollama/m", 32000)
+	m.confirm = &confirmState{Tool: "shell_command", Args: map[string]any{"command": "git status", "reason": "Inspect the repository state."}}
+	nm, _ := m.updateConfirm(confirmKey('r'))
+	if !nm.(Model).confirm.reasonHidden {
+		t.Fatal("r must collapse the approval reason")
+	}
+	nm, _ = nm.(Model).updateConfirm(confirmKey('r'))
+	if nm.(Model).confirm.reasonHidden {
+		t.Fatal("r must expand the approval reason")
 	}
 }
 

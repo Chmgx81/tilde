@@ -121,6 +121,7 @@ func (t *GitWorktreeAdd) Schema() map[string]any {
 		"properties": map[string]any{
 			"path":   map[string]any{"type": "string", "description": "New worktree dir (repo-relative or absolute)"},
 			"branch": map[string]any{"type": "string", "description": "Branch to check out (created with -b if missing)"},
+			"reason": map[string]any{"type": "string", "description": "Optional concise reason shown in the approval prompt; informational only"},
 		}, "required": []string{"path"}}
 }
 
@@ -172,7 +173,8 @@ func (t *GitWorktreeRemove) Description() string {
 func (t *GitWorktreeRemove) Schema() map[string]any {
 	return map[string]any{"type": "object",
 		"properties": map[string]any{
-			"path": map[string]any{"type": "string", "description": "Worktree dir to remove"},
+			"path":   map[string]any{"type": "string", "description": "Worktree dir to remove"},
+			"reason": map[string]any{"type": "string", "description": "Optional concise reason shown in the approval prompt; informational only"},
 		}, "required": []string{"path"}}
 }
 

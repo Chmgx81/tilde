@@ -440,7 +440,10 @@ toast on the transition itself:
 - The banner is the **only** full-width bordered element that appears
   mid-transcript rather than only at the composer — it needs to interrupt the
   scan pattern on purpose, because "nothing will change right now" is exactly
-  the reassurance a cautious user is scanning for.
+  the reassurance a cautious user is scanning for. It is live mode chrome: it
+  is removed immediately when Tab or `/mode` leaves Plan and restored when the
+  session re-enters Plan, so the transcript never claims Build/Auto is still
+  read-only.
 - Todo list uses `☑`/`□` per §1.2, never a percentage bar — a coding agent's
   progress isn't linear enough for a percentage to be honest.
 - **Revision, not duplication (2026-09-06):** when the todo list changes
@@ -602,7 +605,7 @@ Confirm tier (amber):
 │ historical unsigned tags from blocking current updates?               │
 │                                                                       │
 │ [y] once   [n] deny (default — Enter denies)                          │
-│ [a] always this session (exact command — shell only)                  │
+│ [r] hide reason   [a] always this session (exact command — shell only) │
 └───────────────────────────────────────────────────────────────────────┘
 
 Deny-tier panel (red, `[o] override once`): DEFERRED — no red deny-tier
@@ -613,9 +616,11 @@ panel exists in code; policy denials currently render as an inline
 - The exact command or action is shown verbatim, never summarized — a
   paraphrased confirm prompt ("run a cleanup command") defeats the entire
   purpose of asking.
-- If the tool request supplies a reason, it is shown explicitly after the
-  exact action. Otherwise the UI uses the truthful fallback that active policy
-  approval is required; it never invents model rationale.
+- The reason is optional, user-facing model output, and can be toggled with
+  `[r]` (`[r] hide reason` / `[r] show reason`). It is explanatory only and
+  never changes policy or authorization. If the tool request supplies no
+  reason, the UI uses the truthful policy fallback rather than inventing model
+  rationale.
 - Default focused option is always the safe one (`n` / deny) — Enter with no
   other input denies. This is a deliberate one-way door: it is much cheaper to
   make the user press one extra key to allow something than to make a
@@ -1439,7 +1444,7 @@ new section per version:
 | Compaction ambient + marker | DONE |
 | Tool-call timeline | DONE — fixed verb vocabulary (Read/Listed/Grep/Write/Edit/Run) + fixed-width column (2026-09-08); read-only success carries no result line, failures/notices still show, grep counts lift to the call line |
 | Diff rendering | DONE — edit diffs (`⎿ +N -M` + numbered hunk, 2026-09-08) and new-file write rendering (`+N (new file)` + plain numbered body, 2026-09-08); video-regression test replays glob/read/edit/re-read end to end |
-| Plan-mode banner + todos | DONE — banner once at session start + per Build→Plan demotion; `● Update Todos` block from live manager state with □/☑, active bold, unchanged-state suppression |
+| Plan-mode banner + todos | DONE — live banner at session start and per Build→Plan demotion, removed on leaving Plan; `● Update Todos` block from live manager state with □/☑, active bold, unchanged-state suppression |
 | Handoff panel | DONE |
 | Splash screen | DONE |
 | Slash command palette | DONE |
