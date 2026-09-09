@@ -650,7 +650,7 @@ As of v0.6+:
 | Session scrub at rest | DONE — `session.Append` scrubs via `tools.Scrub`, `0600` heal, crypto-random IDs |
 | Hook safe-env + session hooks | DONE — minimal env (no `*_KEY/*_TOKEN/*_SECRET/*_PASSWORD`), 32KB scrubbed output cap, `session_start`/`session_end` |
 | MCP user-authoritative merge | DONE — project config only adds servers or tightens approval; remote type + `headersFile`, SSRF-guarded URLs |
-| Streaming providers | DONE — optional `Streamer` (ollama NDJSON + openai SSE) carrying the same tool defs as `Chat`; `Collect` assembles prose + native calls + length-cut signal with `Chat` fallback on any stream error; a text-only fast path that dropped calls was caught live and fixed |
+| Streaming providers | DONE — optional `Streamer` (ollama NDJSON + openai SSE) carrying the same tool defs as `Chat`; `CollectWith` delivers safe visible prose deltas to the TUI, which commits or rolls back one provisional block atomically; native calls + length-cut signal remain intact, with `Chat` fallback on any stream error |
 | symbol_search tool | DONE — stdlib definition index (go/py/ts/js/rs) + reference fallback, read-only, counts as seen |
 | memory tool | DONE — project `.tilde/memory.md` save/recall/forget, recall Plan-safe, save/forget Plan-blocked + ask-tier |
 | Audit wiring | DONE — registry `AuditSink` records one hashed-args event per dispatch into `~/.tilde/audit/audit.jsonl`; eval trials intentionally unaudited |

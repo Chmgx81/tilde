@@ -3,8 +3,9 @@
 > Evidence-based review of tilde's terminal interface.
 
 **Reviewed:** splash, composer, prompt history, slash and file pickers,
-approvals, transcript rendering, tool results, thinking state, receipts,
-status bar, marketplace, mouse selection, resizing, and headless boundaries.
+approvals, transcript rendering, streamed assistant output, tool results,
+thinking state, receipts, status bar, marketplace, mouse selection, resizing,
+fallbacks, cancellation, and headless boundaries.
 
 **Assessment:** 86/100 after this pass. The interaction model is coherent and
 careful for a coding harness. The main remaining work is accessibility and
@@ -16,7 +17,7 @@ terminal-environment coverage, not a visual redesign.
 | --- | --- |
 | Hierarchy | The transcript is primary; composer, status, and hints form a stable footer. Splash and Plan use distinct, purposeful emphasis. |
 | Input | Enter submits, Ctrl+J inserts a newline, Up/Down preserve prompt history, and large pastes collapse into deletable tokens without losing execution data. |
-| Processing | Tool calls stream into the transcript; quiet turns show elapsed status and rotating verbs after a threshold; confirmation waits do not pretend the model is thinking. |
+| Processing | Tool calls and assistant prose stream into the transcript; quiet turns show elapsed status and rotating verbs after a threshold; confirmation waits do not pretend the model is thinking. |
 | Output | Tool verbs use fixed columns, read-only bursts group, results stay underneath their call, diffs and new files have distinct rendering, and completion receipts are conditional. |
 | Control | Esc returns from history, Esc twice cancels a turn, approvals default to deny, and transcript follow-tail state is preserved while reading older output. |
 | Safety UX | Approval panels show the literal action and reason, exact-command approval is restricted to shell calls, errors use text plus symbols, and MCP/extension state remains visible. |
@@ -81,7 +82,11 @@ the limit.
 ### Processing and thinking
 
 The UI avoids false activity: tool output is the progress signal while tools
-stream, and rotating reasoning verbs begin only after quiet time. The receipt
+run, assistant prose is rendered incrementally when a provider supports
+streaming, and rotating reasoning verbs begin only after quiet time. Streamed
+prose is provisional until the response completes; if streaming fails, the
+preview is removed before the non-streaming retry, so partial text cannot be
+duplicated. Hidden `<think>` blocks are filtered from live deltas. The receipt
 is deliberately non-expandable and does not expose chain-of-thought. Approval
 waits suppress the reasoning indicator because the user—not the model—is the
 blocked party.
@@ -111,10 +116,12 @@ ASCII glyph fallback, not only `NO_COLOR` color removal.
 ### Motion and transitions
 
 Motion is intentionally restrained for a terminal: cursor blink, short-lived
-toasts, live elapsed time, and the two-second reasoning cadence. There are no
-decorative slide transitions or bounce effects competing with output. That is
-appropriate for a coding harness; the important transition contract is state
-visibility and cancellation, not animation volume.
+toasts, live elapsed time, two-second reasoning cadence, and incremental
+assistant rendering. Stream previews replace one block in place, then commit
+or roll back atomically; they never leave a trail of per-token rows. There are
+no decorative slide transitions or bounce effects competing with output. That
+is appropriate for a coding harness; the important transition contract is
+state visibility and cancellation, not animation volume.
 
 ## Pressure test
 
@@ -130,6 +137,7 @@ visibility and cancellation, not animation volume.
 ```sh
 GOCACHE=/tmp/tilde-gocache go test -count=1 ./internal/tui/
 GOCACHE=/tmp/tilde-gocache go test -race -count=1 ./internal/tui/
+GOCACHE=/tmp/tilde-gocache go test -count=1 ./...
 go vet ./...
 git diff --check
 ```

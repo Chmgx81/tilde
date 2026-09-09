@@ -62,6 +62,13 @@ var StreamFirstChunkTimeout = 30 * time.Second
 // Chat content-call fallback applies (local models echo calls as JSON
 // in prose); with calls, prose stays untouched.
 func Collect(ctx context.Context, s Streamer, messages []Message, defs []ToolDef) (Response, error) {
+	return CollectWith(ctx, s, messages, defs, nil)
+}
+
+// CollectWith is Collect with an optional best-effort text-delta observer.
+// Deltas are notifications only: the returned Response remains atomic, and
+// callers must discard observed text if the stream fails.
+func CollectWith(ctx context.Context, s Streamer, messages []Message, defs []ToolDef, onText func(string)) (Response, error) {
 	events, errs := s.Stream(ctx, messages, defs)
 	if events == nil || errs == nil {
 		return Response{}, fmt.Errorf("stream: backend returned nil channels — retry the request")
@@ -71,6 +78,7 @@ func Collect(ctx context.Context, s Streamer, messages []Message, defs []ToolDef
 	var b strings.Builder
 	var calls []ToolCall
 	var truncated bool
+	var observedProse string
 	waitingFirst := true
 	for events != nil || errs != nil {
 		var timeout <-chan time.Time
@@ -103,6 +111,19 @@ func Collect(ctx context.Context, s Streamer, messages []Message, defs []ToolDef
 				}
 			}
 			b.WriteString(ev.Text)
+			if ev.Text != "" && onText != nil {
+				// Stream packets can split <think> tags. Derive the visible
+				// prefix from the accumulated response so private reasoning
+				// never flashes in the interactive transcript.
+				visible, _ := splitThinkTags(b.String())
+				if strings.HasPrefix(visible, observedProse) {
+					delta := visible[len(observedProse):]
+					if delta != "" {
+						onText(delta)
+					}
+					observedProse = visible
+				}
+			}
 			if ev.Calls != nil {
 				calls = ev.Calls
 			}

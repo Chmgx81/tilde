@@ -54,6 +54,43 @@ func TestOllamaStreamConcat(t *testing.T) {
 	}
 }
 
+func TestCollectWithReportsDeltasWithoutChangingResponse(t *testing.T) {
+	p := &scriptedStreamer{events: []StreamEvent{{Text: "hel"}, {Text: "lo"}}}
+	var got []string
+	resp, err := CollectWith(context.Background(), p, nil, nil, func(s string) { got = append(got, s) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, "") != "hello" || resp.Content != "hello" {
+		t.Fatalf("deltas=%q response=%q", got, resp.Content)
+	}
+}
+
+func TestCollectWithDoesNotExposeThinkTags(t *testing.T) {
+	p := &scriptedStreamer{events: []StreamEvent{{Text: "<think>secret"}, {Text: "</think>hello"}}}
+	var got []string
+	resp, err := CollectWith(context.Background(), p, nil, nil, func(s string) { got = append(got, s) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, "") != "hello" || resp.Content != "hello" || resp.Thinking != "secret" {
+		t.Fatalf("deltas=%q response=%q thinking=%q", got, resp.Content, resp.Thinking)
+	}
+}
+
+type scriptedStreamer struct{ events []StreamEvent }
+
+func (s *scriptedStreamer) Stream(context.Context, []Message, []ToolDef) (<-chan StreamEvent, <-chan error) {
+	events := make(chan StreamEvent, len(s.events))
+	errs := make(chan error)
+	for _, event := range s.events {
+		events <- event
+	}
+	close(events)
+	close(errs)
+	return events, errs
+}
+
 func TestOllamaStreamToolCalls(t *testing.T) {
 	// Prose + native calls in one turn: both must survive (the P2-D
 	// regression was prose taking a text-only fast path and dropping

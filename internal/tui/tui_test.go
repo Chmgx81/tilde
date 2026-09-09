@@ -2947,3 +2947,29 @@ func TestScrollModeInvalidDefaultsHistory(t *testing.T) {
 		t.Fatalf("invalid mode must default to recall, box=%q", got)
 	}
 }
+
+func TestAssistantStreamingPreviewCommitsAndRollsBack(t *testing.T) {
+	m := New(newTestLoop(), mode.Build, t.TempDir(), "ollama/m", 32000)
+	m.vp.Width = 60
+	m.lines = []string{"base"}
+	m.vp.SetContent("base")
+
+	m.renderEvent(agent.Event{Kind: "assistant_delta", Text: "hel"})
+	if !m.streamActive || !strings.Contains(stripANSI(strings.Join(m.lines, "\n")), "hel") {
+		t.Fatalf("stream delta must be visible: active=%v lines=%q", m.streamActive, m.lines)
+	}
+	m.renderEvent(agent.Event{Kind: "assistant_delta", Text: "lo"})
+	m.renderEvent(agent.Event{Kind: "assistant", Text: "hello"})
+	if m.streamActive || m.streamText != "" {
+		t.Fatal("final assistant event must close provisional stream")
+	}
+	if got := strings.Count(stripANSI(strings.Join(m.lines, "\n")), "hello"); got != 1 {
+		t.Fatalf("committed response must appear once, count=%d lines=%q", got, m.lines)
+	}
+
+	m.renderEvent(agent.Event{Kind: "assistant_delta", Text: "discard me"})
+	m.renderEvent(agent.Event{Kind: "assistant_stream_reset"})
+	if strings.Contains(stripANSI(strings.Join(m.lines, "\n")), "discard me") || m.streamActive {
+		t.Fatalf("failed stream preview must be removed: active=%v lines=%q", m.streamActive, m.lines)
+	}
+}

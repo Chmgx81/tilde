@@ -52,7 +52,7 @@ type MCPStatus interface {
 
 // Event is emitted for the TUI timeline.
 type Event struct {
-	Kind string // assistant | tool_call | tool_result | system | handoff | done | usage | compacted
+	Kind string // assistant | assistant_delta | assistant_stream_reset | tool_call | tool_result | system | handoff | done | usage | compacted
 	Text string
 	Pct  int // context usage percent (usage events only)
 }
@@ -317,7 +317,7 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 		emit(Event{Kind: "usage", Text: compact.Label(used, budget), Pct: pct})
 		l.maybeCompact(ctx, comp, emit)
 		full := append([]provider.Message{{Role: "system", Content: sys}}, l.MsgsSnapshot()...)
-		resp, err := l.chatTurn(ctx, full, defs)
+		resp, err := l.chatTurn(ctx, full, defs, emit)
 		if err != nil {
 			emit(Event{Kind: "system", Text: "model error [" + provider.Classify(err) + "]: " + err.Error()})
 			return "", err
@@ -488,20 +488,29 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 // calls falls back too. Ctx cancellation never triggers a fallback
 // request — it returns ctx.Err() directly, matching the Chat path's
 // existing cancel semantics.
-func (l *Loop) chatTurn(ctx context.Context, full []provider.Message, defs []provider.ToolDef) (provider.Response, error) {
+func (l *Loop) chatTurn(ctx context.Context, full []provider.Message, defs []provider.ToolDef, emit func(Event)) (provider.Response, error) {
 	prov := l.CurrentProvider()
 	if s, ok := prov.(provider.Streamer); ok && ctx.Err() == nil {
 		// Child ctx: cancelling it aborts the in-flight stream request
 		// before the Chat fallback, so a hung stream holds no
 		// connection past the turn. Parent cancel still propagates.
 		sctx, cancel := context.WithCancel(ctx)
-		resp, serr := provider.Collect(sctx, s, full, defs)
+		streamed := false
+		resp, serr := provider.CollectWith(sctx, s, full, defs, func(text string) {
+			streamed = true
+			if emit != nil {
+				emit(Event{Kind: "assistant_delta", Text: text})
+			}
+		})
 		cancel()
 		if serr == nil && (resp.Content != "" || len(resp.ToolCalls) > 0) {
 			return resp, nil
 		}
 		if ctx.Err() != nil {
 			return provider.Response{}, ctx.Err()
+		}
+		if streamed && emit != nil {
+			emit(Event{Kind: "assistant_stream_reset"})
 		}
 	}
 	return prov.Chat(ctx, full, defs)

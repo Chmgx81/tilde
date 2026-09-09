@@ -210,6 +210,11 @@ type Model struct {
 	// lastAssistant is the latest assistant prose verbatim (raw markdown,
 	// not the Glamour rendering) — the Ctrl+Y copy source.
 	lastAssistant string
+	// streamText is provisional assistant prose from a live provider stream.
+	// It is replaced by the final markdown render, or removed before fallback.
+	streamText    string
+	streamBaseLen int
+	streamActive  bool
 }
 
 type confirmState struct {
@@ -1426,7 +1431,12 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 	}
 	m.flushGroup()
 	switch e.Kind {
+	case "assistant_delta":
+		m.renderAssistantDelta(e.Text)
+	case "assistant_stream_reset":
+		m.clearAssistantStream()
 	case "assistant":
+		m.clearAssistantStream()
 		// Agent prose goes through Glamour (spec stack) so markdown
 		// renders instead of leaking raw asterisks into the transcript.
 		// The raw text is also kept as the Ctrl+Y copy source.
@@ -1481,6 +1491,52 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 		m.append(lipgloss.NewStyle().Foreground(fgDim).Render("● " + e.Text))
 	}
 	return nil
+}
+
+// renderAssistantDelta keeps one provisional assistant block at the tail of
+// the transcript. It is re-rendered on each delta so streamed prose remains
+// readable; the final assistant event replaces it with the authoritative
+// complete render.
+func (m *Model) renderAssistantDelta(delta string) {
+	if delta == "" {
+		return
+	}
+	if !m.streamActive {
+		m.streamActive = true
+		m.streamBaseLen = len(m.lines)
+	}
+	m.streamText += delta
+	m.replaceAssistantStream()
+}
+
+func (m *Model) replaceAssistantStream() {
+	if !m.streamActive {
+		return
+	}
+	base := append([]string(nil), m.lines[:min(m.streamBaseLen, len(m.lines))]...)
+	preview := m.renderMarkdown(m.streamText, m.vp.Width-1)
+	if preview == "" {
+		preview = m.streamText
+	}
+	for _, line := range strings.Split(preview, "\n") {
+		base = append(base, wrapLine(line, m.vp.Width-1))
+	}
+	m.lines = base
+	m.vp.SetContent(strings.Join(m.lines, "\n"))
+	m.vp.GotoBottom()
+}
+
+func (m *Model) clearAssistantStream() {
+	if !m.streamActive {
+		return
+	}
+	baseLen := min(m.streamBaseLen, len(m.lines))
+	m.lines = append([]string(nil), m.lines[:baseLen]...)
+	m.streamText = ""
+	m.streamBaseLen = 0
+	m.streamActive = false
+	m.vp.SetContent(strings.Join(m.lines, "\n"))
+	m.vp.GotoBottom()
 }
 
 // renderCallLine renders one tool-call row in the fixed vocabulary
