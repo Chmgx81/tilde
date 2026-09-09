@@ -373,7 +373,8 @@ Verified: skills — project+user dirs, frontmatter validation with fixes,
 project-wins clashes, bad files skipped loudly; activation via /skills
 picker (rescan-on-open: mid-session installs appear), load_skill tool, and
 --skill preload; prompt carries one-liners only (bodies never leak —
-asserted in test). MCP — stdio client (initialize/list/call, timeouts,
+asserted in test). MCP — local stdio and remote HTTP JSON-RPC clients
+(initialize/list/call, timeouts,
 per-server failure isolation), `mcp.json` user+project merged
 (project wins), mcp_list/mcp_call gateway (schemas never enter prompts —
 asserted), mcp_call Plan-blocked + ask-gated + fenced; servers run outside

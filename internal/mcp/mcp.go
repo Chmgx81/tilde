@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"os"
@@ -207,13 +208,16 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
-// server is one live child process.
+// server is one live local child process or remote HTTP endpoint.
 type server struct {
-	name   string
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout io.Reader
-	log    *ringBuffer
+	name      string
+	cmd       *exec.Cmd
+	stdin     io.WriteCloser
+	stdout    io.Reader
+	log       *ringBuffer
+	remoteURL string
+	headers   map[string]string
+	client    *http.Client
 
 	mu      sync.Mutex
 	nextID  int64
@@ -321,39 +325,53 @@ func (m *Manager) Start(ctx context.Context) error {
 }
 
 func (m *Manager) startOne(ctx context.Context, name string, cfg ServerConfig) error {
-	if cfg.effType() == "remote" {
-		if err := checkRemoteURL(name, cfg.URL); err != nil {
-			return err
-		}
-	}
-	if cfg.Command == "" {
-		return fmt.Errorf("missing command — set command/args in mcp.json")
-	}
 	sctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	m.mu.Lock()
 	procCtx := m.cmdCtx
 	m.mu.Unlock()
-	cmd := exec.CommandContext(procCtx, cfg.Command, cfg.Args...)
-	cmd.Env = os.Environ()
-	for k, v := range cfg.Env {
-		cmd.Env = append(cmd.Env, k+"="+v)
-	}
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("stdin pipe: %v", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("stdout pipe: %v", err)
-	}
 	rb := &ringBuffer{max: 4096}
-	cmd.Stderr = rb
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("cannot start (%v) — is %q on PATH? Server stderr: %s", err, cfg.Command, rb.String())
+	var cmd *exec.Cmd
+	var s *server
+	if cfg.effType() == "remote" {
+		if err := checkRemoteURL(name, cfg.URL); err != nil {
+			return err
+		}
+		headers, err := loadHeadersFile(cfg.HeadersFile)
+		if err != nil {
+			return fmt.Errorf("mcp: remote server %q: %v", name, err)
+		}
+		s = &server{name: name, remoteURL: cfg.URL, headers: headers, log: rb, client: remoteHTTPClient(name, cfg.URL)}
+	} else {
+		if cfg.Command == "" {
+			return fmt.Errorf("missing command — set command/args in mcp.json")
+		}
+		cmd = exec.CommandContext(procCtx, cfg.Command, cfg.Args...)
+		cmd.Env = os.Environ()
+		for k, v := range cfg.Env {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return fmt.Errorf("stdin pipe: %v", err)
+		}
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("stdout pipe: %v", err)
+		}
+		cmd.Stderr = rb
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("cannot start (%v) — is %q on PATH? Server stderr: %s", err, cfg.Command, rb.String())
+		}
+		s = &server{name: name, cmd: cmd, stdin: stdin, stdout: stdout, log: rb, pending: map[int64]chan rpcMsg{}}
+		go s.readLoop()
 	}
-	s := &server{name: name, cmd: cmd, stdin: stdin, stdout: stdout, log: rb, pending: map[int64]chan rpcMsg{}}
-	go s.readLoop()
+	stopChild := func() {
+		if cmd != nil && cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	}
 	// initialize handshake.
 	var initResult map[string]any
 	if err := s.call(sctx, "initialize", map[string]any{
@@ -361,8 +379,7 @@ func (m *Manager) startOne(ctx context.Context, name string, cfg ServerConfig) e
 		"capabilities":    map[string]any{},
 		"clientInfo":      map[string]any{"name": "tilde", "version": update.BuildVersion()},
 	}, &initResult); err != nil {
-		cmd.Process.Kill()
-		_ = cmd.Wait() // reap, never zombie on a failed handshake
+		stopChild()
 		return fmt.Errorf("initialize handshake failed: %v. Server stderr: %s", err, rb.String())
 	}
 	_ = s.notify(map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"})
@@ -376,14 +393,12 @@ func (m *Manager) startOne(ctx context.Context, name string, cfg ServerConfig) e
 	}
 	var raw map[string]any
 	if err := s.call(sctx, "tools/list", map[string]any{}, &raw); err != nil {
-		cmd.Process.Kill()
-		_ = cmd.Wait() // reap, never zombie on a failed handshake
+		stopChild()
 		return fmt.Errorf("tools/list failed: %v. Server stderr: %s", err, rb.String())
 	}
 	re, _ := json.Marshal(raw)
 	if err := json.Unmarshal(re, &listResult); err != nil {
-		cmd.Process.Kill()
-		_ = cmd.Wait() // reap, never zombie on a bad shape
+		stopChild()
 		return fmt.Errorf("tools/list returned an undecodable shape: %v. Server stderr: %s", err, rb.String())
 	}
 	for _, t := range listResult.Tools {
@@ -478,6 +493,67 @@ func checkRemoteURL(name, raw string) error {
 		}
 	}
 	return nil
+}
+
+func loadHeadersFile(path string) (map[string]string, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read headersFile %q: %v", path, err)
+	}
+	if len(data) > 64*1024 {
+		return nil, fmt.Errorf("headersFile %q exceeds 64 KiB", path)
+	}
+	var headers map[string]string
+	if err := json.Unmarshal(data, &headers); err != nil {
+		return nil, fmt.Errorf("headersFile %q must be a JSON object of string headers: %v", path, err)
+	}
+	return headers, nil
+}
+
+// remoteHTTPClient rejects redirects and re-resolves the host for every
+// connection. The startup DNS check alone is insufficient against DNS
+// rebinding, so the transport repeats the public-address check at dial time.
+func remoteHTTPClient(name, rawURL string) *http.Client {
+	base := http.DefaultTransport.(*http.Transport).Clone()
+	base.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		u, err := url.Parse(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		host := u.Hostname()
+		port := u.Port()
+		if port == "" {
+			port = "80"
+			if u.Scheme == "https" {
+				port = "443"
+			}
+		}
+		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+		if err != nil {
+			return nil, fmt.Errorf("mcp: remote server %q DNS lookup failed: %v", name, err)
+		}
+		for _, ip := range ips {
+			addr := netip.MustParseAddr(ip.String())
+			if nonPublicIP(addr) {
+				continue
+			}
+			conn, dialErr := (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+			if dialErr == nil {
+				return conn, nil
+			}
+		}
+		return nil, fmt.Errorf("mcp: remote server %q resolved only to unavailable or non-public addresses", name)
+	}
+	return &http.Client{
+		Transport: base,
+		Timeout:   120 * time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 }
 
 func (m *Manager) serverToolNames(server string) []string {
@@ -588,6 +664,9 @@ func (m *Manager) Close() {
 		cancel()
 	}
 	for _, s := range servers {
+		if s.remoteURL != "" {
+			continue
+		}
 		_ = s.stdin.Close() // unblock the reader on our end first
 		if s.cmd.Process != nil {
 			_ = s.cmd.Process.Kill()
@@ -626,6 +705,9 @@ func renderContent(raw map[string]any) string {
 
 // call performs one request/response exchange.
 func (s *server) call(ctx context.Context, method string, params map[string]any, out any) error {
+	if s.remoteURL != "" {
+		return s.remoteCall(ctx, method, params, out)
+	}
 	s.mu.Lock()
 	s.nextID++
 	id := s.nextID
@@ -659,7 +741,59 @@ func (s *server) call(ctx context.Context, method string, params map[string]any,
 	}
 }
 
+func (s *server) remoteCall(ctx context.Context, method string, params map[string]any, out any) error {
+	s.mu.Lock()
+	s.nextID++
+	id := s.nextID
+	s.mu.Unlock()
+	msg := rpcMsg{JSONRPC: "2.0", ID: &id, Method: method, Params: params}
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("encode request: %v", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.remoteURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for key, value := range s.headers {
+		req.Header.Set(key, value)
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("HTTP request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("HTTP %s", resp.Status)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024+1))
+	if err != nil {
+		return fmt.Errorf("read response: %v", err)
+	}
+	if len(data) > 10*1024*1024 {
+		return fmt.Errorf("response exceeds 10 MiB")
+	}
+	var response rpcMsg
+	if err := json.Unmarshal(data, &response); err != nil {
+		return fmt.Errorf("decode response: %v", err)
+	}
+	if response.Error != nil {
+		return fmt.Errorf("server error %d: %s", response.Error.Code, response.Error.Message)
+	}
+	if out != nil && response.Result != nil {
+		re, _ := json.Marshal(response.Result)
+		if err := json.Unmarshal(re, out); err != nil {
+			return fmt.Errorf("bad result shape: %v", err)
+		}
+	}
+	return nil
+}
+
 func (s *server) notify(msg map[string]any) error {
+	if s.remoteURL != "" {
+		return nil // remote MCP notifications are optional for this client
+	}
 	data, _ := json.Marshal(msg)
 	data = append(data, '\n')
 	s.mu.Lock()

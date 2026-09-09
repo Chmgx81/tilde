@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -312,10 +314,37 @@ func TestRemoteURLSSRFBlocked(t *testing.T) {
 			t.Fatalf("SSRF url %q must be rejected, got %v", raw, err)
 		}
 	}
-	// A public literal passes the gate (no DNS involved) and falls through
-	// to the unchanged behavior for remote servers without a command.
-	if err := m.startOne(ctx, "pub", ServerConfig{Type: "remote", URL: "https://8.8.8.8/rpc"}); err == nil ||
-		!strings.Contains(err.Error(), "missing command") {
-		t.Fatalf("public remote url must keep existing behavior, got %v", err)
+	// A public literal passes the SSRF gate and is a valid remote config even
+	// without a local command; remote servers use HTTP JSON-RPC instead.
+	if err := checkRemoteURL("pub", "https://8.8.8.8/rpc"); err != nil {
+		t.Fatalf("public remote url must pass the gate, got %v", err)
+	}
+	if err := validateServerConfig("pub", &ServerConfig{Type: "remote", URL: "https://8.8.8.8/rpc"}); err != nil {
+		t.Fatalf("remote config without local command must validate, got %v", err)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestRemoteCallUsesHTTPJSONRPC(t *testing.T) {
+	s := &server{name: "test", remoteURL: "https://public.example/rpc", headers: map[string]string{"Authorization": "Bearer test"}, client: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Header.Get("Authorization") != "Bearer test" {
+			t.Errorf("missing configured authorization header")
+		}
+		var msg rpcMsg
+		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+			t.Fatal(err)
+		}
+		data, _ := json.Marshal(rpcMsg{JSONRPC: "2.0", ID: msg.ID, Result: map[string]any{"content": []any{map[string]any{"type": "text", "text": "ok"}}}})
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(data))), Header: make(http.Header)}, nil
+	})}, log: &ringBuffer{max: 4096}}
+	var result map[string]any
+	if err := s.call(context.Background(), "tools/list", nil, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result["content"] == nil {
+		t.Fatalf("unexpected result: %#v", result)
 	}
 }

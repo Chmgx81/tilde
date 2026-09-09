@@ -3,11 +3,35 @@ package tools
 import (
 	"context"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestTaskLogRedactsCommandSecrets(t *testing.T) {
+	m := &TaskManager{LogDir: t.TempDir()}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	secret := "sk-ant-abcdefghij1234567890abcdef"
+	task, err := m.Start("echo "+secret, ctx, cancel, func(stdout, stderr io.Writer) *exec.Cmd {
+		cmd := exec.Command("true")
+		cmd.Stdout, cmd.Stderr = stdout, stderr
+		return cmd
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-task.done
+	data, err := os.ReadFile(task.LogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains(string(data), secret) || contains(task.Command, secret) {
+		t.Fatalf("task command secret leaked into metadata/log: %q", string(data))
+	}
+}
 
 func startSleepTask(t *testing.T, m *TaskManager, cancels *[]context.CancelFunc) {
 	t.Helper()

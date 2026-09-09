@@ -176,6 +176,7 @@ func safeEnv(tool, argsJSON string) []string {
 			env = append(env, k+"="+v)
 		}
 	}
+	argsJSON = scrubLocal(argsJSON)
 	env = append(env,
 		"TILDE_TOOL="+tool,
 		"TILDE_ARGS_JSON="+argsJSON,

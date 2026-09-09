@@ -104,7 +104,7 @@ func (c *Config) Command(ctx context.Context, shellCmd string) (*exec.Cmd, error
 	}
 	if be == BackendPodman {
 		image := os.Getenv("TILDE_SANDBOX_IMAGE")
-		if !strings.Contains(image, "@sha256:") {
+		if !pinnedImageDigest.MatchString(image) {
 			return nil, fmt.Errorf("sandbox: podman backend needs TILDE_SANDBOX_IMAGE pinned with a digest (name@sha256:<hex>) — set TILDE_SANDBOX_IMAGE to a digest-pinned image and retry (got %q)", image)
 		}
 		if c.Root != "" && filepath.Clean(c.Root) == "/" {

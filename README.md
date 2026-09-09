@@ -187,6 +187,9 @@ Same tasks, repeated trials, fresh directories. Exits 1 if any task scores zero.
   default-deny egress the fetch fails closed anyway).
 - **SSRF-guarded.** `web_fetch` and remote MCP hosts refuse private,
   loopback, and link-local targets; redirects are re-checked, userinfo URLs refused.
+- **Remote MCP is bounded.** Remote JSON-RPC uses `headersFile` (JSON string
+  headers, never inline secrets), rejects redirects, caps responses, and
+  re-checks DNS targets at connection time to reduce rebinding risk.
 - **User-authoritative MCP.** A project `mcp.json` can only add new servers
   or tighten approval — never rewire or auto-approve your user servers.
 - **Minimal hook env.** Hooks get `PATH/HOME/USER/SHELL/LANG/PWD` plus tool

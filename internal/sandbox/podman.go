@@ -21,8 +21,10 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"strings"
+	"regexp"
 )
+
+var pinnedImageDigest = regexp.MustCompile(`@sha256:[0-9a-fA-F]{64}$`)
 
 // PodmanConfig tunes one podman-sandboxed command. It mirrors Config's
 // shape: Root is the project dir (the only read-write bind), AllowNet
@@ -58,7 +60,7 @@ func BuildPodmanArgs(root string, allowNet bool, image string, cmd ...string) ([
 	if root == "" {
 		return nil, fmt.Errorf("sandbox: refusing podman run with an empty project dir — pass a concrete root so the write boundary is defined")
 	}
-	if !strings.Contains(image, "@sha256:") {
+	if !pinnedImageDigest.MatchString(image) {
 		return nil, fmt.Errorf("sandbox: podman image %q must be pinned with a digest (name@sha256:<hex>) — replace the mutable tag with an immutable digest and retry", image)
 	}
 	args := []string{

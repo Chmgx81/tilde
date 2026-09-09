@@ -31,6 +31,8 @@ func TestPodmanDigestRequired(t *testing.T) {
 		"ubuntu:22.04",
 		"registry.example/toolchain:latest",
 		"registry.example/toolchain@sha1:abc",
+		"registry.example/toolchain@sha256:short",
+		"registry.example/toolchain@sha256:" + strings.Repeat("g", 64),
 	} {
 		if _, err := BuildPodmanArgs("/proj", false, image, "echo", "hi"); err == nil {
 			t.Fatalf("expected digest-pin refusal for image %q, got nil error", image)

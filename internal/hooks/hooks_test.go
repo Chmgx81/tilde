@@ -90,6 +90,19 @@ func TestHookSeesToolEnv(t *testing.T) {
 	}
 }
 
+func TestHookArgsRedactSecrets(t *testing.T) {
+	c := Config{Before: map[string][]string{
+		"probe": {"echo \"$TILDE_ARGS_JSON\" >&2; exit 1"},
+	}}
+	err := c.RunBefore(context.Background(), "probe", `{"token":"sk-ant-abcdefghij1234567890abcdef"}`)
+	if err == nil || contains(err.Error(), "sk-ant-abcdefghij1234567890abcdef") {
+		t.Fatalf("hook args must not expose secrets: %v", err)
+	}
+	if !contains(err.Error(), "REDACTED") {
+		t.Fatalf("redaction marker missing: %v", err)
+	}
+}
+
 // FIX 15 (resume hints): hook truncation names the cap with a resume hint.
 func TestTruncNamesResume(t *testing.T) {
 	got := trunc(strings.Repeat("x", 600), 500)

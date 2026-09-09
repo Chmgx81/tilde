@@ -124,6 +124,10 @@ func (m *TaskManager) logDir() string {
 // build must return an un-started *exec.Cmd writing to out/errW.
 // The task owns bgCancel and calls it when the process ends.
 func (m *TaskManager) Start(command string, bgCtx context.Context, bgCancel context.CancelFunc, build func(stdout, stderr io.Writer) *exec.Cmd) (*Task, error) {
+	// Commands are user/model supplied and may contain credentials in flags or
+	// URLs. Keep the executable command private, but redact every copy exposed
+	// through task metadata and logs.
+	displayCommand, _ := Scrub(command)
 	m.mu.Lock()
 	if m.tasks == nil {
 		m.tasks = map[string]*Task{}
@@ -149,12 +153,12 @@ func (m *TaskManager) Start(command string, bgCtx context.Context, bgCancel cont
 	if err != nil {
 		return nil, fmt.Errorf("cannot create task log %q: %v", logPath, err)
 	}
-	if _, err := fmt.Fprintf(lf, "$ %s\n[started %s]\n", command, time.Now().UTC().Format(time.RFC3339)); err != nil {
+	if _, err := fmt.Fprintf(lf, "$ %s\n[started %s]\n", displayCommand, time.Now().UTC().Format(time.RFC3339)); err != nil {
 		lf.Close()
 		return nil, fmt.Errorf("cannot write task log %q: %v", logPath, err)
 	}
 
-	t := &Task{ID: id, Command: command, LogPath: logPath, Started: time.Now(), done: make(chan struct{})}
+	t := &Task{ID: id, Command: displayCommand, LogPath: logPath, Started: time.Now(), done: make(chan struct{})}
 	cmd := build(lf, lf)
 	t.cmd = cmd
 	if err := cmd.Start(); err != nil {
