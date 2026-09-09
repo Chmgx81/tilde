@@ -151,6 +151,8 @@ type Model struct {
 	marketplaceQuery   string
 	marketplaceTab     int
 	marketplacePending *marketplace.Item
+	marketplaceDetail  *marketplace.Item
+	marketplaceAction  marketplaceAction
 	slashOpen          bool
 	slashItems         []slashRow
 	slashCursor        int
@@ -399,6 +401,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.marketplaceOpen {
 			if m.marketplacePending != nil {
 				return m.updateMarketplaceConfirm(msg)
+			}
+			if m.marketplaceDetail != nil {
+				return m.updateMarketplaceDetail(msg)
 			}
 			return m.updateMarketplace(msg)
 		}
@@ -1913,6 +1918,9 @@ func (m Model) View() string {
 	if m.marketplaceOpen {
 		if m.marketplacePending != nil {
 			return m.centerFrame(m.marketplaceConfirmView())
+		}
+		if m.marketplaceDetail != nil {
+			return m.centerFrame(m.marketplaceDetailView())
 		}
 		return m.centerFrame(m.marketplaceView())
 	}

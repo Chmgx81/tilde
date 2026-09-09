@@ -50,7 +50,7 @@ func Discover(root, pluginDir string, ix *skills.Index, mcpNames []string) (Regi
 			errs = append(errs, fmt.Errorf("plugins: %w", err))
 		}
 		for _, entry := range entries {
-			if !entry.IsDir() {
+			if !entry.IsDir() || entry.Name() == plugin.StateDirName || entry.Name() == plugin.RollbackDirName {
 				continue
 			}
 			dir := filepath.Join(pluginDir, entry.Name())
@@ -59,13 +59,16 @@ func Discover(root, pluginDir string, ix *skills.Index, mcpNames []string) (Regi
 				errs = append(errs, err)
 				continue
 			}
+			verified := plugin.Verify(dir)
+			enabled := plugin.PluginEnabled(pluginDir, m.Name)
 			r.Add(Item{Kind: Plugins, Name: m.Name, Version: m.Version, Scope: "user",
-				Description: m.Description, Source: dir, Installed: true, Verified: plugin.Verify(dir), Skills: append([]string(nil), m.Skills...)})
+				Description: m.Description, Source: dir, InstallPath: dir, Installed: true, Verified: verified, Enabled: enabled,
+				Skills: append([]string(nil), m.Skills...), Agents: append([]string(nil), m.Agents...)})
 			if m.Hooks != "" {
-				r.Add(Item{Kind: Hooks, Name: m.Name + "/hooks", Version: m.Version, Scope: "user", Source: filepath.Join(dir, filepath.FromSlash(m.Hooks)), Installed: true, Verified: plugin.Verify(dir), Description: "plugin hook manifest"})
+				r.Add(Item{Kind: Hooks, Name: m.Name + "/hooks", Version: m.Version, Scope: "user", Source: filepath.Join(dir, filepath.FromSlash(m.Hooks)), InstallPath: dir, Installed: true, Verified: verified, Enabled: enabled, Description: "plugin hook manifest"})
 			}
 			if m.MCP != "" {
-				r.Add(Item{Kind: MCPServers, Name: m.Name + "/mcp", Version: m.Version, Scope: "user", Source: filepath.Join(dir, filepath.FromSlash(m.MCP)), Installed: true, Verified: plugin.Verify(dir), Description: "plugin MCP manifest"})
+				r.Add(Item{Kind: MCPServers, Name: m.Name + "/mcp", Version: m.Version, Scope: "user", Source: filepath.Join(dir, filepath.FromSlash(m.MCP)), InstallPath: dir, Installed: true, Verified: verified, Enabled: enabled, Description: "plugin MCP manifest"})
 			}
 			for _, rel := range m.Skills {
 				path := filepath.Join(dir, filepath.FromSlash(rel))
@@ -74,7 +77,7 @@ func Discover(root, pluginDir string, ix *skills.Index, mcpNames []string) (Regi
 					errs = append(errs, err)
 					continue
 				}
-				r.Add(Item{Kind: Skills, Name: sk.Name, Version: sk.Version, Scope: "user", Description: sk.Description, Source: path, Installed: true, Verified: plugin.Verify(dir)})
+				r.Add(Item{Kind: Skills, Name: sk.Name, Version: sk.Version, Scope: "user", Description: sk.Description, Source: path, InstallPath: dir, Installed: true, Verified: verified, Enabled: enabled})
 			}
 		}
 	}
@@ -147,7 +150,7 @@ func loadJSONCatalog(r *Registry, errs *[]error, path, scope, base string) {
 		if item.Version == "" {
 			item.Version = "catalog"
 		}
-		r.Add(Item{Kind: Marketplace, Name: item.Name, Version: item.Version, Scope: scope, Description: item.Description, Source: source, InstallPath: localPath, Installable: installable, Skills: nil})
+		r.Add(Item{Kind: Marketplace, Name: item.Name, Version: item.Version, Scope: scope, Description: item.Description, Source: source, InstallPath: localPath, Installable: installable, Remote: localPath == "" && source != "", Provenance: []Provenance{{Catalog: path, Scope: scope, Source: source, InstallPath: localPath, Version: item.Version, Installable: installable, Remote: localPath == "" && source != ""}}, Skills: nil})
 	}
 }
 
@@ -251,6 +254,6 @@ func loadCatalog(r *Registry, errs *[]error, path, scope, projectRoot string) {
 			*errs = append(*errs, fmt.Errorf("marketplace catalog %s: source manifest identity does not match %s", path, item.Name))
 			continue
 		}
-		r.Add(Item{Kind: Marketplace, Name: item.Name, Version: item.Version, Scope: scope, Description: item.Description, Source: item.Source, InstallPath: source, Installable: true, Skills: append([]string(nil), m.Skills...)})
+		r.Add(Item{Kind: Marketplace, Name: item.Name, Version: item.Version, Scope: scope, Description: item.Description, Source: item.Source, InstallPath: source, Installable: true, Provenance: []Provenance{{Catalog: path, Scope: scope, Source: item.Source, InstallPath: source, Version: item.Version, Installable: true}}, Skills: append([]string(nil), m.Skills...)})
 	}
 }

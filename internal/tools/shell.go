@@ -74,6 +74,10 @@ type TaskManager struct {
 	mu    sync.Mutex
 	next  int
 	tasks map[string]*Task
+	// reserved counts starts that have passed the cap check but have not
+	// finished creating and registering their process yet. It closes the
+	// check-then-start window when several callers start concurrently.
+	reserved int
 	// LogDir overrides the default per-process temp dir (tests).
 	LogDir string
 	// MaxTasks caps concurrently running background tasks (default 16).
@@ -133,16 +137,26 @@ func (m *TaskManager) Start(command string, bgCtx context.Context, bgCancel cont
 		m.tasks = map[string]*Task{}
 	}
 	m.pruneLocked() // finished tasks never accumulate across starts
-	if n := len(m.tasks); n >= m.maxTasks() {
+	if n := len(m.tasks) + m.reserved; n >= m.maxTasks() {
 		max := m.maxTasks()
 		m.mu.Unlock()
 		return nil, fmt.Errorf("task limit reached (%d running tasks, max %d): poll one with shell_poll {\"action\": \"status\", \"task_id\": \"...\"} or stop one with shell_poll {\"action\": \"kill\", \"task_id\": \"...\"} before starting another", n, max)
 	}
+	// Hold the slot across log creation and cmd.Start. A concurrent caller
+	// must see this in-flight start as occupying capacity, and every failure
+	// path below releases it before returning.
+	m.reserved++
 	m.next++
 	id := fmt.Sprintf("task_%d", m.next)
 	m.mu.Unlock()
+	releaseReservation := func() {
+		m.mu.Lock()
+		m.reserved--
+		m.mu.Unlock()
+	}
 
 	if err := os.MkdirAll(m.logDir(), 0o700); err != nil {
+		releaseReservation()
 		return nil, fmt.Errorf("cannot create task log dir: %v", err)
 	}
 	logPath := filepath.Join(m.logDir(), id+".log")
@@ -151,10 +165,12 @@ func (m *TaskManager) Start(command string, bgCtx context.Context, bgCancel cont
 	// instead of truncating/following it (see dir comment above).
 	lf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_EXCL|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
+		releaseReservation()
 		return nil, fmt.Errorf("cannot create task log %q: %v", logPath, err)
 	}
 	if _, err := fmt.Fprintf(lf, "$ %s\n[started %s]\n", displayCommand, time.Now().UTC().Format(time.RFC3339)); err != nil {
 		lf.Close()
+		releaseReservation()
 		return nil, fmt.Errorf("cannot write task log %q: %v", logPath, err)
 	}
 
@@ -163,6 +179,7 @@ func (m *TaskManager) Start(command string, bgCtx context.Context, bgCancel cont
 	t.cmd = cmd
 	if err := cmd.Start(); err != nil {
 		lf.Close()
+		releaseReservation()
 		return nil, fmt.Errorf("could not start background command: %v — retry in the foreground or simplify the command", err)
 	}
 	go func() {
@@ -179,6 +196,7 @@ func (m *TaskManager) Start(command string, bgCtx context.Context, bgCancel cont
 	}()
 	m.mu.Lock()
 	m.tasks[id] = t
+	m.reserved--
 	m.mu.Unlock()
 	return t, nil
 }

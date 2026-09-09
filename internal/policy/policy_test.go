@@ -436,6 +436,47 @@ func TestSessionAllowConcurrent(t *testing.T) {
 	<-done
 }
 
+func TestUnattendedApprovalIsReadOnly(t *testing.T) {
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+		want bool
+	}{
+		{"read_file", nil, true},
+		{"git_diff", nil, true},
+		{"shell_poll", map[string]any{"action": "status"}, true},
+		{"shell_poll", map[string]any{"action": "kill"}, false},
+		{"memory", map[string]any{"op": "recall"}, true},
+		{"remember", map[string]any{"op": "index"}, false},
+		{"shell_command", map[string]any{"command": "cat README.md"}, false},
+		{"mcp_call", map[string]any{"server": "fs", "tool": "read"}, false},
+		{"write_file", nil, false},
+	} {
+		if got := UnattendedAllowed(tc.tool, tc.args); got != tc.want {
+			t.Errorf("UnattendedAllowed(%q, %v) = %v, want %v", tc.tool, tc.args, got, tc.want)
+		}
+	}
+}
+
+func TestUnattendedPolicyKeepsMutationsAsk(t *testing.T) {
+	p := &Policy{AlwaysAllow: true, Unattended: true}
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+	}{
+		{"write_file", map[string]any{"path": "x"}},
+		{"shell_command", shellArgs("echo hi > x")},
+		{"mcp_call", map[string]any{"server": "s", "tool": "write"}},
+	} {
+		if got := p.Check(tc.tool, tc.args); got != Ask {
+			t.Errorf("unattended %s = %v, want Ask", tc.tool, got)
+		}
+	}
+	if got := (&Policy{AlwaysAllow: true}).Check("write_file", map[string]any{"path": "x"}); got != Allow {
+		t.Fatalf("interactive AlwaysAllow behavior changed: got %v, want Allow", got)
+	}
+}
+
 // FIX 16 (hardlinks): ln never runs, so same-inode aliases cannot be
 // minted by the agent — deny-on-create is the control.
 func TestHardlinkCreationDenied(t *testing.T) {

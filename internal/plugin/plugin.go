@@ -32,7 +32,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -48,6 +50,13 @@ const (
 	LockFileName = "tilde-plugin.lock.json"
 	// LockFileNameLegacy is the old lockfile name, accepted on verify.
 	LockFileNameLegacy = "tilder-plugin.lock.json"
+	// StateDirName stores lifecycle state outside the content-hashed plugin
+	// directory, so enabling or disabling a plugin never invalidates Verify.
+	StateDirName = ".state"
+	// RollbackDirName stores validated prior plugin trees. Entries are
+	// directories named with a sortable timestamp and are never loaded as
+	// active plugins.
+	RollbackDirName = ".rollback"
 )
 
 // Skill caps, carried over from the deferred marketplace notes.
@@ -73,6 +82,7 @@ type Manifest struct {
 	Version     string   `yaml:"version"`
 	Description string   `yaml:"description"`
 	Skills      []string `yaml:"skills"`
+	Agents      []string `yaml:"agents,omitempty"`
 	Scripts     []string `yaml:"scripts,omitempty"`
 	References  []string `yaml:"references,omitempty"`
 	Assets      []string `yaml:"assets,omitempty"`
@@ -85,6 +95,22 @@ type Lockfile struct {
 	Name    string            `json:"name"`
 	Version string            `json:"version"`
 	Files   map[string]string `json:"files"`
+}
+
+// State is lifecycle metadata for an installed plugin. It is deliberately
+// separate from the plugin tree and is not executable plugin content.
+type State struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Enabled bool   `json:"enabled"`
+}
+
+// Status describes the installed plugin and its current lifecycle state.
+type Status struct {
+	Name     string
+	Version  string
+	Enabled  bool
+	Verified bool
 }
 
 // LoadManifest reads dir/tilde-plugin.yaml, parses it, and validates it.
@@ -164,6 +190,17 @@ func (m *Manifest) Validate(dir string) error {
 			}
 		}
 	}
+	if len(m.Agents) > MaxResourceFiles {
+		return fmt.Errorf("plugin %q: agents has %d files (cap %d)", m.Name, len(m.Agents), MaxResourceFiles)
+	}
+	for _, rel := range m.Agents {
+		if !strings.HasSuffix(rel, ".md") && !strings.HasSuffix(rel, ".yaml") && !strings.HasSuffix(rel, ".yml") {
+			return fmt.Errorf("plugin %q: agent %q must be markdown or YAML", m.Name, rel)
+		}
+		if err := checkResourceFile(dir, m.Name, "agents", rel); err != nil {
+			return err
+		}
+	}
 	if m.Hooks != "" {
 		if !strings.HasSuffix(m.Hooks, ".yaml") && !strings.HasSuffix(m.Hooks, ".yml") {
 			return fmt.Errorf("plugin %q: hooks %q must end in .yaml or .yml", m.Name, m.Hooks)
@@ -187,6 +224,7 @@ func (m *Manifest) Validate(dir string) error {
 func (m *Manifest) Files() []string {
 	out := []string{ManifestFileName}
 	out = append(out, m.Skills...)
+	out = append(out, m.Agents...)
 	out = append(out, m.Scripts...)
 	out = append(out, m.References...)
 	out = append(out, m.Assets...)
@@ -365,28 +403,466 @@ func Install(srcDir, pluginHome string) (string, error) {
 		}
 		return dest, nil
 	}
-	if err := installFresh(m, srcDir, dest); err != nil {
+	if err := os.MkdirAll(pluginHome, 0o755); err != nil {
+		return "", fmt.Errorf("plugin %q: cannot create plugin home: %v", m.Name, err)
+	}
+	stage, err := os.MkdirTemp(pluginHome, "."+m.Name+".stage-")
+	if err != nil {
+		return "", fmt.Errorf("plugin %q: cannot create staging directory: %v", m.Name, err)
+	}
+	defer os.RemoveAll(stage)
+	if err := installFresh(m, srcDir, stage); err != nil {
 		return "", err
+	}
+	if !Verify(stage) {
+		return "", fmt.Errorf("plugin %q: staged install failed verification", m.Name)
+	}
+	if err := writeState(pluginHome, &State{Name: m.Name, Version: m.Version, Enabled: true}); err != nil {
+		return "", err
+	}
+	if err := os.Rename(stage, dest); err != nil {
+		_ = removeState(pluginHome, m.Name)
+		return "", fmt.Errorf("plugin %q: cannot activate staged install: %v", m.Name, err)
 	}
 	return dest, nil
 }
 
-// Reinstall (--upgrade semantics) wipes pluginHome/<name>/ and re-installs
-// from source, re-pinning the lockfile. Like Install it never executes
-// anything and requires explicit user opt-in from the caller.
+// Upgrade atomically stages a validated source plugin and swaps it into the
+// active location. The previous verified tree is retained for Rollback. A
+// failed staging, activation, or state write leaves the old active tree in
+// place.
+func Upgrade(srcDir, pluginHome string) (string, error) {
+	m, err := LoadManifest(srcDir)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(pluginHome, 0o755); err != nil {
+		return "", fmt.Errorf("plugin %q: cannot create plugin home: %v", m.Name, err)
+	}
+	dest := filepath.Join(pluginHome, m.Name)
+	oldExists, err := pathExists(dest)
+	if err != nil {
+		return "", err
+	}
+	enabled := true
+	var oldVersion string
+	if oldExists {
+		if !Verify(dest) {
+			return "", fmt.Errorf("plugin %q: existing install at %q drifted from its lockfile — repair or remove it before upgrading", m.Name, dest)
+		}
+		lf, err := LoadLockfile(dest)
+		if err != nil {
+			return "", err
+		}
+		oldVersion = lf.Version
+		enabled, err = readEnabled(pluginHome, m.Name)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	stage, err := os.MkdirTemp(pluginHome, "."+m.Name+".stage-")
+	if err != nil {
+		return "", fmt.Errorf("plugin %q: cannot create staging directory: %v", m.Name, err)
+	}
+	stageMoved := false
+	defer func() {
+		if !stageMoved {
+			_ = os.RemoveAll(stage)
+		}
+	}()
+	if err := installFresh(m, srcDir, stage); err != nil {
+		return "", err
+	}
+	if !Verify(stage) {
+		return "", fmt.Errorf("plugin %q: staged upgrade failed verification", m.Name)
+	}
+
+	if !oldExists {
+		if err := writeState(pluginHome, &State{Name: m.Name, Version: m.Version, Enabled: enabled}); err != nil {
+			return "", err
+		}
+		if err := os.Rename(stage, dest); err != nil {
+			_ = removeState(pluginHome, m.Name)
+			return "", fmt.Errorf("plugin %q: cannot activate staged upgrade: %v", m.Name, err)
+		}
+		stageMoved = true
+		return dest, nil
+	}
+
+	rollbackDir := filepath.Join(pluginHome, RollbackDirName, m.Name)
+	if err := os.MkdirAll(rollbackDir, 0o755); err != nil {
+		return "", fmt.Errorf("plugin %q: cannot create rollback directory: %v", m.Name, err)
+	}
+	backup, err := uniqueSnapshotPath(rollbackDir, oldVersion)
+	if err != nil {
+		return "", err
+	}
+	if err := os.Rename(dest, backup); err != nil {
+		return "", fmt.Errorf("plugin %q: cannot stage current install for rollback: %v", m.Name, err)
+	}
+	if err := os.Rename(stage, dest); err != nil {
+		if restoreErr := os.Rename(backup, dest); restoreErr != nil {
+			return "", fmt.Errorf("plugin %q: activation failed: %v; restoring old install failed: %v", m.Name, err, restoreErr)
+		}
+		return "", fmt.Errorf("plugin %q: activation failed: %v", m.Name, err)
+	}
+	stageMoved = true
+	if err := writeState(pluginHome, &State{Name: m.Name, Version: m.Version, Enabled: enabled}); err != nil {
+		_ = os.RemoveAll(dest)
+		if restoreErr := os.Rename(backup, dest); restoreErr != nil {
+			return "", fmt.Errorf("plugin %q: state update failed: %v; restoring old install failed: %v", m.Name, err, restoreErr)
+		}
+		return "", fmt.Errorf("plugin %q: state update failed: %v", m.Name, err)
+	}
+	return dest, nil
+}
+
+// Reinstall is the legacy force-reinstall API. It stages the replacement and
+// swaps it atomically, but unlike Upgrade it does not retain the old tree for
+// rollback and can repair a drifted install.
 func Reinstall(srcDir, pluginHome string) (string, error) {
 	m, err := LoadManifest(srcDir)
 	if err != nil {
 		return "", err
 	}
-	dest := filepath.Join(pluginHome, m.Name)
-	if err := os.RemoveAll(dest); err != nil {
-		return "", fmt.Errorf("plugin %q: cannot clear %q: %v", m.Name, dest, err)
+	if err := os.MkdirAll(pluginHome, 0o755); err != nil {
+		return "", fmt.Errorf("plugin %q: cannot create plugin home: %v", m.Name, err)
 	}
-	if err := installFresh(m, srcDir, dest); err != nil {
+	dest := filepath.Join(pluginHome, m.Name)
+	oldExists, err := pathExists(dest)
+	if err != nil {
 		return "", err
 	}
+	enabled := true
+	if oldExists {
+		enabled, err = readEnabled(pluginHome, m.Name)
+		if err != nil {
+			return "", err
+		}
+	}
+	stage, err := os.MkdirTemp(pluginHome, "."+m.Name+".reinstall-")
+	if err != nil {
+		return "", fmt.Errorf("plugin %q: cannot create staging directory: %v", m.Name, err)
+	}
+	stageMoved := false
+	defer func() {
+		if !stageMoved {
+			_ = os.RemoveAll(stage)
+		}
+	}()
+	if err := installFresh(m, srcDir, stage); err != nil {
+		return "", err
+	}
+	if !Verify(stage) {
+		return "", fmt.Errorf("plugin %q: staged reinstall failed verification", m.Name)
+	}
+	var backup string
+	if oldExists {
+		backup, err = temporaryPath(pluginHome, "."+m.Name+".reinstall-")
+		if err != nil {
+			return "", err
+		}
+		if err := os.Rename(dest, backup); err != nil {
+			return "", fmt.Errorf("plugin %q: cannot stage current install: %v", m.Name, err)
+		}
+	}
+	if err := os.Rename(stage, dest); err != nil {
+		if oldExists {
+			_ = os.Rename(backup, dest)
+		}
+		return "", fmt.Errorf("plugin %q: cannot activate reinstall: %v", m.Name, err)
+	}
+	stageMoved = true
+	if err := writeState(pluginHome, &State{Name: m.Name, Version: m.Version, Enabled: enabled}); err != nil {
+		_ = os.RemoveAll(dest)
+		if oldExists {
+			_ = os.Rename(backup, dest)
+		}
+		return "", fmt.Errorf("plugin %q: state update failed: %v", m.Name, err)
+	}
+	if oldExists {
+		_ = os.RemoveAll(backup)
+	}
 	return dest, nil
+}
+
+// Enable marks an installed, verified plugin as enabled.
+func Enable(pluginHome, name string) error {
+	return setEnabled(pluginHome, name, true)
+}
+
+// Disable marks an installed plugin as disabled. Disabling does not delete
+// content, so a later Enable can restore it without a source directory.
+func Disable(pluginHome, name string) error {
+	return setEnabled(pluginHome, name, false)
+}
+
+// PluginEnabled reports the persisted lifecycle state. Missing state is
+// treated as enabled for compatibility with installs created before the
+// lifecycle metadata existed; malformed state fails closed.
+func PluginEnabled(pluginHome, name string) bool {
+	enabled, err := readEnabled(pluginHome, name)
+	return err == nil && enabled
+}
+
+func setEnabled(pluginHome, name string, enabled bool) error {
+	if err := ValidateName(name); err != nil {
+		return err
+	}
+	dest := filepath.Join(pluginHome, name)
+	if !Verify(dest) {
+		return fmt.Errorf("plugin %q failed verification (drifted or unlocked)", name)
+	}
+	lf, err := LoadLockfile(dest)
+	if err != nil {
+		return err
+	}
+	return writeState(pluginHome, &State{Name: name, Version: lf.Version, Enabled: enabled})
+}
+
+// Remove deletes an installed plugin, its lifecycle metadata, and its
+// rollback history. It is intentionally explicit and is not used by upgrade.
+func Remove(pluginHome, name string) error {
+	if err := ValidateName(name); err != nil {
+		return err
+	}
+	dest := filepath.Join(pluginHome, name)
+	if ok, err := pathExists(dest); err != nil {
+		return err
+	} else if !ok {
+		return fmt.Errorf("plugin %q is not installed", name)
+	}
+	if err := os.RemoveAll(dest); err != nil {
+		return fmt.Errorf("plugin %q: cannot remove install: %v", name, err)
+	}
+	if err := removeState(pluginHome, name); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(filepath.Join(pluginHome, RollbackDirName, name)); err != nil {
+		return fmt.Errorf("plugin %q: cannot remove rollback history: %v", name, err)
+	}
+	return nil
+}
+
+// Rollback swaps the active plugin with the newest validated prior tree. The
+// active tree is discarded after a successful swap, so repeated rollbacks
+// walk backward through upgrade history instead of ping-ponging.
+func Rollback(pluginHome, name string) error {
+	if err := ValidateName(name); err != nil {
+		return err
+	}
+	dest := filepath.Join(pluginHome, name)
+	rollbackDir := filepath.Join(pluginHome, RollbackDirName, name)
+	target, err := latestValidSnapshot(rollbackDir)
+	if err != nil {
+		return fmt.Errorf("plugin %q: %v", name, err)
+	}
+	enabled, err := readEnabled(pluginHome, name)
+	if err != nil {
+		return err
+	}
+	currentExists, err := pathExists(dest)
+	if err != nil {
+		return err
+	}
+	var backup string
+	if currentExists {
+		currentVersion := "current"
+		if lf, loadErr := LoadLockfile(dest); loadErr == nil {
+			currentVersion = lf.Version
+		}
+		backup, err = uniqueSnapshotPath(rollbackDir, currentVersion)
+		if err != nil {
+			return err
+		}
+		if err := os.Rename(dest, backup); err != nil {
+			return fmt.Errorf("plugin %q: cannot stage current install for rollback: %v", name, err)
+		}
+	}
+	if err := os.Rename(target, dest); err != nil {
+		if currentExists {
+			_ = os.Rename(backup, dest)
+		}
+		return fmt.Errorf("plugin %q: cannot activate rollback: %v", name, err)
+	}
+	if err := writeState(pluginHome, &State{Name: name, Version: mustVersion(dest), Enabled: enabled}); err != nil {
+		// Put the selected snapshot back before restoring the old active tree;
+		// a state-file failure must not consume the rollback target.
+		_ = os.Rename(dest, target)
+		if currentExists {
+			_ = os.Rename(backup, dest)
+		}
+		return fmt.Errorf("plugin %q: state update failed during rollback: %v", name, err)
+	}
+	// The old active tree is not a rollback target: keeping it would make
+	// the next rollback immediately return to the version we just left.
+	if currentExists {
+		_ = os.RemoveAll(backup)
+	}
+	return nil
+}
+
+// Inspect returns lifecycle and integrity information for one installed
+// plugin. Missing or invalid installs are errors, while Verify is reported
+// separately so list commands can still show drift.
+func Inspect(pluginHome, name string) (Status, error) {
+	if err := ValidateName(name); err != nil {
+		return Status{}, err
+	}
+	dest := filepath.Join(pluginHome, name)
+	lf, err := LoadLockfile(dest)
+	if err != nil {
+		return Status{}, err
+	}
+	enabled, err := readEnabled(pluginHome, name)
+	if err != nil {
+		return Status{}, err
+	}
+	return Status{Name: lf.Name, Version: lf.Version, Enabled: enabled, Verified: Verify(dest)}, nil
+}
+
+// ValidateName validates a name used to address an installed plugin.
+func ValidateName(name string) error {
+	if !nameRe.MatchString(name) {
+		return fmt.Errorf("plugin: bad name %q — use lowercase letters, digits, and hyphens only", name)
+	}
+	return nil
+}
+
+func pathExists(path string) (bool, error) {
+	_, err := os.Lstat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+func statePath(pluginHome, name string) string {
+	return filepath.Join(pluginHome, StateDirName, name+".json")
+}
+
+func readEnabled(pluginHome, name string) (bool, error) {
+	data, err := os.ReadFile(statePath(pluginHome, name))
+	if os.IsNotExist(err) {
+		return true, nil // pre-lifecycle installs were enabled by definition
+	}
+	if err != nil {
+		return false, fmt.Errorf("plugin %q: cannot read lifecycle state: %v", name, err)
+	}
+	var state State
+	if err := json.Unmarshal(data, &state); err != nil || state.Name != name {
+		return false, fmt.Errorf("plugin %q: invalid lifecycle state", name)
+	}
+	return state.Enabled, nil
+}
+
+func writeState(pluginHome string, state *State) error {
+	if err := ValidateName(state.Name); err != nil {
+		return err
+	}
+	dir := filepath.Join(pluginHome, StateDirName)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("plugin %q: cannot create lifecycle state dir: %v", state.Name, err)
+	}
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("plugin %q: cannot encode lifecycle state: %v", state.Name, err)
+	}
+	data = append(data, '\n')
+	tmp, err := os.CreateTemp(dir, ".state-*")
+	if err != nil {
+		return fmt.Errorf("plugin %q: cannot create lifecycle state temp file: %v", state.Name, err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("plugin %q: cannot protect lifecycle state: %v", state.Name, err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("plugin %q: cannot write lifecycle state: %v", state.Name, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("plugin %q: cannot close lifecycle state: %v", state.Name, err)
+	}
+	if err := os.Rename(tmpName, statePath(pluginHome, state.Name)); err != nil {
+		return fmt.Errorf("plugin %q: cannot activate lifecycle state: %v", state.Name, err)
+	}
+	return nil
+}
+
+func removeState(pluginHome, name string) error {
+	err := os.Remove(statePath(pluginHome, name))
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("plugin %q: cannot remove lifecycle state: %v", name, err)
+	}
+	return nil
+}
+
+func uniqueSnapshotPath(dir, version string) (string, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("cannot create rollback directory: %v", err)
+	}
+	for i := 0; i < 10; i++ {
+		name := fmt.Sprintf("%020d-%s", time.Now().UnixNano(), version)
+		if i > 0 {
+			name += fmt.Sprintf("-%d", i)
+		}
+		path := filepath.Join(dir, name)
+		if _, err := os.Lstat(path); os.IsNotExist(err) {
+			return path, nil
+		} else if err != nil {
+			return "", err
+		}
+		time.Sleep(time.Nanosecond)
+	}
+	return "", fmt.Errorf("cannot allocate unique rollback snapshot")
+}
+
+func temporaryPath(dir, pattern string) (string, error) {
+	tmp, err := os.MkdirTemp(dir, pattern)
+	if err != nil {
+		return "", fmt.Errorf("cannot allocate temporary plugin path: %v", err)
+	}
+	path := tmp
+	if err := os.RemoveAll(tmp); err != nil {
+		return "", fmt.Errorf("cannot prepare temporary plugin path: %v", err)
+	}
+	return path, nil
+}
+
+func latestValidSnapshot(dir string) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return "", fmt.Errorf("no rollback available")
+	}
+	if err != nil {
+		return "", fmt.Errorf("cannot read rollback history: %v", err)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() > entries[j].Name() })
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		if Verify(path) {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("no verified rollback available")
+}
+
+func mustVersion(dir string) string {
+	lf, err := LoadLockfile(dir)
+	if err != nil {
+		return "0.0.0"
+	}
+	return lf.Version
 }
 
 // installFresh copies exactly Manifest.Files() from srcDir to dest and pins

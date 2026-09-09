@@ -71,6 +71,60 @@ func TestTaskManagerMaxTasksRefusesWithFix(t *testing.T) {
 	}
 }
 
+func TestTaskManagerReservesSlotsBeforeStart(t *testing.T) {
+	m := &TaskManager{LogDir: t.TempDir(), MaxTasks: 1}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	started := make(chan struct{})
+	proceed := make(chan struct{})
+	build := func(stdout, stderr io.Writer) *exec.Cmd {
+		select {
+		case <-started:
+		default:
+			close(started)
+		}
+		<-proceed
+		cmd := exec.Command("sleep", "30")
+		cmd.Stdout, cmd.Stderr = stdout, stderr
+		return cmd
+	}
+	first := make(chan error, 1)
+	go func() {
+		_, err := m.Start("sleep 30", ctx, cancel, build)
+		first <- err
+	}()
+	<-started // the first caller is between reservation and cmd.Start
+	if _, err := m.Start("sleep 30", ctx, cancel, build); err == nil {
+		t.Fatal("concurrent start must see the reserved slot")
+	}
+	close(proceed)
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	m.KillAll()
+}
+
+func TestTaskManagerReleasesReservationOnStartFailure(t *testing.T) {
+	m := &TaskManager{LogDir: t.TempDir(), MaxTasks: 1}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	_, err := m.Start("bad", ctx, cancel, func(stdout, stderr io.Writer) *exec.Cmd {
+		cmd := exec.Command("/definitely/not-a-command")
+		cmd.Stdout, cmd.Stderr = stdout, stderr
+		return cmd
+	})
+	if err == nil {
+		t.Fatal("invalid command must fail")
+	}
+	if _, err := m.Start("true", ctx, cancel, func(stdout, stderr io.Writer) *exec.Cmd {
+		cmd := exec.Command("true")
+		cmd.Stdout, cmd.Stderr = stdout, stderr
+		return cmd
+	}); err != nil {
+		t.Fatalf("failed start leaked its slot: %v", err)
+	}
+}
+
 func TestTaskManagerDefaultMaxTasks(t *testing.T) {
 	m := &TaskManager{}
 	if m.maxTasks() != 16 {

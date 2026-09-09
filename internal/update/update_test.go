@@ -136,6 +136,114 @@ func gitRun(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
+func writeInstallRecord(t *testing.T, home, source string) {
+	t.Helper()
+	dir := filepath.Join(home, ".tilde")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(installFile{Source: source})
+	if err := os.WriteFile(filepath.Join(dir, "install.json"), append(data, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func addCanonicalOrigin(t *testing.T, repo string, fetchFrom ...string) {
+	t.Helper()
+	remote := repoURL + ".git"
+	if len(fetchFrom) > 0 {
+		// Keep the visible remote canonical while redirecting only this test
+		// checkout's fetch to its local fixture.
+		gitRun(t, repo, "config", "url."+fetchFrom[0]+".insteadOf", repoURL+".git")
+	}
+	gitRun(t, repo, "remote", "add", canonicalRemoteName, remote)
+}
+
+func newUpdateRepo(t *testing.T, branch, remote string) (work, repo string) {
+	t.Helper()
+	work = t.TempDir()
+	repo = filepath.Join(work, "repo")
+	t.Setenv("HOME", filepath.Join(work, "home"))
+	t.Setenv("TILDE_UPDATE_TARGET", filepath.Join(work, "bin", "tilde"))
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, repo, "init", "-b", branch, "-q", ".")
+	if err := os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, repo, "add", "-A")
+	gitRun(t, repo, "commit", "-qm", "v1")
+	gitRun(t, repo, "remote", "add", canonicalRemoteName, remote)
+	writeInstallRecord(t, filepath.Join(work, "home"), repo)
+	return work, repo
+}
+
+func TestIsCanonicalRemote(t *testing.T) {
+	for _, remote := range []string{
+		repoURL,
+		repoURL + ".git",
+		"git@github.com:Chmgx81/tilde.git",
+		"ssh://git@github.com/Chmgx81/tilde.git",
+	} {
+		if !isCanonicalRemote(remote) {
+			t.Errorf("isCanonicalRemote(%q) = false, want true", remote)
+		}
+	}
+	for _, remote := range []string{
+		"/tmp/tilde",
+		"https://github.com/other/tilde.git",
+		"https://github.com/Chmgx81/tilde-fork.git",
+		"https://github.example.com/Chmgx81/tilde.git",
+	} {
+		if isCanonicalRemote(remote) {
+			t.Errorf("isCanonicalRemote(%q) = true, want false", remote)
+		}
+	}
+}
+
+func TestValidateFetchedCommitRequiresExactRef(t *testing.T) {
+	const (
+		fetched = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		remote  = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	)
+	if err := validateFetchedCommit(fetched, fetched); err != nil {
+		t.Fatalf("matching fetched commit/ref must pass: %v", err)
+	}
+	for _, tc := range []struct {
+		name       string
+		fetchHead  string
+		remoteRef  string
+		wantPhrase string
+	}{
+		{"missing fetched commit", "", fetched, "did not produce"},
+		{"different remote ref", fetched, remote, "does not match"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateFetchedCommit(tc.fetchHead, tc.remoteRef); err == nil || !strings.Contains(err.Error(), tc.wantPhrase) {
+				t.Fatalf("validateFetchedCommit(%q, %q) = %v, want %q error", tc.fetchHead, tc.remoteRef, err, tc.wantPhrase)
+			}
+		})
+	}
+}
+
+func TestRunRefusesNonCanonicalRemote(t *testing.T) {
+	newUpdateRepo(t, expectedBranch, filepath.Join(t.TempDir(), "not-canonical"))
+	if err := Run(); err == nil || !strings.Contains(err.Error(), "canonical") {
+		t.Fatalf("non-canonical remote must refuse before fetch, got %v", err)
+	}
+}
+
+func TestRunRefusesUnexpectedBranch(t *testing.T) {
+	_, repo := newUpdateRepo(t, "develop", repoURL+".git")
+	if err := Run(); err == nil || !strings.Contains(err.Error(), "expected main") {
+		t.Fatalf("unexpected branch must refuse before fetch, got %v", err)
+	}
+	if got := gitRun(t, repo, "rev-parse", "--abbrev-ref", "HEAD"); got != "develop" {
+		t.Fatalf("refused update must leave branch unchanged, got %q", got)
+	}
+}
+
 // TestRunFullCycle exercises pull → rebuild → reinstall → smoke test
 // against a local fixture remote (file:// clone — no network), ending
 // with an executable target binary.
@@ -169,6 +277,8 @@ func TestRunFullCycle(t *testing.T) {
 	if out, err := clone.CombinedOutput(); err != nil {
 		t.Fatalf("clone: %v\n%s", err, out)
 	}
+	gitRun(t, src, "remote", "remove", canonicalRemoteName)
+	addCanonicalOrigin(t, src, origin)
 	writeInstall := func() {
 		dir := filepath.Join(work, "home", ".tilde")
 		os.MkdirAll(dir, 0o700)
@@ -191,7 +301,8 @@ func TestRunFullCycle(t *testing.T) {
 	if out, err := exec.Command(target, "--help").CombinedOutput(); err != nil || !strings.Contains(string(out), "usage") {
 		t.Fatalf("current source must repair stale target: %v\n%s", err, out)
 	}
-	// Second commit upstream → the update must pull, rebuild, install.
+	// Second commit upstream → the update must fetch the exact main ref,
+	// rebuild, and install.
 	os.WriteFile(filepath.Join(origin, "note.txt"), []byte("v2\n"), 0o644)
 	gitRun(t, origin, "add", "-A")
 	gitRun(t, origin, "commit", "-qm", "v2")
@@ -224,11 +335,9 @@ func TestRunRefusesDirtyTree(t *testing.T) {
 	os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x\n"), 0o644)
 	gitRun(t, repo, "add", "-A")
 	gitRun(t, repo, "commit", "-qm", "v1")
+	addCanonicalOrigin(t, repo)
 	os.WriteFile(filepath.Join(repo, "f.txt"), []byte("dirty\n"), 0o644) // uncommitted
-	dir := filepath.Join(work, "home", ".tilde")
-	os.MkdirAll(dir, 0o700)
-	data, _ := json.Marshal(installFile{Source: repo})
-	os.WriteFile(filepath.Join(dir, "install.json"), append(data, '\n'), 0o600)
+	writeInstallRecord(t, filepath.Join(work, "home"), repo)
 	if err := Run(); err == nil || !strings.Contains(err.Error(), "uncommitted") {
 		t.Fatalf("dirty tree must refuse loudly, got %v", err)
 	}
@@ -278,10 +387,8 @@ func TestRunRefusesUnsignedTag(t *testing.T) {
 	gitRun(t, repo, "commit", "-qm", "v1")
 	// Unsigned (non-`-s`) version tag: no signature for verify-tag.
 	gitRun(t, repo, "tag", "v0.9.1")
-	dir := filepath.Join(work, "home", ".tilde")
-	os.MkdirAll(dir, 0o700)
-	data, _ := json.Marshal(installFile{Source: repo})
-	os.WriteFile(filepath.Join(dir, "install.json"), append(data, '\n'), 0o600)
+	addCanonicalOrigin(t, repo, repo)
+	writeInstallRecord(t, filepath.Join(work, "home"), repo)
 	err := Run()
 	if err == nil {
 		t.Fatal("unsigned tag must refuse the update")

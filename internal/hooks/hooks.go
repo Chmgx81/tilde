@@ -28,6 +28,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
+	"tilde/internal/sandbox"
 	"tilde/internal/scrub"
 	"time"
 
@@ -36,6 +38,9 @@ import (
 
 // Config maps tool names (or "*" for all) to shell commands.
 type Config struct {
+	// Root is the project boundary used to sandbox configured hooks. Empty is
+	// retained for isolated library tests and means the legacy process runner.
+	Root   string              `yaml:"-"`
 	Before map[string][]string `yaml:"before"`
 	After  map[string][]string `yaml:"after"`
 	// SessionStart runs once at session startup; SessionEnd runs at exit.
@@ -105,7 +110,7 @@ func (c *Config) RunBefore(ctx context.Context, tool, argsJSON string) error {
 		return nil
 	}
 	for _, cmd := range c.forTool(c.Before, tool) {
-		out, err := runHook(ctx, tool, argsJSON, "", cmd)
+		out, err := runHook(WithRoot(ctx, c.Root), tool, argsJSON, "", cmd)
 		if err != nil {
 			msg := scrubLocal(fmt.Sprintf("blocked by before-hook %q: %s", cmd, trunc(out, 500)))
 			return fmt.Errorf("%s", msg)
@@ -122,7 +127,7 @@ func (c *Config) RunAfter(ctx context.Context, tool, argsJSON, result string) st
 	}
 	var notes []string
 	for _, cmd := range c.forTool(c.After, tool) {
-		out, err := runHook(ctx, tool, argsJSON, result, cmd)
+		out, err := runHook(WithRoot(ctx, c.Root), tool, argsJSON, result, cmd)
 		if err != nil {
 			notes = append(notes, scrubLocal(fmt.Sprintf("[after-hook %q failed: %s]", cmd, trunc(out, 500))))
 		} else if strings.TrimSpace(out) != "" {
@@ -135,19 +140,69 @@ func (c *Config) RunAfter(ctx context.Context, tool, argsJSON, result string) st
 func runHook(ctx context.Context, tool, argsJSON, stdin, cmdStr string) (string, error) {
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, "bash", "-c", cmdStr)
-	cmd.Env = safeEnv(tool, argsJSON)
+	var cmd *exec.Cmd
+	var err error
+	if hookRoot := hookRootFromContext(ctx); hookRoot != "" {
+		// The command itself is still configured by the user, but its process
+		// runs under the same filesystem/network boundary as shell tools.
+		wrapped := "export TILDE_TOOL=" + shellQuote(tool) + " TILDE_ARGS_JSON=" + shellQuote(scrubLocal(argsJSON)) + "; " + cmdStr
+		cmd, err = (&sandbox.Config{Root: hookRoot}).Command(cctx, wrapped)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		cmd = exec.Command("bash", "-c", cmdStr)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.Env = safeEnv(tool, argsJSON)
+	}
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
-	runErr := cmd.Run()
+	if err == nil && cmd.Process == nil {
+		err = cmd.Start()
+	}
+	if err != nil {
+		return "", err
+	}
+	wait := make(chan error, 1)
+	go func() { wait <- cmd.Wait() }()
+	var runErr error
+	select {
+	case runErr = <-wait:
+	case <-cctx.Done():
+		if cmd.Process != nil {
+			if cmd.SysProcAttr != nil && cmd.SysProcAttr.Setpgid {
+				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			} else {
+				_ = cmd.Process.Kill()
+			}
+		}
+		runErr = <-wait
+		if runErr == nil {
+			runErr = cctx.Err()
+		}
+	}
 	s := capOutput(out.String())
 	s = scrubLocal(s)
 	s = strings.TrimSpace(s)
 	return s, runErr
 }
+
+type hookRootKey struct{}
+
+// WithRoot attaches the trusted project boundary for sandboxed hooks.
+func WithRoot(ctx context.Context, root string) context.Context {
+	return context.WithValue(ctx, hookRootKey{}, root)
+}
+
+func hookRootFromContext(ctx context.Context) string {
+	root, _ := ctx.Value(hookRootKey{}).(string)
+	return root
+}
+
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
 
 // maxHookOutput caps combined stdout+stderr from a hook (P0-3 sandbox).
 const maxHookOutput = 32 * 1024

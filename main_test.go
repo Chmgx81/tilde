@@ -121,3 +121,45 @@ func TestNewestUnclosedSession(t *testing.T) {
 		t.Fatalf("fresh clean marker must stay silent, got %q", got)
 	}
 }
+
+func TestPluginLifecycleCommands(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	src := t.TempDir()
+	writeTestPluginSource(t, src)
+	if err := runPluginCmd([]string{"plugin", "install", src}); err != nil {
+		t.Fatalf("install command: %v", err)
+	}
+	if err := runPluginCmd([]string{"plugin", "disable", "demo-plugin"}); err != nil {
+		t.Fatalf("disable command: %v", err)
+	}
+	if err := runPluginCmd([]string{"plugin", "enable", "demo-plugin"}); err != nil {
+		t.Fatalf("enable command: %v", err)
+	}
+	if err := runPluginCmd([]string{"plugin", "verify", "../demo-plugin"}); err == nil {
+		t.Fatal("verify command accepted traversal name")
+	}
+	if err := runPluginCmd([]string{"plugin", "remove", "demo-plugin"}); err != nil {
+		t.Fatalf("remove command: %v", err)
+	}
+	if err := runPluginCmd([]string{"plugin", "remove", "demo-plugin"}); err == nil {
+		t.Fatal("remove command silently accepted missing plugin")
+	}
+}
+
+func writeTestPluginSource(t *testing.T, dir string) {
+	t.Helper()
+	writeTestFile(t, dir, "tilde-plugin.yaml", "name: demo-plugin\nversion: 1.2.3\ndescription: test plugin\nskills:\n  - skills/a.md\n")
+	writeTestFile(t, dir, "skills/a.md", "skill\n")
+}
+
+func writeTestFile(t *testing.T, dir, rel, content string) {
+	t.Helper()
+	path := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}

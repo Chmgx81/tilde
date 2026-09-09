@@ -11,17 +11,20 @@
 //
 // State lives in .tilde/schedule-state.json: {id: lastRun RFC3339}.
 //
-// Single CLI invocation only — no goroutines, no locks.
+// The CLI is single-shot, but run-due uses an inter-process lock so two OS
+// wakeups cannot execute the same due jobs or race their state writes.
 package schedule
 
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -49,6 +52,38 @@ type fileJob struct {
 
 // State maps job id -> last run time (RFC3339 in JSON).
 type State map[string]time.Time
+
+// ErrLocked reports that another scheduler invocation owns the run lock.
+var ErrLocked = errors.New("scheduler already running")
+
+// AcquireLock takes a non-blocking advisory lock on path and returns its
+// release function. The file descriptor must remain open for the lifetime of
+// the lock; closing it releases the OS lock even if the process exits.
+//
+// The lock file is intentionally persistent (and empty). flock ownership is
+// attached to the open descriptor, not the directory entry, so a stale file
+// after a crash does not strand future runs.
+func AcquireLock(path string) (func(), error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("schedule: cannot create lock directory %s: %w", filepath.Dir(path), err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("schedule: cannot open lock %s: %w", path, err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+			return nil, ErrLocked
+		}
+		return nil, fmt.Errorf("schedule: cannot lock %s: %w", path, err)
+	}
+	_ = os.Chmod(path, 0o600)
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}, nil
+}
 
 // LoadFile reads a schedule.yaml file. Missing or empty file = no jobs,
 // not an error. Malformed YAML, unknown keys, bad intervals, and empty

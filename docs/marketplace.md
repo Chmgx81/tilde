@@ -71,3 +71,19 @@ not create duplicate rows.
 
 This keeps hooks, plugins, marketplace packages, skills, and MCP servers in
 one spatial model while preserving their different action boundaries.
+
+## Signed remote catalog foundation
+
+`internal/marketplace/remote.go` provides bounded HTTPS retrieval, Ed25519
+catalog verification, artifact SHA-256 verification, and owner-only atomic
+catalog caching. Verification is read-only and does not execute or activate
+anything. Remote installation remains deliberately disabled until the
+verified bytes pass archive containment checks and are staged through the same
+plugin lifecycle used for local packages.
+
+## Capability and lifecycle safety
+
+Plugins may declare `skills`, `agents`, `hooks`, and `mcp` resources. Agent
+manifests are metadata-only until an explicit activation model exists. Plugin
+installation, upgrade, enable, disable, remove, and rollback are separate
+operations; newly discovered metadata never enables execution by itself.

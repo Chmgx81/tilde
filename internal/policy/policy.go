@@ -33,6 +33,10 @@ type Policy struct {
 	// AlwaysAllow, if true, auto-approves Ask-tier calls (Auto mode / --yes
 	// for confirm-tier only; deny-tier still blocks — see Check).
 	AlwaysAllow bool
+	// Unattended narrows AlwaysAllow for --yes/headless runs: only the
+	// explicit read-only allowlist may be approved without an operator.
+	// Interactive Auto mode leaves this false and keeps its existing scope.
+	Unattended bool
 	// File is the loaded policies.yaml overlay (nil = defaults).
 	// deny wins over everything, including AlwaysAllow.
 	File *File
@@ -351,6 +355,36 @@ func (p *Policy) sessionAllowed(cmd string) bool {
 	return ok
 }
 
+// UnattendedAllowed reports whether a call is safe to approve without an
+// operator. The list is deliberately closed: shell commands and MCP calls
+// stay prompt-gated because their arguments can mutate or exfiltrate even
+// when their tool names look familiar.
+func UnattendedAllowed(tool string, args map[string]any) bool {
+	switch tool {
+	case "read_file", "grep", "glob", "git_status", "git_diff",
+		"git_worktree_list", "load_skill", "mcp_list", "symbol_search",
+		"diagnose":
+		return true
+	case "shell_poll":
+		action, _ := args["action"].(string)
+		action = strings.ToLower(strings.TrimSpace(action))
+		return action == "status" || action == "log"
+	case "memory":
+		op, _ := args["op"].(string)
+		return strings.EqualFold(strings.TrimSpace(op), "recall")
+	case "remember":
+		op, _ := args["op"].(string)
+		op = strings.ToLower(strings.TrimSpace(op))
+		return op == "recall" || op == "status"
+	default:
+		return false
+	}
+}
+
+func (p *Policy) autoAllowed(tool string, args map[string]any) bool {
+	return p != nil && p.AlwaysAllow && (!p.Unattended || UnattendedAllowed(tool, args))
+}
+
 // Check returns the decision for a tool call.
 func (p *Policy) Check(tool string, args map[string]any) Decision {
 	if p != nil && p.File != nil {
@@ -371,7 +405,7 @@ func (p *Policy) Check(tool string, args map[string]any) Decision {
 		// spawn/discard create/remove git worktrees — same class as
 		// git_worktree_add/remove, so Ask even when policies.yaml is
 		// missing (apply_work is read-only review: yaml-listed instead).
-		if p != nil && p.AlwaysAllow {
+		if p.autoAllowed(tool, args) {
 			return Allow
 		}
 		return Ask
@@ -383,7 +417,7 @@ func (p *Policy) Check(tool string, args map[string]any) Decision {
 		if p.sessionAllowed(cmd) {
 			return Allow // exact literal approved via [a] this session
 		}
-		if p != nil && p.AlwaysAllow {
+		if p.autoAllowed(tool, args) {
 			return Allow
 		}
 		return Ask

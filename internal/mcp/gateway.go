@@ -91,9 +91,11 @@ func (t *CallTool) Exec(ctx context.Context, args map[string]any) (string, error
 	if t.Mgr == nil {
 		return "", fmt.Errorf("no MCP servers live")
 	}
-	// The agent loop's policy tier already approved this exact call
-	// (mcp_call is Ask-gated at dispatch), so it arrives approved.
-	out, err := t.Mgr.CallApproved(ctx, server, tool, argv, true)
+	// mcp_call approval is not server-tool approval. A server tool configured
+	// with approval=prompt must receive its own approval; otherwise allowing the
+	// outer gateway would bypass the nested trust boundary. Auto-configured MCP
+	// tools still proceed through CallApproved's explicit auto path.
+	out, err := t.Mgr.CallApproved(ctx, server, tool, argv, false)
 	if err != nil {
 		return "", err
 	}

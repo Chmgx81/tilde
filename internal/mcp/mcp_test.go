@@ -7,9 +7,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"tilde/internal/tools"
 )
 
 // TestMCPHelper doubles as the fake MCP server when re-executed with
@@ -21,6 +24,7 @@ func TestMCPHelper(t *testing.T) {
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 1024*1024), 1024*1024)
 	enc := json.NewEncoder(os.Stdout)
+	delayed := false
 	idOf := func(m map[string]any) any { return m["id"] }
 	for in.Scan() {
 		line := strings.TrimSpace(in.Text())
@@ -38,6 +42,12 @@ func TestMCPHelper(t *testing.T) {
 		}
 		switch method {
 		case "initialize":
+			if !delayed {
+				if ms, _ := strconv.Atoi(os.Getenv("TILDE_TEST_MCP_DELAY_MS")); ms > 0 {
+					time.Sleep(time.Duration(ms) * time.Millisecond)
+				}
+				delayed = true
+			}
 			reply(map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{}, "serverInfo": map[string]any{"name": "fake"}})
 		case "tools/list":
 			reply(map[string]any{"tools": []any{
@@ -294,6 +304,89 @@ func TestApprovalPromptBlocks(t *testing.T) {
 	mgrAuto := testManagerWith(t, ServerConfig{Approval: map[string]string{"shout": "auto"}})
 	if out, err := mgrAuto.Call(context.Background(), "fake", "shout", map[string]any{"text": "hi"}); err != nil || out != "HI" {
 		t.Fatalf("auto call must run, got %q, %v", out, err)
+	}
+}
+
+func TestGatewayEnforcesNestedApproval(t *testing.T) {
+	mgr := testManagerWith(t, ServerConfig{}) // default: every nested tool is prompt-gated
+	call := &CallTool{Mgr: mgr}
+	if _, err := call.Exec(context.Background(), map[string]any{
+		"server": "fake", "tool": "shout", "arguments": map[string]any{"text": "hi"},
+	}); err == nil || !strings.Contains(err.Error(), "needs user approval") {
+		t.Fatalf("outer mcp_call approval must not bypass nested approval, got %v", err)
+	}
+	reg := tools.NewRegistry()
+	reg.Register(call)
+	reg.Gate = func(string, map[string]any) (bool, string) { return true, "approved" }
+	if out := reg.Dispatch(context.Background(), "mcp_call", map[string]any{
+		"server": "fake", "tool": "shout", "arguments": map[string]any{"text": "hi"},
+	}); !strings.Contains(out, "needs user approval") {
+		t.Fatalf("registry-approved outer call must not bypass the nested gate, got %q", out)
+	}
+
+	auto := testManagerWith(t, ServerConfig{Approval: map[string]string{"shout": "auto"}})
+	out, err := (&CallTool{Mgr: auto}).Exec(context.Background(), map[string]any{
+		"server": "fake", "tool": "shout", "arguments": map[string]any{"text": "hi"},
+	})
+	if err != nil || !strings.Contains(out, "HI") {
+		t.Fatalf("explicit nested auto approval must run, got %q, %v", out, err)
+	}
+}
+
+func TestStartIsConcurrentWithOneTotalDeadline(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := func() ServerConfig {
+		return ServerConfig{Command: exe, Args: []string{"-test.run", "TestMCPHelper"}, Env: map[string]string{
+			"TILDE_TEST_MCP_SERVER":   "1",
+			"TILDE_TEST_MCP_DELAY_MS": "200",
+		}}
+	}
+	mgr := NewManager(map[string]ServerConfig{"a": cfg(), "b": cfg(), "c": cfg()})
+	defer mgr.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	if err := mgr.Start(ctx); err != nil {
+		t.Fatalf("concurrent startup should finish all servers within one deadline: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed >= 400*time.Millisecond {
+		t.Fatalf("startup used more than its total deadline: %v", elapsed)
+	}
+	if live := mgr.Live(); len(live) != 3 {
+		t.Fatalf("live=%v, want all servers", live)
+	}
+}
+
+func TestStartDeadlineStopsSlowServers(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr := NewManager(map[string]ServerConfig{
+		"slow-a": {Command: exe, Args: []string{"-test.run", "TestMCPHelper"}, Env: map[string]string{
+			"TILDE_TEST_MCP_SERVER":   "1",
+			"TILDE_TEST_MCP_DELAY_MS": "2000",
+		}},
+		"slow-b": {Command: exe, Args: []string{"-test.run", "TestMCPHelper"}, Env: map[string]string{
+			"TILDE_TEST_MCP_SERVER":   "1",
+			"TILDE_TEST_MCP_DELAY_MS": "2000",
+		}},
+	})
+	defer mgr.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	if err := mgr.Start(ctx); err == nil {
+		t.Fatal("slow startup must report the deadline failure")
+	}
+	if elapsed := time.Since(started); elapsed >= time.Second {
+		t.Fatalf("startup exceeded its total deadline by too much: %v", elapsed)
+	}
+	if live := mgr.Live(); len(live) != 0 {
+		t.Fatalf("deadline-expired servers must not remain live: %v", live)
 	}
 }
 

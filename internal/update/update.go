@@ -37,6 +37,11 @@ const (
 	apiURL  = "https://api.github.com/repos/Chmgx81/tilde/commits/main"
 	tagsURL = "https://api.github.com/repos/Chmgx81/tilde/tags?per_page=100"
 
+	canonicalRemoteName = "origin"
+	expectedBranch      = "main"
+	expectedFetchRef    = "refs/heads/main"
+	expectedRemoteRef   = "refs/remotes/origin/main"
+
 	// checkTTL bounds phone-home frequency: at most one API read per
 	// day no matter how often tilde starts.
 	checkTTL = 24 * time.Hour
@@ -455,6 +460,69 @@ func needsReleaseVerification(tag string) bool {
 	return tag != "" && compareVersion(tag, Version) > 0
 }
 
+// isCanonicalRemote accepts the normal HTTPS clone URL plus the equivalent
+// GitHub SSH forms. The repository identity must remain exact; in particular,
+// local paths, other hosts, and lookalike repository names are not updater
+// sources.
+func isCanonicalRemote(raw string) bool {
+	raw = strings.TrimRight(strings.TrimSpace(raw), "/")
+	raw = strings.TrimSuffix(raw, ".git")
+	return raw == repoURL ||
+		raw == "git@github.com:Chmgx81/tilde" ||
+		raw == "ssh://git@github.com/Chmgx81/tilde"
+}
+
+// validateCanonicalRemote makes the update source explicit instead of
+// trusting whichever remote or URL the checkout happens to have configured.
+func validateCanonicalRemote(git func(args ...string) (string, error)) error {
+	// Read the configured URL rather than `remote get-url`: the latter applies
+	// url.*.insteadOf rewrites and can make a canonical-looking checkout appear
+	// to have a different origin (or hide the configured provenance).
+	out, err := git("config", "--get-all", "remote."+canonicalRemoteName+".url")
+	if err != nil {
+		return fmt.Errorf("refusing update: checkout has no usable %s remote — configure it as %s", canonicalRemoteName, repoURL)
+	}
+	var urls []string
+	for _, line := range strings.Split(out, "\n") {
+		if url := strings.TrimSpace(line); url != "" {
+			urls = append(urls, url)
+		}
+	}
+	if len(urls) != 1 || !isCanonicalRemote(urls[0]) {
+		return fmt.Errorf("refusing update: %s remote %q is not the canonical repository %s", canonicalRemoteName, strings.Join(urls, ", "), repoURL)
+	}
+	return nil
+}
+
+// validateFetchedCommit proves that the commit reported by FETCH_HEAD is the
+// commit installed at the exact origin/main remote-tracking ref. Keeping both
+// checks prevents a configured upstream or a fetch result from silently
+// changing the source selected by the updater.
+func validateFetchedCommit(fetchHead, remoteRef string) error {
+	if fetchHead == "" || remoteRef == "" {
+		return fmt.Errorf("refusing update: fetch did not produce %s and %s", expectedFetchRef, expectedRemoteRef)
+	}
+	if fetchHead != remoteRef {
+		return fmt.Errorf("refusing update: fetched commit %s does not match %s at %s", short(fetchHead), short(remoteRef), expectedRemoteRef)
+	}
+	return nil
+}
+
+func fetchedCommit(git func(args ...string) (string, error)) (string, error) {
+	fetchHead, err := git("rev-parse", "--verify", "FETCH_HEAD^{commit}")
+	if err != nil {
+		return "", fmt.Errorf("refusing update: cannot resolve FETCH_HEAD: %s", fetchHead)
+	}
+	remoteRef, err := git("rev-parse", "--verify", expectedRemoteRef+"^{commit}")
+	if err != nil {
+		return "", fmt.Errorf("refusing update: cannot resolve %s: %s", expectedRemoteRef, remoteRef)
+	}
+	if err := validateFetchedCommit(fetchHead, remoteRef); err != nil {
+		return "", err
+	}
+	return fetchHead, nil
+}
+
 // Run pulls, rebuilds, and reinstalls tilde from its install source.
 // Fail-closed throughout: a dirty tree refuses (never stashes or
 // resets user work), a failed build or smoke test never touches the
@@ -478,6 +546,13 @@ func Run() error {
 		out, err := cmd.CombinedOutput()
 		return strings.TrimSpace(string(out)), err
 	}
+	if err := validateCanonicalRemote(git); err != nil {
+		return err
+	}
+	branch, err := git("branch", "--show-current")
+	if err != nil || branch != expectedBranch {
+		return fmt.Errorf("refusing update: source checkout is on branch %q; expected %s", branch, expectedBranch)
+	}
 	before, err := git("rev-parse", "HEAD")
 	if err != nil {
 		return fmt.Errorf("not a usable git checkout at %s — reinstall from a fresh clone", dir)
@@ -489,18 +564,25 @@ func Run() error {
 		return fmt.Errorf("source tree at %s has uncommitted changes — commit or stash them, then retry (nothing was pulled)", dir)
 	}
 	fmt.Printf("tilde: pulling %s in %s\n", repoURL, dir)
-	if out, err := git("fetch", "--tags", "--prune"); err != nil {
+	if out, err := git("fetch", "--tags", "--prune", canonicalRemoteName, expectedFetchRef+":"+expectedRemoteRef); err != nil {
 		return fmt.Errorf("fetch failed: %s — resolve it with git in %s, then retry", out, dir)
+	}
+	fetched, err := fetchedCommit(git)
+	if err != nil {
+		return err
 	}
 	if tag := latestLocalTag(git); needsReleaseVerification(tag) {
 		if err := verifyTag(git, tag); err != nil {
 			return err
 		}
 	}
-	if out, err := git("pull", "--ff-only"); err != nil {
-		return fmt.Errorf("pull failed: %s — resolve it with git in %s, then retry", out, dir)
+	if out, err := git("merge", "--ff-only", "--no-edit", expectedRemoteRef); err != nil {
+		return fmt.Errorf("merge of fetched %s failed: %s — resolve it with git in %s, then retry", expectedRemoteRef, out, dir)
 	}
-	after, _ := git("rev-parse", "HEAD")
+	after, err := git("rev-parse", "--verify", "HEAD^{commit}")
+	if err != nil || after != fetched {
+		return fmt.Errorf("refusing update: checkout HEAD %s does not equal fetched %s", short(after), short(fetched))
+	}
 	target, err := updateTarget()
 	if err != nil {
 		return err

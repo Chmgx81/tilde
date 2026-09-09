@@ -414,7 +414,8 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 			// Tab-cycling into Auto takes effect immediately (the startup
 			// AlwaysAllow wiring cannot see later mode changes). Deny
 			// still beats everything.
-			if dec == policy.Ask && l.GetMode() == mode.Auto {
+			if dec == policy.Ask && l.GetMode() == mode.Auto &&
+				(l.Cfg.Pol == nil || !l.Cfg.Pol.Unattended) {
 				dec = policy.Allow
 			}
 			switch dec {

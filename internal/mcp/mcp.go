@@ -260,6 +260,8 @@ type Manager struct {
 	cmdCancel context.CancelFunc
 }
 
+const mcpStartupTimeout = 20 * time.Second
+
 // NewManager builds (not starts) the configured servers.
 func NewManager(configs map[string]ServerConfig) *Manager {
 	return &Manager{servers: map[string]*server{}, configs: configs}
@@ -309,17 +311,32 @@ func (m *Manager) ServerTools() map[string][]string {
 // One bad server never kills the rest: failures return as a joined error
 // naming each, while working servers stay live.
 func (m *Manager) Start(ctx context.Context) error {
+	startupCtx, cancel := context.WithTimeout(ctx, mcpStartupTimeout)
+	defer cancel()
 	m.mu.Lock()
 	m.cmdCtx, m.cmdCancel = context.WithCancel(context.Background())
 	m.mu.Unlock()
-	var failures []string
-	for _, name := range m.ServerNames() {
-		if err := m.startOne(ctx, name, m.configs[name]); err != nil {
-			failures = append(failures, fmt.Sprintf("%s: %v", name, err))
+	names := m.ServerNames()
+	failures := make([]string, len(names))
+	var wg sync.WaitGroup
+	wg.Add(len(names))
+	for i, name := range names {
+		go func(i int, name string) {
+			defer wg.Done()
+			if err := m.startOne(startupCtx, name, m.configs[name]); err != nil {
+				failures[i] = fmt.Sprintf("%s: %v", name, err)
+			}
+		}(i, name)
+	}
+	wg.Wait()
+	var failed []string
+	for _, failure := range failures {
+		if failure != "" {
+			failed = append(failed, failure)
 		}
 	}
-	if len(failures) > 0 {
-		return fmt.Errorf("mcp: %s", strings.Join(failures, "; "))
+	if len(failed) > 0 {
+		return fmt.Errorf("mcp: %s", strings.Join(failed, "; "))
 	}
 	return nil
 }
@@ -334,7 +351,7 @@ func (m *Manager) startOne(ctx context.Context, name string, cfg ServerConfig) e
 	var cmd *exec.Cmd
 	var s *server
 	if cfg.effType() == "remote" {
-		if err := checkRemoteURL(name, cfg.URL); err != nil {
+		if err := checkRemoteURLContext(sctx, name, cfg.URL); err != nil {
 			return err
 		}
 		headers, err := loadHeadersFile(cfg.HeadersFile)
@@ -466,6 +483,10 @@ func nonPublicIP(ip netip.Addr) bool {
 // to non-public addresses (fail closed when unresolvable). Transport
 // behavior is unchanged — this is only a gate.
 func checkRemoteURL(name, raw string) error {
+	return checkRemoteURLContext(context.Background(), name, raw)
+}
+
+func checkRemoteURLContext(ctx context.Context, name, raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return fmt.Errorf("mcp: server %q has non-http(s) url %q — fix mcp.json: \"url\" must be http(s)", name, raw)
@@ -480,7 +501,7 @@ func checkRemoteURL(name, raw string) error {
 		}
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil || len(addrs) == 0 {

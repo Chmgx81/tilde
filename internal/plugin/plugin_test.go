@@ -139,10 +139,16 @@ func TestProgressiveDisclosureResourcesArePinned(t *testing.T) {
 	writeFile(t, src, "references/advanced.md", "details\n")
 	writeFile(t, src, "assets/template.txt", "template\n")
 	dest, err := Install(src, t.TempDir())
-	if err != nil { t.Fatalf("Install: %v", err) }
-	if !Verify(dest) { t.Fatal("resource-backed plugin did not verify") }
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if !Verify(dest) {
+		t.Fatal("resource-backed plugin did not verify")
+	}
 	for _, rel := range m.Files() {
-		if _, err := os.Stat(filepath.Join(dest, filepath.FromSlash(rel))); err != nil { t.Errorf("missing pinned resource %q: %v", rel, err) }
+		if _, err := os.Stat(filepath.Join(dest, filepath.FromSlash(rel))); err != nil {
+			t.Errorf("missing pinned resource %q: %v", rel, err)
+		}
 	}
 }
 
@@ -321,5 +327,90 @@ func TestReinstallRepins(t *testing.T) {
 	}
 	if got := readFile(t, dest, "skills/a.md"); got != "Body A v2.\n" {
 		t.Errorf("Reinstall did not re-pin source content: %q", got)
+	}
+}
+
+func writeVersionedSource(t *testing.T, dir, version, body string) {
+	t.Helper()
+	m := validManifest()
+	m.Version = version
+	writePlugin(t, dir, m)
+	writeFile(t, dir, "skills/a.md", body)
+	writeFile(t, dir, "skills/b.md", "stable B\n")
+	writeFile(t, dir, "hooks.yaml", "hooks: []\n")
+	writeFile(t, dir, "mcp.json", "{}\n")
+}
+
+func TestUpgradeIsAtomicAndRollbackPreservesLifecycleState(t *testing.T) {
+	home := t.TempDir()
+	v1 := t.TempDir()
+	v2 := t.TempDir()
+	writeVersionedSource(t, v1, "1.0.0", "version one\n")
+	writeVersionedSource(t, v2, "2.0.0", "version two\n")
+
+	dest, err := Install(v1, home)
+	if err != nil {
+		t.Fatalf("Install v1: %v", err)
+	}
+	if err := Disable(home, "demo-plugin"); err != nil {
+		t.Fatalf("Disable: %v", err)
+	}
+
+	if _, err := Upgrade(v2, home); err != nil {
+		t.Fatalf("Upgrade v2: %v", err)
+	}
+	status, err := Inspect(home, "demo-plugin")
+	if err != nil {
+		t.Fatalf("Inspect v2: %v", err)
+	}
+	if status.Version != "2.0.0" || status.Enabled || !status.Verified {
+		t.Fatalf("unexpected v2 status: %+v", status)
+	}
+	if got := readFile(t, dest, "skills/a.md"); got != "version two\n" {
+		t.Fatalf("upgrade did not activate v2: %q", got)
+	}
+
+	if err := Rollback(home, "demo-plugin"); err != nil {
+		t.Fatalf("Rollback: %v", err)
+	}
+	status, err = Inspect(home, "demo-plugin")
+	if err != nil {
+		t.Fatalf("Inspect rollback: %v", err)
+	}
+	if status.Version != "1.0.0" || status.Enabled || !status.Verified {
+		t.Fatalf("unexpected rollback status: %+v", status)
+	}
+	if got := readFile(t, dest, "skills/a.md"); got != "version one\n" {
+		t.Fatalf("rollback did not restore v1: %q", got)
+	}
+	if err := Rollback(home, "demo-plugin"); err == nil || !strings.Contains(err.Error(), "rollback") {
+		t.Fatalf("second rollback should report exhausted history, got %v", err)
+	}
+}
+
+func TestUpgradeFailureLeavesActivePluginUntouched(t *testing.T) {
+	home := t.TempDir()
+	v1 := t.TempDir()
+	bad := t.TempDir()
+	writeVersionedSource(t, v1, "1.0.0", "version one\n")
+	writeVersionedSource(t, bad, "2.0.0", "version two\n")
+	if _, err := Install(v1, home); err != nil {
+		t.Fatalf("Install v1: %v", err)
+	}
+	if err := os.Remove(filepath.Join(bad, "skills", "b.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Upgrade(bad, home); err == nil {
+		t.Fatal("invalid upgrade unexpectedly succeeded")
+	}
+	status, err := Inspect(home, "demo-plugin")
+	if err != nil {
+		t.Fatalf("Inspect after failed upgrade: %v", err)
+	}
+	if status.Version != "1.0.0" || !status.Verified {
+		t.Fatalf("failed upgrade changed active plugin: %+v", status)
+	}
+	if got := readFile(t, filepath.Join(home, "demo-plugin"), "skills/a.md"); got != "version one\n" {
+		t.Fatalf("failed upgrade changed active content: %q", got)
 	}
 }

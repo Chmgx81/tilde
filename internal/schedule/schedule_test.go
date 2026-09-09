@@ -1,6 +1,7 @@
 package schedule
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -163,5 +164,22 @@ func TestLoadMissingIsEmpty(t *testing.T) {
 	jobs, err := LoadFile(filepath.Join(t.TempDir(), "nope.yaml"))
 	if err != nil || len(jobs) != 0 {
 		t.Fatalf("missing file = empty, not error: %v %v", jobs, err)
+	}
+}
+
+func TestAcquireLockExcludesOverlapAndReleases(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".tilde", "run-due.lock")
+	release, err := AcquireLock(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AcquireLock(path); !errors.Is(err, ErrLocked) {
+		t.Fatalf("overlapping scheduler run must be refused with ErrLocked, got %v", err)
+	}
+	release()
+	if again, err := AcquireLock(path); err != nil {
+		t.Fatalf("lock must be reusable after release: %v", err)
+	} else {
+		again()
 	}
 }

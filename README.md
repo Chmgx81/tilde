@@ -98,10 +98,13 @@ VCS builds report the release line plus their short source revision (for
 example, `v0.9.0+g5f94724`), so a rebuilt binary is distinguishable even
 before the next release tag.
 
-Source installs update the checkout recorded in `~/.tilde/install.json`; the
-checkout's configured remote must be the repository you intend to update.
-GitHub is the canonical upstream, but `tilde update` does not clone over an
-existing project or discard local work. A clean clone is the simplest setup:
+Source installs update the checkout recorded in `~/.tilde/install.json` only
+when it is a clean checkout on `main` with one canonical `origin` remote
+(`https://github.com/Chmgx81/tilde`, or its normal `.git`/SSH spelling).
+The updater fetches `origin`'s exact `main` ref and verifies that
+`FETCH_HEAD`, `origin/main`, and the resulting `HEAD` are the same commit;
+otherwise it refuses before building. It never clones over an existing
+project or discards local work. A clean clone is the simplest setup:
 `git clone https://github.com/Chmgx81/tilde.git && cd tilde && ./install.sh`.
 
 Fail-closed like everything else: a dirty source tree refuses (commit or
@@ -157,7 +160,7 @@ tilde --prompt "..." --output json   # JSONL events + result object with token u
 ```sh
 tilde run-due [--yes] [dir]   # run due .tilde/schedule.yaml entries headlessly (cron/systemd wakes it)
 tilde audit [--since 24h] [--tool shell_command] [--json]   # read the governance trail
-tilde plugin install <dir> [--upgrade] | verify <name> | list   # hash-pinned local plugins
+tilde plugin install <dir> [--upgrade] | upgrade <dir> | enable|disable|remove|rollback <name> | verify <name> | list   # hash-pinned local plugins
 tilde                         # /plugins and /marketplace browse the unified local registry
 tilde models [provider]   # print the model catalog (windows + prices), no network
 tilde ide-bridge          # serve line-delimited JSON over stdio for IDE hosts
@@ -213,6 +216,10 @@ Same tasks, repeated trials, fresh directories. Exits 1 if any task scores zero.
 - **Vision status.** Image input and the independent vision side-call are
   designed but not yet supported; see `docs/vision-design.md`. Tilde does not
   claim vision support until provider, TUI, approval, and redaction tests pass.
+- **Remote marketplace status.** Signed catalog and artifact verification
+  primitives exist in `internal/marketplace/remote.go`; remote installation is
+  not enabled until archive extraction, staging, trust configuration, and
+  provider/network integration are complete.
 
 | Tier + Plan gate | Tools |
 |---|---|

@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -129,7 +130,8 @@ func main() {
 	// `tilde audit [--since ...] [--tool ...] [--decision ...] [--json]`
 	// reads the governance trail. `tilde run-due [--yes]` executes due
 	// schedule entries by re-invoking this binary headlessly per job.
-	// `tilde plugin install <dir> [--upgrade] | verify <name> | list`
+	// `tilde plugin install <dir> [--upgrade] | upgrade <dir> |
+	// enable|disable|remove|rollback <name> | verify <name> | list`
 	// manages hash-pinned local plugins. All three dispatch before any
 	// session-shaped setup: they need no provider, no log, no TUI.
 	if flag.NArg() > 0 && flag.Arg(0) == "audit" {
@@ -383,7 +385,7 @@ func main() {
 		Log:  sessLog,
 		Cfg: agent.Config{
 			MaxIters: 25, DoomRepeats: 3, Root: root,
-			Mode: m, Pol: &policy.Policy{AlwaysAllow: *yesFlag || m == mode.Auto, File: polFile},
+			Mode: m, Pol: &policy.Policy{AlwaysAllow: *yesFlag || m == mode.Auto, Unattended: *yesFlag, File: polFile},
 			Compactor: &compact.Compactor{
 				Budget:    budget,
 				Summarize: compact.SummarizeWithProvider(prov),
@@ -451,7 +453,9 @@ func main() {
 	// (Plan default); --yes auto-approves ask-tier like headless.
 	if flag.NArg() > 0 && flag.Arg(0) == "ide-bridge" {
 		_ = sessLog.Append("meta", map[string]any{"root": root, "model": prov.Name(), "budget": budget})
-		loop.Cfg.AskUser = func(string, map[string]any) bool { return *yesFlag }
+		loop.Cfg.AskUser = func(tool string, args map[string]any) bool {
+			return *yesFlag && policy.UnattendedAllowed(tool, args)
+		}
 		br := ide.New(reg.Names(), func(ctx context.Context, prompt string) (string, error) {
 			return loop.Run(ctx, prompt, func(agent.Event) {})
 		})
@@ -752,6 +756,7 @@ func loadHooks(root string, allowProject bool) *hooks.Config {
 	if merged.Empty() {
 		return nil
 	}
+	merged.Root = root
 	return &merged
 }
 
@@ -987,7 +992,7 @@ func runHeadless(loop *agent.Loop, goal string, yes bool, format string) {
 	}()
 	loop.Cfg.AskUser = func(tool string, args map[string]any) bool {
 		if yes {
-			return true
+			return policy.UnattendedAllowed(tool, args)
 		}
 		if asJSON {
 			emitJSON(map[string]any{"type": "approval", "tool": tool, "args": args})
@@ -1252,11 +1257,36 @@ func runDueCmd(args []string) error {
 	if strings.HasPrefix(root, "-") {
 		return fmt.Errorf("usage: tilde run-due [--yes] [dir] — got flag-like %q", root)
 	}
+	var err error
+	root, err = filepath.Abs(root)
+	if err != nil {
+		return fmt.Errorf("cannot resolve scheduler root: %w", err)
+	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("cannot resolve scheduler root %q: %w", root, err)
+	}
+	rootInfo, err := os.Stat(root)
+	if err != nil || !rootInfo.IsDir() {
+		return fmt.Errorf("scheduler root %q is not a directory", root)
+	}
 	jobs, err := schedule.LoadFile(filepath.Join(root, ".tilde", "schedule.yaml"))
 	if err != nil {
 		return err
 	}
-	st, err := schedule.LoadState(filepath.Join(root, ".tilde", "schedule-state.json"))
+	statePath := filepath.Join(root, ".tilde", "schedule-state.json")
+	// Hold the lock through due evaluation, child execution, and state
+	// writes. A second cron/systemd wakeup must not run the same job while
+	// the first invocation is still in flight.
+	release, err := schedule.AcquireLock(statePath + ".lock")
+	if err != nil {
+		if errors.Is(err, schedule.ErrLocked) {
+			return fmt.Errorf("run-due already running for %s — skipping overlapping invocation", root)
+		}
+		return err
+	}
+	defer release()
+	st, err := schedule.LoadState(statePath)
 	if err != nil {
 		return err
 	}
@@ -1288,7 +1318,7 @@ func runDueCmd(args []string) error {
 			continue
 		}
 		st = schedule.MarkRun(st, j.ID, now)
-		if err := schedule.SaveState(filepath.Join(root, ".tilde", "schedule-state.json"), st); err != nil {
+		if err := schedule.SaveState(statePath, st); err != nil {
 			return err
 		}
 		fmt.Printf("tilde: run-due: job %q done\n", j.ID)
@@ -1408,13 +1438,13 @@ func runExportCmd(sessionID, out string) error {
 	return nil
 }
 
-// runPluginCmd implements `tilde plugin install <dir> [--upgrade] |
-// verify <name> | list`: explicit, hash-pinned local plugin management.
-// Install sources are local dirs only (no network, no clone); every
-// install pins sha256 per file and refuses drift.
+// runPluginCmd implements explicit, hash-pinned local plugin management.
+// Install and upgrade sources are local dirs only (no network, no clone).
+// Upgrade stages and verifies a new tree before activation; lifecycle state
+// is persisted outside plugin content so Verify remains meaningful.
 func runPluginCmd(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade] | verify <name> | list")
+		return pluginUsageError()
 	}
 	home, err := pluginHome()
 	if err != nil {
@@ -1431,32 +1461,40 @@ func runPluginCmd(args []string) error {
 			return err
 		}
 		for _, e := range entries {
-			m, err := plugin.LoadManifest(filepath.Join(home, e.Name()))
+			if strings.HasPrefix(e.Name(), ".") || !e.IsDir() {
+				continue
+			}
+			status, err := plugin.Inspect(home, e.Name())
 			if err != nil {
 				fmt.Printf("%s\t(unreadable: %v)\n", e.Name(), err)
 				continue
 			}
-			ok := plugin.Verify(filepath.Join(home, e.Name()))
-			fmt.Printf("%s\t%s\tverified=%v\n", m.Name, m.Version, ok)
+			fmt.Printf("%s\t%s\tenabled=%v\tverified=%v\n", status.Name, status.Version, status.Enabled, status.Verified)
 		}
 		return nil
 	case "verify":
-		if len(args) < 3 {
+		if len(args) != 3 {
 			return fmt.Errorf("usage: tilde plugin verify <name>")
 		}
-		dir := filepath.Join(home, filepath.Clean(args[2]))
+		if err := plugin.ValidateName(args[2]); err != nil {
+			return err
+		}
+		dir := filepath.Join(home, args[2])
 		if !plugin.Verify(dir) {
 			return fmt.Errorf("plugin %q failed verification (drifted or unlocked) — reinstall from its source dir", args[2])
 		}
 		fmt.Printf("tilde: plugin %q verified\n", args[2])
 		return nil
 	case "install":
-		if len(args) < 3 {
+		if len(args) < 3 || len(args) > 4 {
 			return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade]")
 		}
 		upgrade := len(args) > 3 && args[3] == "--upgrade"
+		if len(args) == 4 && !upgrade {
+			return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade]")
+		}
 		if upgrade {
-			if _, err := plugin.Reinstall(args[2], home); err != nil {
+			if _, err := plugin.Upgrade(args[2], home); err != nil {
 				return err
 			}
 		} else if _, err := plugin.Install(args[2], home); err != nil {
@@ -1464,9 +1502,58 @@ func runPluginCmd(args []string) error {
 		}
 		fmt.Printf("tilde: plugin installed from %s\n", args[2])
 		return nil
+	case "upgrade":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: tilde plugin upgrade <dir>")
+		}
+		if _, err := plugin.Upgrade(args[2], home); err != nil {
+			return err
+		}
+		fmt.Printf("tilde: plugin upgraded from %s\n", args[2])
+		return nil
+	case "enable", "disable":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: tilde plugin %s <name>", args[1])
+		}
+		if err := plugin.ValidateName(args[2]); err != nil {
+			return err
+		}
+		var err error
+		if args[1] == "enable" {
+			err = plugin.Enable(home, args[2])
+		} else {
+			err = plugin.Disable(home, args[2])
+		}
+		if err != nil {
+			return err
+		}
+		fmt.Printf("tilde: plugin %q %sd\n", args[2], args[1])
+		return nil
+	case "remove":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: tilde plugin remove <name>")
+		}
+		if err := plugin.Remove(home, args[2]); err != nil {
+			return err
+		}
+		fmt.Printf("tilde: plugin %q removed\n", args[2])
+		return nil
+	case "rollback":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: tilde plugin rollback <name>")
+		}
+		if err := plugin.Rollback(home, args[2]); err != nil {
+			return err
+		}
+		fmt.Printf("tilde: plugin %q rolled back\n", args[2])
+		return nil
 	default:
-		return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade] | verify <name> | list")
+		return pluginUsageError()
 	}
+}
+
+func pluginUsageError() error {
+	return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade] | upgrade <dir> | enable|disable|remove|rollback <name> | verify <name> | list")
 }
 
 // headlessExitCode maps a loop outcome to the spec §4 table: 3 = provider

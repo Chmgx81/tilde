@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -19,6 +20,16 @@ import (
 )
 
 var marketplaceTabs = marketplace.Kinds
+
+type marketplaceAction string
+
+const (
+	marketplaceActionInstall marketplaceAction = "install"
+	marketplaceActionEnable  marketplaceAction = "enable"
+	marketplaceActionDisable marketplaceAction = "disable"
+	marketplaceActionRemove  marketplaceAction = "remove"
+	marketplaceActionUpdate  marketplaceAction = "update"
+)
 
 func (m *Model) openMarketplace() {
 	if m.running {
@@ -55,6 +66,9 @@ func (m *Model) openMarketplace() {
 	m.marketplaceItems = reg
 	m.marketplaceCursor, m.marketplaceQuery = 0, ""
 	m.marketplaceTab = 0
+	m.marketplacePending = nil
+	m.marketplaceDetail = nil
+	m.marketplaceAction = ""
 	m.marketplaceOpen = true
 }
 
@@ -134,12 +148,11 @@ func (m *Model) updateMarketplace(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		key := string(msg.Runes)
 		if key == "i" && len(rows) > 0 && m.marketplaceCursor < len(rows) {
 			item := rows[m.marketplaceCursor]
-			if !item.Installable {
+			if item.Kind != marketplace.Marketplace || !item.Installable {
 				m.append("✗ " + item.Name + " is not an installable local marketplace package")
 				return m, nil
 			}
-			copy := item
-			m.marketplacePending = &copy
+			m.requestMarketplaceAction(item, marketplaceActionInstall)
 			return m, nil
 		}
 		if key == "/" {
@@ -154,11 +167,56 @@ func (m *Model) updateMarketplace(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			item := rows[m.marketplaceCursor]
 			if item.Kind == marketplace.Skills {
 				m.loadSkillByName(item.Name)
-			} else if item.Kind == marketplace.Plugins {
-				m.append(fmt.Sprintf("● %s v%s — skills: %s", item.Name, item.Version, strings.Join(item.Skills, ", ")))
+			} else {
+				copy := item
+				m.marketplaceDetail = &copy
 			}
 		}
 		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) requestMarketplaceAction(item marketplace.Item, action marketplaceAction) {
+	copy := item
+	m.marketplacePending = &copy
+	m.marketplaceAction = action
+}
+
+func (m *Model) updateMarketplaceDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	item := m.marketplaceDetail
+	if item == nil {
+		return m, nil
+	}
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		m.marketplaceDetail = nil
+		return m, nil
+	case tea.KeyRunes:
+		switch strings.ToLower(string(msg.Runes)) {
+		case "i":
+			if item.Kind == marketplace.Marketplace && item.Installable && !item.Installed {
+				m.requestMarketplaceAction(*item, marketplaceActionInstall)
+			}
+		case "e":
+			if item.Kind == marketplace.Plugins && item.Installed {
+				action := marketplaceActionEnable
+				if item.Enabled {
+					action = marketplaceActionDisable
+				}
+				m.requestMarketplaceAction(*item, action)
+			}
+		case "r":
+			if item.Kind == marketplace.Plugins && item.Installed {
+				m.requestMarketplaceAction(*item, marketplaceActionRemove)
+			}
+		case "u":
+			if item.Kind == marketplace.Plugins && item.Installed && item.UpdatePath != "" {
+				m.requestMarketplaceAction(*item, marketplaceActionUpdate)
+			}
+		}
 	}
 	return m, nil
 }
@@ -170,17 +228,19 @@ func (m *Model) updateMarketplaceConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEsc:
 		m.marketplacePending = nil
+		m.marketplaceAction = ""
 		return m, nil
 	case tea.KeyEnter:
-		return m.installMarketplacePending()
+		return m.executeMarketplacePending()
 	case tea.KeyCtrlC:
 		return m, tea.Quit
 	case tea.KeyRunes:
 		switch strings.ToLower(msg.String()) {
 		case "y":
-			return m.installMarketplacePending()
+			return m.executeMarketplacePending()
 		case "n":
 			m.marketplacePending = nil
+			m.marketplaceAction = ""
 			return m, nil
 		}
 	}
@@ -188,8 +248,14 @@ func (m *Model) updateMarketplaceConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) installMarketplacePending() (tea.Model, tea.Cmd) {
+	return m.executeMarketplacePending()
+}
+
+func (m *Model) executeMarketplacePending() (tea.Model, tea.Cmd) {
 	item := m.marketplacePending
+	action := m.marketplaceAction
 	m.marketplacePending = nil
+	m.marketplaceAction = ""
 	if item == nil {
 		return m, nil
 	}
@@ -198,22 +264,91 @@ func (m *Model) installMarketplacePending() (tea.Model, tea.Cmd) {
 		m.append("✗ cannot locate plugin home: " + err.Error())
 		return m, nil
 	}
-	if _, err := plugin.Install(item.InstallPath, filepath.Join(home, ".tilde", "plugins")); err != nil {
-		m.append("✗ plugin install failed: " + err.Error())
+	pluginHome := filepath.Join(home, ".tilde", "plugins")
+	switch action {
+	case marketplaceActionInstall:
+		if _, err := plugin.Install(item.InstallPath, pluginHome); err != nil {
+			m.append("✗ plugin install failed: " + safeMarketplaceText(err.Error()))
+			return m, nil
+		}
+		m.append("✓ Installed " + safeMarketplaceText(item.Name) + " v" + safeMarketplaceText(item.Version) + " — reopen /plugins to inspect its skills")
+	case marketplaceActionEnable, marketplaceActionDisable:
+		enabled := action == marketplaceActionEnable
+		var err error
+		if enabled {
+			err = plugin.Enable(pluginHome, item.Name)
+		} else {
+			err = plugin.Disable(pluginHome, item.Name)
+		}
+		if err != nil {
+			m.append("✗ plugin state change failed: " + safeMarketplaceText(err.Error()))
+			return m, nil
+		}
+		state := "disabled"
+		if enabled {
+			state = "enabled"
+		}
+		m.append("✓ " + safeMarketplaceText(item.Name) + " " + state)
+	case marketplaceActionRemove:
+		if !safeInstalledPluginPath(pluginHome, item.InstallPath) {
+			m.append("✗ refusing to remove an install outside the plugin home")
+			return m, nil
+		}
+		if err := plugin.Remove(pluginHome, item.Name); err != nil {
+			m.append("✗ plugin remove failed: " + safeMarketplaceText(err.Error()))
+			return m, nil
+		}
+		m.append("✓ Removed " + safeMarketplaceText(item.Name))
+	case marketplaceActionUpdate:
+		if item.UpdatePath == "" {
+			m.append("✗ no local marketplace source is available for update")
+			return m, nil
+		}
+		if _, err := plugin.Upgrade(item.UpdatePath, pluginHome); err != nil {
+			m.append("✗ plugin update failed: " + safeMarketplaceText(err.Error()))
+			return m, nil
+		}
+		m.append("✓ Updated " + safeMarketplaceText(item.Name) + " to v" + safeMarketplaceText(item.Version))
+	default:
 		return m, nil
 	}
-	m.append("✓ Installed " + item.Name + " v" + item.Version + " — reopen /plugins to inspect its skills")
-	m.openMarketplace()
-	// Land on the installed package's skill list so the install action has a
-	// useful, deterministic next step instead of returning to the catalog.
-	m.marketplaceTab = 3 // Skills
-	for _, sk := range m.marketplaceItems.Items(marketplace.Skills, "") {
-		if strings.Contains(filepath.Clean(sk.Source), filepath.Clean(item.Name)) {
-			m.marketplaceQuery = sk.Name
+	m.refreshMarketplaceSelection(item.Kind, item.Name)
+	return m, nil
+}
+
+func safeInstalledPluginPath(pluginHome, installPath string) bool {
+	if installPath == "" {
+		return false
+	}
+	home, err := filepath.Abs(pluginHome)
+	if err != nil {
+		return false
+	}
+	path, err := filepath.Abs(installPath)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(home, path)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && filepath.Dir(rel) == "."
+}
+
+func (m *Model) refreshMarketplaceSelection(kind marketplace.Kind, name string) {
+	tab := 0
+	for i, candidate := range marketplaceTabs {
+		if candidate == kind {
+			tab = i
 			break
 		}
 	}
-	return m, nil
+	m.openMarketplace()
+	m.marketplaceTab = tab
+	rows := m.marketplaceItems.Items(kind, "")
+	for i, row := range rows {
+		if row.Name == name {
+			m.marketplaceCursor = i
+			break
+		}
+	}
 }
 
 func (m *Model) loadSkillByName(name string) {
@@ -235,7 +370,7 @@ func (m Model) marketplaceView() string {
 	b.WriteString("  " + strings.Repeat(" ", tabOffset(m.marketplaceTab)) + "^\n")
 	b.WriteString("  / to search                                      Workspace ▾\n")
 	if m.marketplaceQuery != "" {
-		fmt.Fprintf(&b, "  /%s\n", m.marketplaceQuery)
+		fmt.Fprintf(&b, "  /%s\n", safeMarketplaceText(m.marketplaceQuery))
 	}
 	for i, item := range rows {
 		status := "[installed]"
@@ -244,16 +379,24 @@ func (m Model) marketplaceView() string {
 			status = "[install]"
 			statusStyle = lipgloss.NewStyle().Foreground(accentSelect)
 		}
+		if item.Kind == marketplace.Plugins && item.Installed && !item.Enabled {
+			status = "[disabled]"
+			statusStyle = lipgloss.NewStyle().Foreground(amber)
+		}
 		if item.Verified {
 			status = "[verified]"
 		}
-		label := item.Name
-		if item.Version != "" {
-			label += " v" + item.Version
+		if item.Collision {
+			status = "[collision]"
+			statusStyle = lipgloss.NewStyle().Foreground(amber)
 		}
-		detail := item.Scope
+		label := safeMarketplaceText(item.Name)
+		if item.Version != "" {
+			label += " v" + safeMarketplaceText(item.Version)
+		}
+		detail := safeMarketplaceText(item.Scope)
 		if detail == "" {
-			detail = item.Source
+			detail = safeMarketplaceText(item.Source)
 		}
 		width := m.vp.Width
 		if width <= 0 {
@@ -287,16 +430,72 @@ func (m Model) marketplaceConfirmView() string {
 		return m.marketplaceView()
 	}
 	var b strings.Builder
-	b.WriteString("Install marketplace package?\n\n")
-	fmt.Fprintf(&b, "  %s v%s\n", item.Name, item.Version)
-	fmt.Fprintf(&b, "  source: %s\n", item.Source)
-	fmt.Fprintf(&b, "  scope: %s\n", item.Scope)
-	if item.Description != "" {
-		fmt.Fprintf(&b, "  %s\n", item.Description)
+	action := string(m.marketplaceAction)
+	if action == "" {
+		action = string(marketplaceActionInstall)
 	}
-	b.WriteString("\n  This copies a reviewed local package into ~/.tilde/plugins.\n")
-	b.WriteString("  y/enter install · n/esc cancel")
+	fmt.Fprintf(&b, "%s marketplace item?\n\n", strings.Title(action))
+	fmt.Fprintf(&b, "  %s v%s\n", safeMarketplaceText(item.Name), safeMarketplaceText(item.Version))
+	fmt.Fprintf(&b, "  source: %s\n", safeMarketplaceText(item.Source))
+	fmt.Fprintf(&b, "  scope: %s\n", safeMarketplaceText(item.Scope))
+	if item.Description != "" {
+		fmt.Fprintf(&b, "  %s\n", safeMarketplaceText(item.Description))
+	}
+	if action == string(marketplaceActionInstall) || action == string(marketplaceActionUpdate) {
+		b.WriteString("\n  This changes the hash-pinned local plugin installation.\n")
+	}
+	fmt.Fprintf(&b, "  y/enter %s · n/esc cancel", action)
 	return b.String()
+}
+
+func (m Model) marketplaceDetailView() string {
+	item := m.marketplaceDetail
+	if item == nil {
+		return m.marketplaceView()
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s", safeMarketplaceText(item.Name))
+	if item.Version != "" {
+		fmt.Fprintf(&b, " v%s", safeMarketplaceText(item.Version))
+	}
+	b.WriteString("\n\n")
+	fmt.Fprintf(&b, "kind: %s\nscope: %s\nsource: %s\n", safeMarketplaceText(string(item.Kind)), safeMarketplaceText(item.Scope), safeMarketplaceText(item.Source))
+	fmt.Fprintf(&b, "installed: %t · verified: %t · enabled: %t\n", item.Installed, item.Verified, item.Enabled)
+	if item.Description != "" {
+		fmt.Fprintf(&b, "\n%s\n", safeMarketplaceText(item.Description))
+	}
+	for _, d := range item.Diagnostics {
+		fmt.Fprintf(&b, "\nwarning: %s", safeMarketplaceText(d))
+	}
+	if len(item.Skills) > 0 {
+		fmt.Fprintf(&b, "\n\nskills: %s", safeMarketplaceText(strings.Join(item.Skills, ", ")))
+	}
+	b.WriteString("\n\nenter/esc back")
+	if item.Kind == marketplace.Plugins && item.Installed {
+		b.WriteString(" · e enable/disable · r remove")
+		if item.UpdatePath != "" {
+			b.WriteString(" · u update")
+		}
+	}
+	if item.Kind == marketplace.Marketplace && item.Installable && !item.Installed {
+		b.WriteString(" · i install")
+	}
+	return b.String()
+}
+
+func safeMarketplaceText(s string) string {
+	s = ansi.Strip(s)
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.IsControl(r) {
+			if r == '\t' {
+				b.WriteRune(' ')
+			}
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
 }
 
 func tabOffset(n int) int {
