@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"tilde/internal/agent"
@@ -117,12 +118,15 @@ func confirmFooter(tool string, args map[string]any, width int, reasonHidden boo
 	if lineWidth < 10 {
 		lineWidth = 10
 	}
-	foot := "Confirm\n" + wrapLine(ansi.Strip(policy.Describe(tool, args)), lineWidth)
+	title := lipgloss.NewStyle().Foreground(amber).Bold(true).Render("Confirm")
+	describe := lipgloss.NewStyle().Foreground(fg).Render(wrapLine(ansi.Strip(policy.Describe(tool, args)), lineWidth))
+	foot := title + "\n" + describe
 	if !reasonHidden {
-		reasonLine := wrapLine("Reason: "+reason, lineWidth)
-		foot += "\n\n" + reasonLine
+		reasonLabel := lipgloss.NewStyle().Foreground(fgMuted).Render("Reason:")
+		reasonBody := lipgloss.NewStyle().Foreground(fg).Render(wrapLine(reason, max(lineWidth-len("Reason: ")-1, 1)))
+		foot += "\n\n" + reasonLabel + " " + reasonBody
 	}
-	hint := "[y] once   [n] deny (default — Enter denies)   [r] "
+	hint := "[y] approve once   [n] deny (default — Enter denies)   [r] "
 	if reasonHidden {
 		hint += "show reason"
 	} else {
@@ -131,8 +135,24 @@ func confirmFooter(tool string, args map[string]any, width int, reasonHidden boo
 	if tool == "shell_command" {
 		hint += "   [a] always this session (exact command)"
 	}
-	foot += "\n" + wrapLine(hint, lineWidth)
+	// Keep controls visually separate from the explanation. Color is paired
+	// with explicit words so the prompt remains usable in monochrome.
+	foot += "\n\n" + lipgloss.NewStyle().Foreground(fgMuted).Render("Actions") +
+		"\n" + styleConfirmHints(wrapLine(hint, lineWidth))
 	return foot
+}
+
+func styleConfirmHints(s string) string {
+	styles := map[string]lipgloss.Style{
+		"[y]": lipgloss.NewStyle().Foreground(success).Bold(true),
+		"[n]": lipgloss.NewStyle().Foreground(danger).Bold(true),
+		"[r]": lipgloss.NewStyle().Foreground(fgMuted).Bold(true),
+		"[a]": lipgloss.NewStyle().Foreground(amber).Bold(true),
+	}
+	for token, style := range styles {
+		s = strings.ReplaceAll(s, token, style.Render(token))
+	}
+	return s
 }
 
 // shellEscape runs a raw command without invoking the model (§2.6). It

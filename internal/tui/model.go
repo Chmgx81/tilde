@@ -2061,7 +2061,9 @@ func (m Model) View() string {
 			m.vp.GotoBottom()
 		}
 		p := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
-			BorderForeground(borderPlan).Padding(1, 1).
+			BorderForeground(borderPlan).
+			Background(lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0D1117"}).
+			Padding(1, 1).
 			Render(confirmFooter(m.confirm.Tool, m.confirm.Args, m.vp.Width, m.confirm.reasonHidden))
 		return m.centerFrame(m.vpView() + "\n" + p + "\n" + composer + dropdown + toast + "\n\n" + statusBar)
 	}

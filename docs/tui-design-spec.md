@@ -615,7 +615,9 @@ Confirm tier (amber):
 │ Reason: May I commit and push the verified updater fix that prevents   │
 │ historical unsigned tags from blocking current updates?               │
 │                                                                       │
-│ [y] once   [n] deny (default — Enter denies)                          │
+│                                                                       │
+│ Actions                                                               │
+│ [y] approve once   [n] deny (default — Enter denies)                  │
 │ [r] hide reason   [a] always this session (exact command — shell only) │
 └───────────────────────────────────────────────────────────────────────┘
 
@@ -627,6 +629,10 @@ panel exists in code; policy denials currently render as an inline
 - The exact command or action is shown verbatim, never summarized — a
   paraphrased confirm prompt ("run a cleanup command") defeats the entire
   purpose of asking.
+- The explanation and controls are separated by a blank row. Approval keys
+  use semantic color accents (`y` success, `n` danger, `r` muted, `a` amber)
+  paired with explicit labels, and the panel has an opaque background so
+  transcript content cannot show through the decision surface.
 - The reason is optional, user-facing model output, and can be toggled with
   `[r]` (`[r] hide reason` / `[r] show reason`). It is explanatory only and
   never changes policy or authorization. If the tool request supplies no

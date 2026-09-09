@@ -73,6 +73,14 @@ Secondary text, hints, metadata, idle borders, and the composer placeholder
 now use contrast-safe semantic colors while preserving the primary/secondary
 hierarchy. Typed content and safety-critical text remain brighter.
 
+### High — approval surface separation
+
+The approval screenshot showed transcript text bleeding through the bordered
+card and the reason running directly into the decision keys. Approval panels
+now use an opaque adaptive background, a dedicated `Actions` section, a blank
+separator row, and semantic highlighting for approve, deny, reason, and
+session-approval keys.
+
 ## State-by-state review
 
 ### Splash and onboarding

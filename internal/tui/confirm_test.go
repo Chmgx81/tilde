@@ -127,8 +127,11 @@ func TestConfirmFooterShellOnly(t *testing.T) {
 	if !strings.Contains(strings.ReplaceAll(shell, "\n", " "), "[a] always this session (exact command)") {
 		t.Fatalf("shell footer must offer [a]:\n%s", shell)
 	}
-	if !strings.Contains(shell, "[y] once") || !strings.Contains(shell, "[n] deny") {
+	if !strings.Contains(shell, "[y] approve once") || !strings.Contains(shell, "[n] deny") {
 		t.Fatalf("footer must keep y/n:\n%s", shell)
+	}
+	if !strings.Contains(shell, "\n\n") || !strings.Contains(shell, "Actions") {
+		t.Fatalf("footer must separate reason from action controls:\n%s", shell)
 	}
 	mcp := confirmFooter("mcp_call", map[string]any{"server": "fs", "tool": "read"}, 100, false)
 	if strings.Contains(mcp, "[a]") {
