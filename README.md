@@ -25,7 +25,15 @@ It is built for engineers who want an agent that is useful in production codebas
 
 ## Quickstart
 
-### Install from GitHub
+### Install (no clone needed)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh
+```
+
+Downloads the latest release binary to `~/.local/bin/tilde`. No Go toolchain required.
+
+### Install from source
 
 ```sh
 git clone https://github.com/Chmgx81/tilde.git

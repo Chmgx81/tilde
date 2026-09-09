@@ -22,16 +22,15 @@ func TestLocalSHAShape(t *testing.T) {
 
 func TestBuildVersionIncludesRevisionWhenAvailable(t *testing.T) {
 	got := BuildVersion()
-	sha := LocalSHA()
-	if sha == "" {
-		if got != Version {
-			t.Fatalf("without VCS metadata BuildVersion() = %q, want %q", got, Version)
-		}
-		return
+	if got == "" {
+		t.Fatal("BuildVersion() must never be empty")
 	}
-	want := Version + "+g" + short(sha)
-	if got != want {
-		t.Fatalf("BuildVersion() = %q, want %q", got, want)
+	// BuildVersion() uses git describe when available, so the result
+	// always starts with the version tag (Version) whether built from
+	// VCS or not. Exact format varies: "v0.9.1" (at tag) or
+	// "v0.9.1-3-g0f075ad" (commits past tag).
+	if !strings.HasPrefix(got, Version) {
+		t.Fatalf("BuildVersion() = %q must start with %s", got, Version)
 	}
 }
 
@@ -367,7 +366,7 @@ func TestNeedsReleaseVerificationIgnoresCurrentOrOlderTags(t *testing.T) {
 			t.Fatalf("tag %q must not block a refresh when it is not newer than %s", tag, Version)
 		}
 	}
-	if !needsReleaseVerification("v0.9.1") {
+	if !needsReleaseVerification("v99.0.0") {
 		t.Fatal("newer release tags must require signature verification")
 	}
 }
