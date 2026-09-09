@@ -84,3 +84,19 @@ func TestOrderedListNumbersHaveSeparator(t *testing.T) {
 		t.Fatalf("numbers must not glue to text: %q", got)
 	}
 }
+
+func TestNormalizeOrderedListBareNumbers(t *testing.T) {
+	in := "1Dead else branch\n2No type checks\n3No validation"
+	got := stripANSI(renderMarkdownText(in, 60))
+	// After normalisation these become proper list items: "1. Dead",
+	// "2. No", "3. No" — each number must be separated from its text.
+	if strings.Contains(got, "1Dead") {
+		t.Fatalf("bare number should be normalised: %q", got)
+	}
+	if strings.Contains(got, "2No type checks") {
+		t.Fatalf("bare number should be normalised: %q", got)
+	}
+	if !strings.Contains(got, "Dead else branch") {
+		t.Fatalf("item text must survive normalisation: %q", got)
+	}
+}

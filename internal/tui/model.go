@@ -220,6 +220,7 @@ type Model struct {
 	streamText    string
 	streamBaseLen int
 	streamActive  bool
+	streamTick    int
 	toolOverflow  *toolOverflow
 }
 
@@ -260,6 +261,15 @@ type showConfirmMsg struct {
 }
 
 type toastTickMsg struct{}
+
+// streamTickMsg drives the pulsing streaming indicator. Re-arms only
+// while m.streamActive is true, so the animation stops automatically
+// when the stream ends.
+type streamTickMsg struct{}
+
+func tickStreamCmd() tea.Cmd {
+	return tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg { return streamTickMsg{} })
+}
 
 // verbTickMsg re-renders on a 2s cadence while a turn runs. Renders are
 // otherwise message-driven, so without it the Working-seconds counter
@@ -413,6 +423,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case toastTickMsg:
 		if m.toast != "" && time.Since(m.toastAt) >= 600*time.Millisecond {
 			m.toast, m.toastAmber = "", false
+		}
+		return m, nil
+	case streamTickMsg:
+		if m.streamActive {
+			m.streamTick++
+			m.replaceAssistantStream()
+			return m, tickStreamCmd()
 		}
 		return m, nil
 	case verbTickMsg:
@@ -1582,6 +1599,7 @@ func (m *Model) renderAssistantDelta(delta string) {
 	if !m.streamActive {
 		m.streamActive = true
 		m.streamBaseLen = len(m.lines)
+		m.streamTick = 0
 	}
 	m.streamText += delta
 	m.replaceAssistantStream()
@@ -1599,6 +1617,11 @@ func (m *Model) replaceAssistantStream() {
 	for _, line := range strings.Split(preview, "\n") {
 		base = append(base, wrapLine(line, m.vp.Width-1))
 	}
+	// Pulsing streaming indicator: cycles through four brightness
+	// levels so the user sees activity without extra scrollback.
+	pulse := []string{"●", "◐", "○", "◐"}
+	indicator := pulse[m.streamTick%len(pulse)]
+	base = append(base, lipgloss.NewStyle().Foreground(fgDim).Render("  "+indicator))
 	m.lines = base
 	m.vp.SetContent(strings.Join(m.lines, "\n"))
 	m.vp.GotoBottom()
@@ -1613,6 +1636,7 @@ func (m *Model) clearAssistantStream() {
 	m.streamText = ""
 	m.streamBaseLen = 0
 	m.streamActive = false
+	m.streamTick = 0
 	m.vp.SetContent(strings.Join(m.lines, "\n"))
 	m.vp.GotoBottom()
 }
@@ -1633,8 +1657,22 @@ func (m *Model) renderCallLine(text string, grouped bool, extra string) {
 	if grouped {
 		prefix = "  "
 	}
+	// Colour the verb by category: writes green, edits amber,
+	// runs red, reads/lists muted — the transcript vocabulary
+	// is small enough for a direct map.
+	verbColor := fg
+	switch verb {
+	case "write_file":
+		verbColor = success
+	case "edit_file":
+		verbColor = amber
+	case "shell_command", "shell_poll":
+		verbColor = danger
+	default:
+		verbColor = fgMuted
+	}
 	m.append(prefix +
-		lipgloss.NewStyle().Foreground(fg).Render(disp) +
+		lipgloss.NewStyle().Foreground(verbColor).Render(disp) +
 		lipgloss.NewStyle().Foreground(fgMuted).Render(rest+extra))
 }
 

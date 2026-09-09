@@ -177,8 +177,35 @@ func capResultLinesLimit(lines []string, limit int) (kept []string, truncated bo
 
 // statResultLine renders a diff/new-file stat as the ⎿ receipt line.
 func statResultLine(stat string) string {
-	return lipgloss.NewStyle().Foreground(fgDim).Render("  ⎿ ") +
-		lipgloss.NewStyle().Foreground(fgMuted).Render(stat)
+	green := lipgloss.NewStyle().Foreground(success)
+	red := lipgloss.NewStyle().Foreground(danger)
+	dim := lipgloss.NewStyle().Foreground(fgDim)
+	mut := lipgloss.NewStyle().Foreground(fgMuted)
+	out := lipgloss.NewStyle().Foreground(fgDim).Render("  ⎿ ")
+	// Colour the +N green and -M red when present (e.g.
+	// "+141 -135 (overwrote existing file)"). The rest stays muted.
+	rest := stat
+	if i := strings.Index(rest, "+"); i >= 0 {
+		out += mut.Render(rest[:i])
+		rest = rest[i:]
+	}
+	if i := strings.Index(rest, "-"); i > 0 {
+		out += green.Render(rest[:i])
+		rest = rest[i:]
+	}
+	if i := strings.Index(rest, "("); i > 0 {
+		out += red.Render(rest[:i])
+		out += dim.Render(rest[i:])
+	} else {
+		if strings.HasPrefix(rest, "+") {
+			out += green.Render(rest)
+		} else if strings.HasPrefix(rest, "-") {
+			out += red.Render(rest)
+		} else {
+			out += mut.Render(rest)
+		}
+	}
+	return out
 }
 
 // truncResultLine announces transcript truncation (never silent).

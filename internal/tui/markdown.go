@@ -9,6 +9,36 @@ import (
 	"github.com/charmbracelet/glamour/ansi"
 )
 
+// reBareNumber matches a line that starts with a number immediately
+// followed by a non-digit, non-space letter — the pattern LLMs emit
+// for numbered lists when they omit the dot and space ("1Dead branch"
+// instead of "1. Dead branch"). Lines that already have proper
+// markdown list syntax ("1. text" or "1) text") are left alone.
+var reBareNumber = regexp.MustCompile(`^(\d+)([A-Za-z])`)
+
+// normalizeOrderedListItems fixes bare numbered lines that lack the
+// dot-space separator Glamour needs to recognise them as ordered lists.
+// Each "NText" becomes "N. Text" so the Markdown parser treats it as
+// a list item. Non-list lines, blank lines, and already-proper lists
+// ("1. text") pass through unchanged.
+func normalizeOrderedListItems(text string) string {
+	lines := strings.Split(text, "\n")
+	changed := false
+	for i, ln := range lines {
+		if stripped := strings.TrimSpace(ln); stripped == "" {
+			continue
+		}
+		if m := reBareNumber.FindStringSubmatch(ln); m != nil {
+			lines[i] = m[1] + ". " + m[2] + ln[len(m[0]):]
+			changed = true
+		}
+	}
+	if !changed {
+		return text
+	}
+	return strings.Join(lines, "\n")
+}
+
 func highlightSourceLines(path string, lines []string) []string {
 	lang := strings.TrimPrefix(filepath.Ext(path), ".")
 	if lang == "" || len(lines) == 0 {
@@ -157,6 +187,7 @@ func trimLinePad(ln string) string {
 // (session resume rebuilds scrollback outside any live model).
 func renderMarkdownText(text string, width int) string {
 	text = stripANSI(text)
+	text = normalizeOrderedListItems(text)
 	r := newMarkdownRenderer(width)
 	if r == nil {
 		return text
@@ -175,6 +206,7 @@ func renderMarkdownText(text string, width int) string {
 // content.
 func (m *Model) renderMarkdown(text string, width int) string {
 	text = stripANSI(text)
+	text = normalizeOrderedListItems(text)
 	r := m.mdRenderer(width)
 	if r == nil {
 		return text
