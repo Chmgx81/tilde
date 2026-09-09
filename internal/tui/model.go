@@ -35,10 +35,10 @@ var (
 	borderPlan   = lipgloss.Color("#E5A00D")
 	borderBuild  = lipgloss.Color("#E6E6E6")
 	borderAuto   = lipgloss.Color("#4FC3F7")
-	borderIdle   = lipgloss.Color("#30363D")
+	borderIdle   = lipgloss.Color("#465365")
 	fg           = lipgloss.Color("#E6E6E6")
-	fgMuted      = lipgloss.Color("#8B95A6")
-	fgDim        = lipgloss.Color("#565F71")
+	fgMuted      = lipgloss.Color("#A7B2C4")
+	fgDim        = lipgloss.Color("#758198")
 	amber        = lipgloss.Color("#E5A00D")
 	accentSelect = lipgloss.Color("#7E22CE")
 	fgOnSelect   = lipgloss.Color("#FFFFFF")
@@ -55,7 +55,7 @@ func configurePalette() {
 		borderPlan, borderBuild, borderAuto, borderIdle =
 			lipgloss.Color("#E5A00D"), lipgloss.Color("#E6E6E6"),
 			lipgloss.Color("#4FC3F7"), lipgloss.Color("#30363D")
-		fg, fgMuted, fgDim = lipgloss.Color("#E6E6E6"), lipgloss.Color("#8B95A6"), lipgloss.Color("#565F71")
+		fg, fgMuted, fgDim = lipgloss.Color("#E6E6E6"), lipgloss.Color("#A7B2C4"), lipgloss.Color("#758198")
 		amber, accentSelect = lipgloss.Color("#E5A00D"), lipgloss.Color("#7E22CE")
 		success, danger = lipgloss.Color("#4CAF50"), lipgloss.Color("#F44747")
 		fgOnSelect = lipgloss.Color("#FFFFFF")
@@ -287,6 +287,16 @@ func New(loop *agent.Loop, m mode.Mode, root, modelName string, budget int) Mode
 		lipgloss.SetColorProfile(termenv.Ascii)
 	}
 	ta := textarea.New()
+	// Bubble's default placeholder uses ANSI gray 240, which is nearly
+	// invisible in the dark terminal profile shown by the app. Keep the
+	// composer hierarchy (typed text > placeholder) while using semantic
+	// palette tokens so the first action remains discoverable.
+	focused, blurred := textarea.DefaultStyles()
+	focused.Placeholder = lipgloss.NewStyle().Foreground(fgMuted)
+	blurred.Placeholder = lipgloss.NewStyle().Foreground(fgMuted)
+	focused.Text = lipgloss.NewStyle().Foreground(fg)
+	blurred.Text = lipgloss.NewStyle().Foreground(fg)
+	ta.FocusedStyle, ta.BlurredStyle = focused, blurred
 	ta.Focus()
 	// Spec §2.3: the composer is a plain single-line box — placeholder
 	// text only, left-aligned. No prompt bar, no line numbers; those are

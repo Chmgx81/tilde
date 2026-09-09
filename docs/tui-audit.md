@@ -65,6 +65,14 @@ showed a narrow text island and could split `/login <provider>` as `pro-` /
 width, and the empty-skills receipt is concise enough to remain useful above
 the footer on a normal terminal.
 
+### High — dark-theme guidance contrast
+
+The screenshot review found Bubble's default ANSI-gray placeholder and tilde's
+previous dim token were too faint for reliable reading on dark terminals.
+Secondary text, hints, metadata, idle borders, and the composer placeholder
+now use contrast-safe semantic colors while preserving the primary/secondary
+hierarchy. Typed content and safety-critical text remain brighter.
+
 ## State-by-state review
 
 ### Splash and onboarding

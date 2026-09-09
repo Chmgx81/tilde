@@ -52,15 +52,15 @@ what it is.
 |---|---|---|---|
 | `bg` | `#0D1117` | Base background | Everything sits on this |
 | `fg` | `#E6E6E6` | Primary text | Agent prose, user input |
-| `fg-muted` | `#8B95A6` | Secondary text | Timestamps, paths, meta |
-| `fg-dim` | `#565F71` | Tertiary / disabled | Compacted markers, hints |
+| `fg-muted` | `#A7B2C4` | Secondary text | Timestamps, paths, meta |
+| `fg-dim` | `#758198` | Tertiary / disabled | Compacted markers, hints |
 | `accent-plan` | `#E5A00D` (amber) | Read-only / caution | Plan mode banner, warnings |
 | `accent-build` | `#E6E6E6` (neutral) | Normal editing state | Build mode — deliberately *unmarked* |
 | `accent-auto` | `#4FC3F7` (cyan) | Autonomous progression | Auto mode banner, background tasks |
 | `accent-select` | `#7E22CE` (magenta) | Active selection / focus | Picker highlight, active tab |
 | `success` | `#4CAF50` (green) | Completed, passed, approved | Done checkmarks, passed tests |
 | `danger` | `#F44747` (red) | Failed, denied, destructive | Errors, denied commands, deletions |
-| `border-idle` | `#30363D` | Resting frame | Unfocused boxes |
+| `border-idle` | `#465365` | Resting frame | Unfocused boxes |
 | `border-focus` | matches active mode token | Focused frame | Composer border in current mode |
 
 **Contrast note on `accent-select` (2026-09-06, resolved 2026-09-09):** the original `#C792EA` was
