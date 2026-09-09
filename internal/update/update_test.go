@@ -134,6 +134,7 @@ func TestRunFullCycle(t *testing.T) {
 	os.MkdirAll(origin, 0o755)
 	gitRun(t, origin, "init", "-b", "main", "-q", ".")
 	os.WriteFile(filepath.Join(origin, "go.mod"), []byte("module fixture\n\ngo 1.25.0\n"), 0o644)
+	os.WriteFile(filepath.Join(origin, ".gitignore"), []byte("/tilde\n"), 0o644)
 	os.WriteFile(filepath.Join(origin, "main.go"), []byte("package main\n\nimport \"fmt\"\n\nfunc main() { fmt.Println(\"fixture v1\") }\n"), 0o644)
 	gitRun(t, origin, "add", "-A")
 	gitRun(t, origin, "commit", "-qm", "v1")
@@ -157,6 +158,17 @@ func TestRunFullCycle(t *testing.T) {
 
 	if err := Run(); err != nil {
 		t.Fatalf("first run (already current): %v", err)
+	}
+	// A current checkout must also repair a stale or replaced installed
+	// binary; source freshness alone is not enough for `tilde update`.
+	if err := os.WriteFile(target, []byte("stale binary\n"), 0o755); err != nil {
+		t.Fatalf("replace installed target: %v", err)
+	}
+	if err := Run(); err != nil {
+		t.Fatalf("repair stale installed binary: %v", err)
+	}
+	if out, err := exec.Command(target, "--help").CombinedOutput(); err != nil || !strings.Contains(string(out), "usage") {
+		t.Fatalf("current source must repair stale target: %v\n%s", err, out)
 	}
 	// Second commit upstream → the update must pull, rebuild, install.
 	os.WriteFile(filepath.Join(origin, "note.txt"), []byte("v2\n"), 0o644)

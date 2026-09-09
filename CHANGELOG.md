@@ -2,6 +2,8 @@
 
 ## v0.11.0 (unreleased)
 
+- `tilde update`: repairs a stale or missing installed binary even when the
+  source checkout is already current; CI now smoke-tests both version flag forms.
 - `tilde run-due`: scheduled headless runs from `.tilde/schedule.yaml`
   (interval or daily HH:MM, state file, failed jobs retry next tick).
 - `tilde audit`: read the governance trail with since/tool/decision filters.

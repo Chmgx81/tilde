@@ -28,6 +28,10 @@ jobs:
         run: go build -o /tmp/tilde-smoke .
       - name: Smoke
         run: /tmp/tilde-smoke --help
+      - name: Version smoke
+        run: |
+          test -n "$(/tmp/tilde-smoke --version)"
+          test -n "$(/tmp/tilde-smoke -version)"
 
   govulncheck:
     runs-on: ubuntu-latest

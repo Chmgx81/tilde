@@ -17,6 +17,7 @@ package update
 
 import (
 	"context"
+	"debug/buildinfo"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -454,9 +455,16 @@ func Run() error {
 		return fmt.Errorf("pull failed: %s — resolve it with git in %s, then retry", out, dir)
 	}
 	after, _ := git("rev-parse", "HEAD")
-	if after == before {
+	target, err := updateTarget()
+	if err != nil {
+		return err
+	}
+	if after == before && binaryRevision(target) == after {
 		fmt.Printf("tilde: already up to date (%s)\n", describeVersion(dir, before))
 		return nil
+	}
+	if after == before {
+		fmt.Println("tilde: source is current, but the installed binary is stale or missing; rebuilding…")
 	}
 	fmt.Println("tilde: rebuilding…")
 	ctx, cancel := context.WithTimeout(context.Background(), buildTimeout)
@@ -471,23 +479,48 @@ func Run() error {
 	if out, err := smoke.CombinedOutput(); err != nil {
 		return fmt.Errorf("fresh binary failed its --help smoke test (%v: %s) — installed binary untouched", err, strings.TrimSpace(string(out)))
 	}
-	target := os.Getenv(envTarget)
-	if target == "" {
-		exe, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("cannot locate running binary: %v", err)
-		}
-		target, err = filepath.EvalSymlinks(exe)
-		if err != nil {
-			return fmt.Errorf("cannot resolve binary path: %v", err)
-		}
-	}
 	if err := installBinary(filepath.Join(dir, "tilde"), target); err != nil {
 		return fmt.Errorf("reinstall failed: %v — fresh binary is at %s", err, filepath.Join(dir, "tilde"))
 	}
 	_ = RecordInstall(dir)
 	fmt.Printf("tilde: updated %s → %s — restart tilde to use it\n", describeVersion(dir, before), describeVersion(dir, after))
 	return nil
+}
+
+// updateTarget resolves the executable that an update should replace. Tests
+// use TILDE_UPDATE_TARGET so they never overwrite the test process itself.
+func updateTarget() (string, error) {
+	if target := os.Getenv(envTarget); target != "" {
+		return target, nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("cannot locate running binary: %v", err)
+	}
+	target, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve binary path: %v", err)
+	}
+	return target, nil
+}
+
+// binaryRevision reads the VCS revision embedded by go build. An empty
+// result is deliberately treated as stale: binaries built from tarballs or
+// without VCS metadata cannot prove that they match the checkout.
+func binaryRevision(path string) string {
+	if path == "" {
+		return ""
+	}
+	info, err := buildinfo.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, setting := range info.Settings {
+		if setting.Key == "vcs.revision" {
+			return strings.TrimSpace(setting.Value)
+		}
+	}
+	return ""
 }
 
 // describeVersion names one checkout state for humans: the release
