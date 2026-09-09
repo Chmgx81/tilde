@@ -554,10 +554,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd := m.handleModeCmd(m.curMode.Cycle().String())
 			return m, cmd
 		case tea.KeyCtrlC:
-			// Quit when idle. While a turn runs this deliberately does
-			// NOT cancel (that moved to double-Esc — Ctrl+C now collides
-			// with copy muscle memory under native selection); it points
-			// at the real interrupt instead.
+			// A non-empty draft owns Ctrl+C: clearing a large prompt is a
+			// reversible editing action and must not quit the whole session.
+			// With no draft, preserve the normal idle quit contract; during a
+			// turn, preserve the explicit double-Esc cancellation contract.
+			if m.ta.Length() > 0 || len(m.pasteSegs) > 0 {
+				m.clearComposer()
+				return m, m.setToast("⎌ composer cleared")
+			}
 			if m.running {
 				return m, m.setToast("⏵ Esc twice cancels the current turn")
 			}
@@ -664,6 +668,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.syncComposer()
 	m.refreshPickers()
 	return m, cmd
+}
+
+// clearComposer removes the visible draft and any hidden collapsed-paste
+// bodies associated with it. It also closes inline completion surfaces so a
+// cleared prompt cannot leave stale slash/file suggestions behind.
+func (m *Model) clearComposer() {
+	m.ta.Reset()
+	m.pasteSegs = nil
+	m.pasteSeq = 0
+	m.shellArmed = false
+	m.dismissed = ""
+	m.slashOpen, m.atOpen = false, false
+	m.slashItems, m.atItems = nil, nil
+	m.refreshPlaceholder()
+	m.syncComposer()
 }
 
 // maxHistoryEntries caps the prompt ring: sessions run long, and an

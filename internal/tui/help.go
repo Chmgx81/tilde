@@ -10,7 +10,7 @@ func helpView(width int) string {
 	rows := [][2]string{
 		{"Enter", "Send the prompt"},
 		{"Tab", "Cycle mode: Plan → Build → Auto"},
-		{"Ctrl+C", "Quit when idle"},
+		{"Ctrl+C", "Clear draft; quit when empty"},
 		{"Esc Esc", "Cancel the running turn"},
 		{"Ctrl+J", "Newline in the composer"},
 		{"Ctrl+Y", "Copy latest assistant response"},

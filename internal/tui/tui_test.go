@@ -2850,6 +2850,20 @@ func TestCtrlCNoLongerCancels(t *testing.T) {
 	}
 }
 
+func TestCtrlCClearsNonEmptyComposerWithoutQuitting(t *testing.T) {
+	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	m.ta.SetValue("a large draft with multiple lines\nthat should be discarded")
+	m.syncComposer()
+	nm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	after := nm.(Model)
+	if cmd == nil || after.ta.Value() != "" {
+		t.Fatalf("Ctrl+C must clear a draft without quitting: value=%q cmd=%v", after.ta.Value(), cmd)
+	}
+	if after.running || !strings.Contains(after.toast, "composer cleared") {
+		t.Fatalf("clear action must leave the session idle with feedback: running=%v toast=%q", after.running, after.toast)
+	}
+}
+
 func TestQuitCommand(t *testing.T) {
 	// /quit is in the palette and exits, stopping a live turn first.
 	found := false

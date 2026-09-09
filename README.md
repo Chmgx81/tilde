@@ -72,8 +72,8 @@ Use `./tilde --help` and the provider documentation in `docs/` for the exact opt
 ### Interactive controls
 
 - `Enter` — submit the prompt
-- `Esc` — cancel the current operation
-- `Ctrl+C` — interrupt safely
+- `Esc` twice — cancel a running turn
+- `Ctrl+C` — clear a non-empty draft; quit when the composer is empty
 - `/` — open command/search input
 - `?` — show help
 - `q` — quit when no confirmation is active

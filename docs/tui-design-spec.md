@@ -732,7 +732,7 @@ timeline vocabulary it's explaining.
   Keybindings                                                    tilde v0.9.0
 
   Tab              Cycle mode: Plan → Build → Auto
-  Ctrl+C           Quit when idle (running turns ignore it — see Esc Esc)
+  Ctrl+C           Clear draft; quit when empty (running turns use Esc Esc)
   Esc Esc          Cancel the running turn (second press inside 2s)
   Ctrl+J           Newline in the composer
   Ctrl+Y           Copy latest assistant response to the clipboard (raw

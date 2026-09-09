@@ -103,7 +103,8 @@ card deliberately removes detail.
 The composer is modeless and predictable: text goes to the textarea, `/` and
 `@` open contextual pickers, `!` exposes the shell path, and overlays trap
 their own keys. It caps height and input size, preserves drafts through
-history navigation, and handles bracketed paste as a data-preserving token.
+history navigation, handles bracketed paste as a data-preserving token, and
+uses Ctrl+C as a safe draft-clear action whenever the composer is non-empty.
 
 The principal remaining gap is visible capacity feedback: users only learn
 that the character ceiling was reached when truncation is reported. A future
