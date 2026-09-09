@@ -76,6 +76,10 @@ func splashLines(root, modelName string, budget, width int) []string {
 	out = append(out, splashPanel(width)...)
 	left := fmt.Sprintf("  Budget: %s", budgetStr)
 	right := fmt.Sprintf("Sandbox: %s", sandbox.StatusLine())
+	// The sandbox diagnostic can be longer than the available status row
+	// (notably when bubblewrap is missing). Keep the row inside the terminal
+	// width instead of allowing an exceptional startup state to break layout.
+	right = truncANSI(right, max(width-runeLen(left)-1, 1))
 	gap := width - runeLen(left) - runeLen(right)
 	if gap < 1 {
 		gap = 1
