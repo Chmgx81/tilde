@@ -15,8 +15,9 @@
 **A terminal coding agent.** Describe a goal in plain language — tilde reads
 your code, edits files, runs commands in a sandbox, and shows you the diff.
 
-No telemetry, no accounts, no tracking. The only network connection tilde
-opens is the model endpoint you chose.
+No telemetry, no accounts, no tracking. Tilde connects to the model endpoint
+you choose and, for interactive source installs, performs one cached GitHub
+release check per day unless you set `TILDE_NO_UPDATE_CHECK=1`.
 
 | Setup | Model runs | Sandbox network | Your code leaves the machine? |
 |---|---|---|---|
@@ -27,8 +28,9 @@ opens is the model endpoint you chose.
 
 - **Security-first.** Every tool call passes a policy engine. Shell runs in a
   bubblewrap jail: disposable filesystem, no network. Deny beats everything.
-- **Local-first.** The default is Ollama on localhost. Nothing leaves your
-  machine unless you point tilde at a cloud endpoint.
+- **Local-first.** The default is Ollama on localhost. Apart from the optional
+  daily GitHub release check, nothing leaves your machine unless you point
+  tilde at a cloud endpoint.
 - **Measured.** Same tasks, repeated trials, fresh directories, trajectory
   scoring — not demo applause. Qwen3.8-4b scores **22/24 ≈ 92%** built in.
 

@@ -169,17 +169,30 @@ func (s *Store) write(m map[string]string) error {
 }
 
 func writeFile0600(path string, data []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", tmp, err)
+	// Use a random, exclusive sibling file. A predictable temp path combined
+	// with os.WriteFile would follow a pre-planted symlink before the atomic
+	// rename, allowing a local attacker to redirect the credential payload.
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create temporary %s: %w", path, err)
 	}
-	if err := os.Chmod(tmp, 0o600); err != nil {
-		os.Remove(tmp)
-		return err
+	tmpName := tmp.Name()
+	cleanup := func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return err
+	defer cleanup()
+	if err := tmp.Chmod(0o600); err != nil {
+		return fmt.Errorf("chmod %s: %w", tmpName, err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		return fmt.Errorf("write %s: %w", tmpName, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", tmpName, err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("replace %s: %w", path, err)
 	}
 	return nil
 }

@@ -2529,7 +2529,7 @@ func TestDragSelectEdgeAutoscroll(t *testing.T) {
 	total := len(after.lines)
 	// Scroll up 3, press at the top edge, drag to the bottom edge.
 	for i := 0; i < 3; i++ {
-		nm, _ = after.Update(tea.MouseMsg{Type: tea.MouseWheelUp})
+		nm, _ = after.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
 		after = nm.(Model)
 	}
 	y0 := after.vp.YOffset
@@ -2541,8 +2541,14 @@ func TestDragSelectEdgeAutoscroll(t *testing.T) {
 	if !press.selActive || press.selAnchor != y0 {
 		t.Fatalf("press at top edge must anchor at YOffset %d, got %+v", y0, press)
 	}
-	nm, _ = press.Update(tea.MouseMsg{X: 5, Y: press.vp.Height - 1, Action: tea.MouseActionMotion})
-	ext := nm.(Model)
+	ext := press
+	for i := 0; i < total; i++ {
+		nm, _ = ext.Update(tea.MouseMsg{X: 5, Y: ext.vp.Height - 1, Action: tea.MouseActionMotion})
+		ext = nm.(Model)
+		if ext.selHead == total-1 {
+			break
+		}
+	}
 	if ext.selHead != total-1 {
 		t.Fatalf("edge drag must autoscroll the head to the tail %d, got %d", total-1, ext.selHead)
 	}

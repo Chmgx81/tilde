@@ -45,6 +45,27 @@ func TestFileMode0600(t *testing.T) {
 	}
 }
 
+func TestWriteDoesNotUsePredictableTempPath(t *testing.T) {
+	s := tmpStore(t)
+	tmpPath := s.encPath() + ".tmp"
+	outside := filepath.Join(t.TempDir(), "redirected")
+	if err := os.MkdirAll(filepath.Dir(tmpPath), 0o700); err != nil {
+		t.Fatalf("create credential directory: %v", err)
+	}
+	if err := os.Symlink(outside, tmpPath); err != nil {
+		t.Fatalf("create temp-path symlink: %v", err)
+	}
+	if err := s.Set("openai", "k"); err != nil {
+		t.Fatalf("Set with planted temp symlink: %v", err)
+	}
+	if _, err := os.Lstat(tmpPath); err != nil {
+		t.Fatalf("predictable temp symlink disappeared unexpectedly: %v", err)
+	}
+	if _, err := os.Stat(outside); !os.IsNotExist(err) {
+		t.Fatalf("credential write followed planted temp symlink; outside=%v", err)
+	}
+}
+
 func TestDeleteIdempotent(t *testing.T) {
 	s := tmpStore(t)
 	if err := s.Delete("openai"); err != nil {
