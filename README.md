@@ -1,362 +1,198 @@
 # tilde (~)
 
-```
-     ▄▄▄▄▄▄▄
-  ▄▄█▀▀▀▀▀▀▀█▄
-  ▀▀         ▀███▄         ▄
-                 ▀█▄▄▄▄▄▄▄█▀
-                   ▀▀▀▀▀▀▀
-```
+> A security-first terminal coding agent for real repositories.
 
-![Go 1.25](https://img.shields.io/badge/go-1.25-00ADD8?style=flat-square)
-![Linux](https://img.shields.io/badge/platform-linux-E6E6E6?style=flat-square)
-![Sandboxed](https://img.shields.io/badge/sandbox-bubblewrap-4CAF50?style=flat-square)
+tilde is a local-first coding harness for software work that needs more than a chat window: repository inspection, controlled tool use, explicit approvals, resumable sessions, plugins, MCP servers, and scriptable output.
 
-**A terminal coding agent.** Describe a goal in plain language — tilde reads
-your code, edits files, runs commands in a sandbox, and shows you the diff.
-
-No telemetry, no accounts, no tracking. Tilde connects to the model endpoint
-you choose and, for interactive source installs, performs one cached GitHub
-release check per day unless you set `TILDE_NO_UPDATE_CHECK=1`.
-
-| Setup | Model runs | Sandbox network | Your code leaves the machine? |
-|---|---|---|---|
-| Default (Ollama) | localhost | Denied | **Never** |
-| Any cloud provider | The endpoint you configured | Denied | Only to that endpoint |
+It is built for engineers who want an agent that is useful in production codebases without giving up visibility or control.
 
 ## Why tilde
 
-- **Security-first.** Every tool call passes a policy engine. Shell runs in a
-  bubblewrap jail: disposable filesystem, no network. Deny beats everything.
-- **Local-first.** The default is Ollama on localhost. Apart from the optional
-  daily GitHub release check, nothing leaves your machine unless you point
-  tilde at a cloud endpoint.
-- **Measured.** Same tasks, repeated trials, fresh directories, trajectory
-  scoring — not demo applause. The documented historical Qwen3.8-4b result is
-  **22/24 ≈ 92%**; run `tilde --eval --trials 5+` for a current result.
+- **Local-first:** your repository, session history, and approvals stay on your machine.
+- **Inspectable:** tool calls, outputs, decisions, and failures are visible in the transcript and session log.
+- **Safe by default:** destructive actions are gated; sandboxing, timeouts, process cleanup, and fail-closed policy checks are built in.
+- **Composable:** use built-in tools, MCP servers, plugins, skills, hooks, and providers without changing the core loop.
+- **Automation-ready:** interactive TUI and headless modes share the same execution model.
+- **Honest under failure:** provider, tool, hook, MCP, updater, and startup errors remain actionable and diagnosable.
 
 ## Quickstart
 
-Needs: Go 1.25+, Linux with
-[bubblewrap](https://github.com/containers/bubblewrap). Shell calls refuse to
-run without it.
-
-**1. Install** (to `~/.local/bin`; override with `PREFIX=...`):
+### Install from GitHub
 
 ```sh
-./install.sh
-```
-
-Or just build it:
-
-```sh
+git clone https://github.com/Chmgx81/tilde.git
+cd tilde
 go build -o tilde .
+./tilde
 ```
 
-**2. Get a model** — Ollama on localhost, nothing to sign up for:
+Go 1.25 or newer and Linux with [bubblewrap](https://github.com/containers/bubblewrap) are required for the default sandbox. To use the local Ollama provider, install Ollama and make sure a model is available:
 
 ```sh
-ollama serve & ollama pull qwen3.8-4b:16k
+ollama pull qwen2.5-coder:7b
+./tilde --provider ollama --model qwen2.5-coder:7b
 ```
 
-No GPU? Skip to [Providers](#providers) — cloud keys and free tiers work too.
+Run `./tilde --help` for the current command and flag reference.
 
-**3. Run it in your repo** — starts in read-only Plan mode:
+## Operating model
 
-```sh
-cd ~/my-project && tilde
-```
+tilde separates intent, execution, and trust:
 
-```text
-→ Add a test for the empty-config case
-● Listed             . 20 files, 12 directories
-● Read               internal/config/config.go
-● Edit               internal/config/config.go
-  ⎿ +12 -3
-● Run                go test ./internal/config/
-  ⎿ ok    tilde/internal/config   0.412s
-✓ Done
-```
+| Mode | Best for | Behavior |
+| --- | --- | --- |
+| **Plan** | review and design | inspect and propose; changes require approval |
+| **Build** | normal implementation | execute approved work with visible tool calls |
+| **Auto** | unattended workflows | bounded automation under narrower approval rules |
 
-## Updating
-
-tilde tells you when it goes stale. Once a day, interactive starts
-compare your build against `main` on GitHub (one anonymous API read —
-no identity or telemetry leaves the machine) and cache the answer. When
-an update exists, the welcome panel gains a dim line:
-
-```text
-update available (v0.8.0 → v0.9.0) — run tilde update
-```
-
-```sh
-tilde update   # update the source checkout recorded by install.sh, then rebuild
-tilde --version
-```
-
-VCS builds report the release line plus their short source revision (for
-example, `v0.9.0+g5f94724`), so a rebuilt binary is distinguishable even
-before the next release tag.
-
-Source installs update the checkout recorded in `~/.tilde/install.json` only
-when it is a clean checkout on `main` with one canonical `origin` remote
-(`https://github.com/Chmgx81/tilde`, or its normal `.git`/SSH spelling).
-The updater fetches `origin`'s exact `main` ref and verifies that
-`FETCH_HEAD`, `origin/main`, and the resulting `HEAD` are the same commit;
-otherwise it refuses before building. It never clones over an existing
-project or discards local work. A clean clone is the simplest setup:
-`git clone https://github.com/Chmgx81/tilde.git && cd tilde && ./install.sh`.
-
-Fail-closed like everything else: a dirty source tree refuses (commit or
-stash first — nothing is stashed or reset for you), and a failed build
-or smoke test never touches your installed binary (atomic rename, never
-a partial overwrite). Headless runs never check; `TILDE_NO_UPDATE_CHECK=1`
-opts out entirely. No install record (`~/.tilde/install.json`, written by
-`install.sh`) means `tilde update` can't find its source — reinstall from
-a fresh clone instead.
-
-## Interface
-
-### Keys & commands
-
-| Input | Action |
-|---|---|
-| `Tab` | Cycle Plan → Build → Auto |
-| `/` | Palette: `/mode /compact /clear /copy /sandbox /diff /undo /sessions /export /model /login /logout /skills /plugins /marketplace /help /quit` |
-| `@file` | Fuzzy file reference (respects `.gitignore`) |
-| `!cmd` | Shell escape — same sandbox and confirm tier as the agent |
-| `Ctrl+Y` | Copy the latest assistant response (raw markdown) |
-| `Ctrl+C` | Quit when idle (points to `Esc Esc` during running turns) |
-| `Esc Esc` | Cancel the running turn |
-| `Ctrl+J` | Newline inside the composer |
-| `↑ ↓` | Prompt history |
-| `PgUp/PgDn` · `Ctrl+U/D` | Scroll half a screen |
-| `Home/End` | Top of history / back to live |
-
-### Mouse & clipboard
-
-| Gesture | Action |
-|---|---|
-| Wheel / two-finger scroll | Scroll the transcript — even mid-drag or with a picker open |
-| Left-drag on the transcript | Select characters, release to copy. Edge autoscroll for long selections. A bare click copies nothing |
-| `Shift` + drag | The terminal's own selection (recommended for arbitrary terminal copy) |
-| `Alt+M` | Pause mouse tracking for native selection; hint bar shows the state |
-
-Copying works with nothing to install: `xclip`/`xsel` first, then **OSC 52**
-(bare Wayland, SSH, tmux with `set -g set-clipboard on`). Collapsed pastes
-copy expanded — a `[Pasted text #N …]` token ships the full body to the
-clipboard while the screen stays compact. `/copy [n]` copies the transcript
-the same way.
-
-### Headless
-
-```sh
-tilde --prompt "Fix the failing test" --mode build --yes
-tilde --prompt "..." --output json   # JSONL events + result object with token usage
-```
-
-### Scheduled runs, audit, plugins
-
-```sh
-tilde run-due [--yes] [dir]   # run due .tilde/schedule.yaml entries headlessly (cron/systemd wakes it)
-tilde audit [--since 24h] [--tool shell_command] [--json]   # read the governance trail
-tilde plugin install <dir> [--upgrade] | upgrade <dir> | enable|disable|remove|rollback <name> | verify <name> | list   # hash-pinned local plugins
-tilde                         # /plugins and /marketplace browse the unified local registry
-tilde models [provider]   # print the model catalog (windows + prices), no network
-tilde ide-bridge          # serve line-delimited JSON over stdio for IDE hosts
-tilde prune --sessions 30d --audit 90d --yes   # enforce retention (dry run without --yes)
-tilde fork <id> [--at RFC3339]   # branch a session at an earlier point (or tip)
-tilde --export <id> [--out path.md]   # write the portable brief headlessly (cwd-contained)
-```
-
-No daemon lives in tilde: the OS owns waking, tilde owns deciding
-what is due. Failed schedule jobs are not marked and retry next tick.
-
-### Evaluation
-
-```sh
-tilde --eval [--eval-task write-two-files,rename-chain] [--trials 3]
-```
-
-Same tasks, repeated trials, fresh directories. Exits 1 if any task scores zero.
-
-## Safety model
-
-- **Three tiers** — `deny / ask / allow`. Deny always wins. A broken
-  `policies.yaml` refuses to start the session (fail closed).
-- **Structural parsing.** Destructive shell shapes are matched per pipeline
-  segment, never substring-matched.
-- **Real isolation.** Every shell call runs under bwrap: disposable root,
-  no network by default.
-- **Explicit opt-in.** Project MCP servers, hooks, and skills stay off until you pass
-  `--mcp-project` / `--hooks-project` / `--skills-project` (or `tilde trust` the folder).
-- **Scrubbed.** Shell/file/search output is secret-scrubbed before the model sees it; sensitive paths warn.
-- **Reversible.** Every mutating step snapshots for `/undo`.
-- **Untrusted by default.** Tool output is data, never instructions. Package
-  installs stay Ask-tier with an unverified-name warning — approve only names
-  you checked (models hallucinate packages attackers pre-register; with
-  default-deny egress the fetch fails closed anyway).
-- **SSRF-guarded.** `web_fetch` and remote MCP hosts refuse private,
-  loopback, and link-local targets; redirects are re-checked, userinfo URLs refused.
-- **Remote MCP is bounded.** Remote JSON-RPC uses `headersFile` (JSON string
-  headers, never inline secrets), rejects redirects, caps responses, and
-  re-checks DNS targets at connection time to reduce rebinding risk.
-- **User-authoritative MCP.** A project `mcp.json` can only add new servers
-  or tighten approval — never rewire or auto-approve your user servers.
-- **Minimal hook env.** Hooks get `PATH/HOME/USER/SHELL/LANG/PWD` plus tool
-  args only; `*_KEY/*_TOKEN/*_SECRET/*_PASSWORD` never pass through, output capped at 32KB and scrubbed.
-- **Signed updates.** `tilde update` verifies a newer release tag signature
-  before pulling; unsigned releases fail closed, while an older unsigned tag
-  cannot block refreshing or rebuilding the current source checkout.
-- **Scrubbed at rest.** Session logs and the audit trail are secret-scrubbed
-  on write (mode `0600`); the audit stores arg hashes, never raw args.
-- **Bundled skills.** Tilde ships a small, immutable, instruction-only core
-  skill set with provenance and progressive disclosure. User/project skills
-  remain trust-gated and cannot silently replace bundled skills.
-- **Vision status.** Image input and the independent vision side-call are
-  designed but not yet supported; see `docs/vision-design.md`. Tilde does not
-  claim vision support until provider, TUI, approval, and redaction tests pass.
-- **Remote marketplace status.** Signed catalog and artifact verification
-  primitives exist in `internal/marketplace/remote.go`; remote installation is
-  not enabled until archive extraction, staging, trust configuration, and
-  provider/network integration are complete.
-
-| Tier + Plan gate | Tools |
-|---|---|
-| Ask, Plan-blocked (mutating) | `write_file` `edit_file` `shell_command` `git_worktree_add/remove` `mcp_call` `spawn_work` `discard_work` `memory` (save/forget) `remember` (index) |
-| Ask, Plan-OK (read-only) | `todo_write` `ask_user` `web_fetch` `web_search` `web_shot` `apply_work` `memory` (recall only) `remember` (recall/status) `shell_poll` status/log |
-| Allow, Plan-OK | `read_file` `grep` `glob` `git_status` `git_diff` `git_worktree_list` `load_skill` `mcp_list` `spawn_explore` `symbol_search` `diagnose` |
-
-Plan blocks mutating tools at the registry layer, not the prompt.
-`spawn_work` opens one worktree session; writer children may
-`write_file`/`edit_file` inside their worktree only; `apply_work` /
-`discard_work` close it. `web_fetch` / `web_search` need
-`TILDE_ALLOW_NET=1` or a `policies.yaml` `allow_net` host. `memory`
-recall reads free; `save` / `forget` are Plan-blocked like other writes.
-`remember` recall/status read free; `index` rebuilds the vector store.
-`web_shot` captures viewport PNGs for human review (the model cannot
-see images yet — no vision pipeline).
-
-**Honest scope:** Linux only (sandboxing is OS-level; bwrap is the mechanism).
-No clipboard capture, no cloud runs, no multi-session tabs — the terminal
-already does those jobs.
-
-## Configuration
-
-| File | Scope | Notes |
-|---|---|---|
-| `policies.yaml` | project root | Live tiers; deny beats `--yes` and Auto; `allow_net` lists hosts `web_fetch` / `web_search` may reach without `TILDE_ALLOW_NET=1` (`web_shot` honors it for the initial URL; redirects run inside Firefox); `deny_paths` denies file-tool paths by glob before tiers |
-| `.tilde/skills/*.md` | project | Needs `--skills-project`; progressive disclosure (one-liners in prompt, bodies on load) |
-| `AGENTS.md` / `CLAUDE.md` / `.tilde/RULES.md` | project | First existing wins; auto-loaded into the prompt under the project-skills trust gate; 8KB cap |
-| `~/.tilde/skills/*.md` | user | Same, personal |
-| `.tilde/hooks.yaml` | project | Needs `--hooks-project`; `before` blocks, `after` observes |
-| `~/.tilde/hooks.yaml` | user | Always on |
-| `.tilde/mcp.json` | project | Needs `--mcp-project`; only tool *names* enter prompts |
-| `~/.tilde/mcp.json` | user | Auto-starts |
-
-| Env var | Meaning |
-|---|---|
-| `TILDE_MODEL` / `OLLAMA_HOST` | Model + Ollama endpoint |
-| `TILDE_BUDGET` | Token budget before auto-compaction (default 32000, or model window when known) |
-| `TILDE_NO_SANDBOX=1` | Disable bwrap (loud warning, not recommended) |
-| `TILDE_BACKEND=podman` | Run shell calls in an ephemeral digest-pinned podman container instead of bwrap (needs `TILDE_SANDBOX_IMAGE` with `@sha256:` digest) |
-| `TILDE_SANDBOX_IMAGE` | Container image for the podman backend (digest-pin required, e.g. `img@sha256:<64 hex>`) |
-| `TILDE_ALLOW_NET=1` | Lift the sandbox network ban (policy still judges commands; required for `web_fetch` / `web_search` / `web_shot` unless the host is in `allow_net`) |
-| `TILDE_MCP_PROJECT=1` / `TILDE_HOOKS_PROJECT=1` / `TILDE_SKILLS_PROJECT=1` | Opt into project MCP / hooks / skills |
-| `TILDE_PASTE_LINES` | Large-paste collapse threshold in lines (default 4, `0` disables) |
-| `TILDE_ARROWS=scroll` | Arrows scroll the transcript instead of recalling history |
-| `TILDE_NO_UPDATE_CHECK=1` | Disable the daily update check and splash notice |
-| `OPENAI_API_KEY` / `OPENAI_BASE_URL` | `--provider openai` credentials |
-| `ANTHROPIC_API_KEY` | `--provider anthropic` (native API; needs live-key verification) |
-| `OPENROUTER_API_KEY` | `--provider openrouter` (free `:free` models included) |
-| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `--provider gemini` (either name works; free tier via AI Studio) |
-| `OPENCODE_API_KEY` | `--provider opencode` (Zen dashboard key; curated coding models) |
-
-Trust a folder once — `tilde trust [dir]` (`tilde untrust [dir]` to revoke) — instead of per-run project flags.
+The agent loop is bounded by task, tool, timeout, and budget limits. Sessions are append-only and resumable, so a crash does not silently erase the work already recorded.
 
 ## Providers
 
-Six backends, one shape. No GPU is fine — cloud keys are first-class, and three
-providers cost nothing to start.
+The provider layer keeps the session model independent from the model backend. Configure a supported provider through flags or environment variables; credentials are never meant to be committed to the repository.
 
-- `--provider ollama` (default) — localhost, private by construction.
-- `--provider openai` — OpenAI-compatible; bring a key and base URL.
-- `--provider anthropic` — native Messages API; httptest-verified, awaiting a
-  live-key run.
-- `--provider openrouter` — one key, many vendors, plus a **free shelf**
-  (`:free` models, $0 per token — account and key still required).
-- `--provider gemini` — Google via its OpenAI-compatible endpoint; AI Studio
-  serves these on a **free tier**, so a Google account is enough to start.
-- `--provider opencode` — OpenCode Zen: models the OpenCode team tested and
-  benchmarked for coding agents, behind one key (`OPENCODE_API_KEY`).
-  Ships coding-first picks plus a logged free-trial row.
+Common environment variables include:
 
-Keys resolve down a ladder — no silent fallbacks, a stored key owns its
-provider:
+```sh
+export TILDE_MODEL=qwen2.5-coder:7b
+```
 
-1. `--api-key` flag (this process only, wins outright)
-2. Stored credential — `/login <provider>` asks (masked, never echoed or
-   logged), validates with a one-token request, saves to
-   `~/.tilde/credentials.json` (mode `0600`); `/logout` removes it
-3. Env var from the table above
+Use `./tilde --help` and the provider documentation in `docs/` for the exact options available in your checkout.
 
-Bare `/login` shows every provider, its source, and its key tail. Switching
-mid-session keeps transcript and session: `/model <provider/model>` (e.g.
-`/model gemini/gemini-2.5-flash`); bare `/model` lists the catalog with
-context windows and prices. A catalog pick adopts the model's window as the
-budget — unless `--budget` / `TILDE_BUDGET` was set, which is never
-second-guessed.
+## Everyday commands
+
+### Interactive controls
+
+- `Enter` — submit the prompt
+- `Esc` — cancel the current operation
+- `Ctrl+C` — interrupt safely
+- `/` — open command/search input
+- `?` — show help
+- `q` — quit when no confirmation is active
+
+Long waits show live status. Tool activity is rendered as a compact, auditable timeline rather than an opaque spinner.
+
+### Headless and automation
+
+Run one prompt non-interactively with standard exit codes. Select text or JSON output explicitly:
+
+```sh
+./tilde --prompt "run the unit tests and summarize failures" --output json
+```
+
+Use `--eval`, `--export`, and `--resume` for evaluation and session workflows. `./tilde --help` is the authoritative reference for the current flags.
+
+Useful administrative commands:
+
+```sh
+./tilde plugin list
+./tilde plugin verify <name>
+./tilde audit --json
+./tilde models ollama
+./tilde update
+```
+
+Plugin lifecycle commands also include `install`, `upgrade`, `enable`, `disable`, `remove`, and `rollback`. Update refuses dirty or unexpected source checkouts and never overwrites a working binary after a failed build.
+
+## Plugins, skills, hooks, and MCP
+
+tilde treats extensions as registered capabilities with provenance and lifecycle state:
+
+- **Skills** provide focused instructions and workflows.
+- **Plugins** package related skills, tools, hooks, and metadata.
+- **Hooks** run at defined lifecycle points under policy and process-group cleanup.
+- **MCP servers** expose external tools with per-server isolation, nested approval enforcement, and startup deadlines.
+- **Agent manifests** describe optional personas or specialized agents without silently changing the host policy.
+
+The marketplace registry distinguishes project, user, workspace, and remote sources. It reports name collisions, source provenance, version state, and install/update failures instead of silently choosing one item. Plugin installs and upgrades are staged and atomic, with rollback support.
+
+See [docs/marketplace.md](docs/marketplace.md) for the registry model and lifecycle details.
+
+## Web, MCP, and vision status
+
+- **MCP:** supported as a controlled extension boundary; a failed server does not take down the session.
+- **Web access:** provider/tool dependent. tilde does not pretend that every configured model can browse the web.
+- **Vision:** image paths can be passed to a vision-capable provider or vision fallback when configured. A text-only provider is told clearly when it cannot inspect an image.
+- **Browser automation:** available only when an appropriate browser tool or MCP server is installed and approved.
+
+This separation is deliberate: capability discovery is explicit, and unavailable integrations fail clearly rather than producing invented results.
+
+## Safety details
+
+tilde is designed around least privilege and recoverable failure:
+
+- approval checks are enforced at the execution boundary, including nested MCP calls;
+- background task slots are reserved atomically to avoid overcommit races;
+- hooks can run in a sandbox and are terminated as complete process groups;
+- scheduler locks prevent overlapping unattended runs;
+- marketplace metadata and artifacts can be verified with signatures, digests, caching, and staged installation;
+- updater checks validate the canonical remote, branch, and exact target commit;
+- terminal metadata is sanitized before it reaches the UI;
+- provider retries use bounded backoff and remain cancellable;
+- configuration errors fail closed before the TUI starts.
+
+No security feature is a substitute for reviewing a plugin, hook, MCP server, or remote marketplace before granting it trust.
+
+## Configuration
+
+Configuration precedence is intentionally predictable:
+
+1. command-line flags;
+2. environment variables;
+3. project configuration;
+4. user configuration;
+5. built-in defaults.
+
+Keep credentials in the environment or an external secret store. Do not place tokens, private keys, or provider credentials in project config, session exports, plugin manifests, or logs.
+
+Useful runtime controls include budget, timeout, task-slot, paste, and unattended-approval settings. Run `./tilde --help` to see the exact names and defaults for the current build.
+
+## Updating
+
+The updater verifies the expected canonical repository, branch, and exact commit before applying changes. A dirty source tree is intentionally refused:
+
+```text
+tilde: update: source tree ... has uncommitted changes — commit or stash them, then retry
+```
+
+That message refers to the local checkout being updated, not the GitHub repository itself. Commit or stash local changes first, then retry. If you want to update from GitHub, ensure the local checkout's `origin` remote points to the intended repository URL.
+
+## Evaluation and development
+
+Run the same checks used by CI before sending a change:
+
+```sh
+go test -count=1 ./...
+go test -race -count=1 ./internal/agent/ ./internal/tools/
+go vet ./...
+go build -o /tmp/tilde-smoke .
+/tmp/tilde-smoke --help
+test -z "$(gofmt -l $(find . -name '*.go' -not -path './.git/*'))"
+```
+
+CI also runs vulnerability checks and a release dry run. Keep tests deterministic, add regression coverage for every fixed bug, and document behavior changes with the code that introduces them.
 
 ## Architecture
 
+The system is organized around a small execution core with explicit boundaries for:
+
 ```text
-main.go                  flags, wiring, headless + eval runners
-internal/agent/          ReAct loop, modes gate, explore + work subagents, compaction hooks
-internal/tools/          read/edit/write/shell/grep/glob/git + registry,
-                         todo/ask/web_fetch/web_search/web_shot/symbol_search/memory/remember/diagnose, scrubbed output, undo, containment
-internal/trust/          explicit project trust, no auto-trust
-internal/sandbox/        bwrap isolation (fs + net, PID namespace); podman backend via TILDE_BACKEND=podman
-internal/policy/         deny/ask/allow + destructive-command parser, allow_net hosts
-internal/mode/           Plan/Build/Auto gate
-internal/provider/       6 backends + registry, credential ladder, model catalog, streaming (ollama/openai) with fallback
-internal/compact/        80% auto-compaction with model summaries
-internal/session/        append-only JSONL transcripts, scrubbed at rest, resume
-internal/creds/          credential store, sealed AES-GCM envelope
-internal/export/         distilled /export briefs
-internal/audit/          append-only tool decision trail (hashes, never raw args)
-internal/skills/         progressive-disclosure loader + frontmatter lint
-internal/plugin/         hash-pinned local plugin installs (manifest v1 + lockfile)
-internal/marketplace/    unified local registry and safe catalog discovery
-internal/schedule/       due-checker for .tilde/schedule.yaml (no daemon; run-due reexecs headless)
-internal/rules/          project rules auto-load (AGENTS.md/CLAUDE.md/.tilde/RULES.md, trust-gated)
-internal/vec/            vector memory engine (TF-IDF default, Ollama embeddings optional)
-internal/scrub/          shared secret-redaction patterns (single source of truth; tools/hooks/session/audit consume it)
-internal/mcp/            stdio client, lazy gateway (names in prompt)
-internal/hooks/          before/after tool scripts, session start/end
-internal/ide/            stdio JSON bridge for IDE hosts (initialize/health/session.chat/history)
-internal/repair/         tool-call mistake repair (nulls, shapes, coercions)
-internal/eval/           trajectory suite: tasks × trials + cost columns
-internal/update/         versioned self-update, signed-tag verification
-internal/tui/            Bubble Tea UI (spec: docs/tui-design-spec.md)
-docs/                    Plan.md · tui-design-spec.md · agents-survey-2026.md
-examples/                sample skill, hooks.yaml, mcp.json
+CLI / TUI
+  └─ session + transcript
+      └─ agent loop + budgets
+          ├─ policy / approval
+          ├─ tool registry
+          │   ├─ built-in tools
+          │   ├─ MCP servers
+          │   └─ plugins / hooks / skills
+          ├─ provider adapters
+          └─ append-only session log
 ```
 
-Module map: `docs/ARCHITECTURE.md` (layout only; behavior lives in
-`docs/Plan.md`).
+Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the detailed design, [docs/Plan.md](docs/Plan.md) for the delivery plan, and [docs/vision-design.md](docs/vision-design.md) for vision behavior.
 
-Changing anything? Every tool result names its recovery (never silence, never
-bare errors); fail loud, cheap, and closed; repair the model's mistakes
-instead of punishing them; every token must justify itself. Full checklist in
-`docs/Plan.md §1`.
+## Project status
 
-## Development
+tilde is under active development. The core harness, safety boundaries, extension lifecycle, marketplace model, and operational failure handling are implemented and tested. Integrations that depend on an external provider, browser, MCP server, or remote marketplace still require explicit configuration and trust.
 
-```sh
-go build ./... && go vet ./... && gofmt -l .   # must all be silent
-go test -count=1 ./...                          # full suite, fresh
-go test -race ./internal/agent/ ./internal/tools/
-./tilde --eval --trials 3                        # consistency number
-```
-
-CI (`.github/workflows/ci.yml`) runs vet + tests + build on push/PR.
+Contributions are welcome. Please include focused tests, security implications, and documentation updates with each change.
