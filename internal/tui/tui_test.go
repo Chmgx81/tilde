@@ -240,6 +240,21 @@ func TestSplashRendersOnNew(t *testing.T) {
 	}
 }
 
+func TestSplashWrapsCopyAtWordBoundaries(t *testing.T) {
+	for _, width := range []int{78, 120} {
+		lines := splashPanel(width)
+		for _, line := range lines {
+			if got := ansi.StringWidth(stripANSI(line)); got > width {
+				t.Fatalf("splash line exceeds %d columns (%d): %q", width, got, line)
+			}
+		}
+		joined := stripANSI(strings.Join(lines, "\n"))
+		if strings.Contains(joined, "pro-\nvider") || !strings.Contains(joined, "<provider>") {
+			t.Fatalf("provider placeholder was split at width %d:\n%s", width, joined)
+		}
+	}
+}
+
 func TestSelectResumeRestoresCautiousPlan(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	dir, err := sessionsDir()

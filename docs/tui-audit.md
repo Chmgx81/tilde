@@ -57,6 +57,14 @@ floor. The splash now provides a compact truthful card below 32 columns,
 hard-cuts the header and status row safely, and has a regression test for
 20/24/31-column frames.
 
+### Medium — splash copy wrapping and first-run density
+
+The first-run card used hand-authored line breaks, so a wider terminal still
+showed a narrow text island and could split `/login <provider>` as `pro-` /
+`vider>`. Splash prose now wraps at word boundaries against the live card
+width, and the empty-skills receipt is concise enough to remain useful above
+the footer on a normal terminal.
+
 ## State-by-state review
 
 ### Splash and onboarding

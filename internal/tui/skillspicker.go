@@ -25,7 +25,7 @@ func (m *Model) openSkills() {
 	}
 	items := ix.List()
 	if len(items) == 0 {
-		m.append("● no skills installed — drop a NAME.md with name:/description: frontmatter into .tilde/skills/ (project) or ~/.tilde/skills/ (user).")
+		m.append("● No skills installed · add NAME.md to .tilde/skills/ or ~/.tilde/skills/.")
 		return
 	}
 	m.skillsItems, m.skillsCursor, m.skillsQuery, m.skillsOpen = items, 0, "", true

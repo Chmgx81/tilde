@@ -32,23 +32,52 @@ func splashPanel(width int) []string {
 	// Width(width-2) lands the box exactly on the viewport width.
 	inner := max(width-2, 20)
 	title := lipgloss.NewStyle().Foreground(fg).Render("Welcome to tilde.")
-	body := lipgloss.NewStyle().Foreground(fgMuted).Render(strings.Join([]string{
-		"tilde can read, edit, and delete files, and run shell commands you",
-		"approve or that fall inside the active sandbox policy. Use in trusted",
-		"environments only. Sandboxed via bubblewrap + network egress denied by",
-		"default on Linux. See policies.yaml to review current rules.",
-		"",
-		// Cloud list derives from the registry (CloudIDs) so it can never
-		// go stale when a provider is added — the splash is not the place
-		// for a second hardcoded source of truth.
-		"Local models run via Ollama. On a machine without a GPU, /login <pro-",
-		"vider> arms a cloud key (" + strings.Join(provider.CloudIDs(), ", ") + ") and /model",
-		"<provider/model> switches mid-session.",
-	}, "\n"))
+	// Wrap prose at words rather than splitting a command placeholder in the
+	// middle (`<provider>` used to become `pro-` / `vider>`). The card is
+	// responsive: the same copy reads naturally at 80 columns and uses the
+	// available width on larger terminals instead of leaving a narrow island
+	// of text inside a wide border.
+	paragraphs := []string{
+		"tilde can read, edit, and delete files, and run shell commands you approve or that fall inside the active sandbox policy. Use in trusted environments only. Sandboxed via bubblewrap + network egress denied by default on Linux. See policies.yaml to review current rules.",
+		// Cloud list derives from the registry so it cannot go stale when a
+		// provider is added.
+		"Local models run via Ollama. On a machine without a GPU, /login <provider> arms a cloud key (" + strings.Join(provider.CloudIDs(), ", ") + ") and /model <provider/model> switches mid-session.",
+	}
+	body := lipgloss.NewStyle().Foreground(fgMuted).Render(wrapSplashParagraphs(paragraphs, max(width-6, 1)))
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderIdle).Padding(0, 1).Width(inner).
 		Render(title + "\n\n" + body)
 	return strings.Split(box, "\n")
+}
+
+func wrapSplashParagraphs(paragraphs []string, width int) string {
+	if width < 1 {
+		width = 1
+	}
+	var out []string
+	for i, paragraph := range paragraphs {
+		if i > 0 {
+			out = append(out, "")
+		}
+		words := strings.Fields(paragraph)
+		line := ""
+		for _, word := range words {
+			if line == "" {
+				line = word
+				continue
+			}
+			if len([]rune(line))+1+len([]rune(word)) <= width {
+				line += " " + word
+				continue
+			}
+			out = append(out, line)
+			line = word
+		}
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 // splashLines renders the welcome screen (§2.1): safety notice as prose
