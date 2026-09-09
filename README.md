@@ -90,6 +90,7 @@ update available (v0.8.0 → v0.9.0) — run tilde update
 
 ```sh
 tilde update   # pull --ff-only, rebuild, smoke-test, reinstall, restart
+tilde --version
 ```
 
 Fail-closed like everything else: a dirty source tree refuses (commit or
