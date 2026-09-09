@@ -27,8 +27,10 @@ type Skill struct {
 	Name        string // frontmatter name, else filename stem
 	Description string // frontmatter description (required)
 	Body        string // everything below the frontmatter
-	Scope       string // "project" | "user"
+	Scope       string // "bundled" | "project" | "user"
 	Path        string
+	Version     string // bundled skills expose an immutable content version
+	Verified    bool   // true only for skills shipped and reviewed by tilde
 }
 
 // Index is a scanned set of skills. Project wins on name clash.
@@ -208,14 +210,36 @@ func (ix *Index) Names() []string {
 	return out
 }
 
+// AddBuiltin adds an embedded, verified skill without allowing a project or
+// user file to replace it silently. Built-ins are inserted only when their
+// name is not already present; explicit overrides remain a future, visible
+// feature rather than an accidental precedence rule.
+func (ix *Index) AddBuiltin(sk Skill) {
+	if ix == nil || sk.Name == "" {
+		return
+	}
+	if _, exists := ix.byName[sk.Name]; exists {
+		return
+	}
+	sk.Scope = "bundled"
+	sk.Verified = true
+	ix.byName[sk.Name] = sk
+	ix.skills = append(ix.skills, sk)
+}
+
 // ParseFile parses one skill file.
 func ParseFile(path, scope string) (Skill, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Skill{}, fmt.Errorf("skill %q: cannot read: %v", path, err)
 	}
-	text := string(data)
-	name := strings.TrimSuffix(filepath.Base(path), ".md")
+	return ParseText(filepath.Base(path), scope, string(data), path)
+}
+
+// ParseText parses a skill from an in-memory source such as an embedded
+// bundled skill. It shares the same caps and validation as filesystem skills.
+func ParseText(filename, scope, text, path string) (Skill, error) {
+	name := strings.TrimSuffix(filename, ".md")
 	desc, body := "", text
 	if strings.HasPrefix(text, "---\n") || strings.HasPrefix(text, "---\r\n") {
 		rest := text[4:]

@@ -168,3 +168,29 @@ func TestPromptLineFencesProjectOnly(t *testing.T) {
 		t.Fatalf("user line must stay raw, got %q", got)
 	}
 }
+
+func TestBundledSkillsAreEmbeddedAndVerified(t *testing.T) {
+	builtins, err := Bundled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(builtins) < 3 {
+		t.Fatalf("expected core bundled skills, got %d", len(builtins))
+	}
+	ix, err := ScanDirs("", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sk := range builtins {
+		if sk.Scope != "bundled" || !sk.Verified || sk.Version == "" || !strings.HasPrefix(sk.Path, "embedded://") {
+			t.Fatalf("bundled provenance incomplete: %+v", sk)
+		}
+		ix.AddBuiltin(sk)
+	}
+	for _, name := range []string{"using-agent-skills", "security-hardening", "tui-design"} {
+		sk, ok := ix.Get(name)
+		if !ok || sk.Scope != "bundled" {
+			t.Fatalf("missing bundled skill %q: %+v", name, sk)
+		}
+	}
+}

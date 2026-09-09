@@ -199,6 +199,12 @@ Same tasks, repeated trials, fresh directories. Exits 1 if any task scores zero.
   cannot block refreshing or rebuilding the current source checkout.
 - **Scrubbed at rest.** Session logs and the audit trail are secret-scrubbed
   on write (mode `0600`); the audit stores arg hashes, never raw args.
+- **Bundled skills.** Tilde ships a small, immutable, instruction-only core
+  skill set with provenance and progressive disclosure. User/project skills
+  remain trust-gated and cannot silently replace bundled skills.
+- **Vision status.** Image input and the independent vision side-call are
+  designed but not yet supported; see `docs/vision-design.md`. Tilde does not
+  claim vision support until provider, TUI, approval, and redaction tests pass.
 
 | Tier + Plan gate | Tools |
 |---|---|
