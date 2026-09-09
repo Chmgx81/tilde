@@ -32,18 +32,19 @@ import (
 )
 
 var (
-	borderPlan   = lipgloss.Color("#E5A00D")
-	borderBuild  = lipgloss.Color("#E6E6E6")
-	borderAuto   = lipgloss.Color("#4FC3F7")
-	borderIdle   = lipgloss.Color("#465365")
-	fg           = lipgloss.Color("#E6E6E6")
-	fgMuted      = lipgloss.Color("#A7B2C4")
-	fgDim        = lipgloss.Color("#758198")
-	amber        = lipgloss.Color("#E5A00D")
-	accentSelect = lipgloss.Color("#7E22CE")
-	fgOnSelect   = lipgloss.Color("#FFFFFF")
-	success      = lipgloss.Color("#4CAF50")
-	danger       = lipgloss.Color("#F44747")
+	borderPlan     = lipgloss.Color("#E5A00D")
+	borderBuild    = lipgloss.Color("#E6E6E6")
+	borderAuto     = lipgloss.Color("#4FC3F7")
+	borderIdle     = lipgloss.Color("#465365")
+	borderComposer = lipgloss.Color("#8FA1B8")
+	fg             = lipgloss.Color("#E6E6E6")
+	fgMuted        = lipgloss.Color("#A7B2C4")
+	fgDim          = lipgloss.Color("#758198")
+	amber          = lipgloss.Color("#E5A00D")
+	accentSelect   = lipgloss.Color("#7E22CE")
+	fgOnSelect     = lipgloss.Color("#FFFFFF")
+	success        = lipgloss.Color("#4CAF50")
+	danger         = lipgloss.Color("#F44747")
 )
 
 // configurePalette adapts semantic colors to the terminal background. A
@@ -55,6 +56,7 @@ func configurePalette() {
 		borderPlan, borderBuild, borderAuto, borderIdle =
 			lipgloss.Color("#E5A00D"), lipgloss.Color("#E6E6E6"),
 			lipgloss.Color("#4FC3F7"), lipgloss.Color("#30363D")
+		borderComposer = lipgloss.Color("#8FA1B8")
 		fg, fgMuted, fgDim = lipgloss.Color("#E6E6E6"), lipgloss.Color("#A7B2C4"), lipgloss.Color("#758198")
 		amber, accentSelect = lipgloss.Color("#E5A00D"), lipgloss.Color("#7E22CE")
 		success, danger = lipgloss.Color("#4CAF50"), lipgloss.Color("#F44747")
@@ -64,6 +66,7 @@ func configurePalette() {
 	borderPlan, borderBuild, borderAuto, borderIdle =
 		lipgloss.Color("#9A6700"), lipgloss.Color("#57606A"),
 		lipgloss.Color("#0969DA"), lipgloss.Color("#8C959F")
+	borderComposer = lipgloss.Color("#57606A")
 	fg, fgMuted, fgDim = lipgloss.Color("#1F2328"), lipgloss.Color("#57606A"), lipgloss.Color("#6E7781")
 	amber, accentSelect = lipgloss.Color("#9A6700"), lipgloss.Color("#0969DA")
 	success, danger = lipgloss.Color("#1A7F37"), lipgloss.Color("#CF222E")
@@ -2065,14 +2068,11 @@ func (m Model) View() string {
 		}
 		return m.centerFrame(m.marketplaceView())
 	}
-	border := borderBuild
-	switch m.curMode {
-	case mode.Plan:
-		border = borderPlan
-	case mode.Auto:
-		border = borderAuto
-	}
-	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Padding(0, 1)
+	// The composer is the focused input surface, but it is not a risk state.
+	// Keep its border neutral so Plan's amber banner remains the single visual
+	// warning signal; key-entry is the deliberate exception for a security
+	// sensitive modal field.
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(borderComposer).Padding(0, 1)
 	if m.keyProvider != "" {
 		// Masked key entry (§2.24): amber owns the border while open.
 		box = box.BorderForeground(amber)

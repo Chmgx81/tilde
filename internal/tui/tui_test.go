@@ -1443,6 +1443,12 @@ func TestTooSmallTerminalUsesTruthfulBoundedView(t *testing.T) {
 	}
 }
 
+func TestComposerBorderDoesNotCompeteWithPlanAccent(t *testing.T) {
+	if borderComposer == borderPlan {
+		t.Fatal("composer focus border must remain distinct from the Plan amber accent")
+	}
+}
+
 func TestMarketplaceOverlaysWrapUntrustedLongMetadata(t *testing.T) {
 	m := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 44, Height: 24})

@@ -165,6 +165,9 @@ each reads:
 - **The composer border is always full available width.** Content inside it is
   left-aligned; the mode glyph, if shown inside the border, is right-aligned
   in the same line as the placeholder/hint text, never its own line.
+  The border uses a neutral focus token; Plan's amber banner remains the
+  single caution signal. Masked credential entry may use amber as a security
+  focus state.
   ("Available width" is the centered content column past 120 terminal
   columns — see §1.3 wide-terminal exception.)
 - **Diffs align on the gutter, not the code.** Line numbers and `+`/`-` markers
@@ -1370,7 +1373,7 @@ guidance on empty config, command-shaped auth remedy.
 Splash (§2.1) → composer in Plan mode → user states a goal → agent works
 read-only, populating the action timeline (§2.10) and, for anything non-trivial,
 a todo list (§2.9) → agent presents a plan in prose → Tab (or Auto's own
-promotion) moves to Build → composer border shifts amber → neutral → edits and
+promotion) moves to Build → composer keeps its neutral focus border → edits and
 test runs appear in the timeline, each risky command gated by a confirm prompt
 (§2.12) → `✓ Done` closes the turn.
 
@@ -1398,7 +1401,8 @@ watching the status bar, is the dim marker line scrolling past.
 
 ### 3.5 Agent gets stuck
 Repeated failure detected → Handoff panel (§2.15) renders → mode toast (§2.8)
-confirms Build → Plan → composer border reverts to amber → user reads the
+confirms Build → Plan → the amber banner is the caution signal while the
+composer keeps its neutral focus border → user reads the
 partial diff already in the timeline above the handoff panel, decides how to
 redirect, and continues in Plan.
 
