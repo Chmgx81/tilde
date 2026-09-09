@@ -29,7 +29,9 @@ ask:
   - web_fetch
   - web_search
   - web_shot
+  - spawn_work
   - apply_work
+  - discard_work
   - memory
   - remember
 allow:

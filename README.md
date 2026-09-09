@@ -109,7 +109,7 @@ a fresh clone instead.
 | `@file` | Fuzzy file reference (respects `.gitignore`) |
 | `!cmd` | Shell escape — same sandbox and confirm tier as the agent |
 | `Ctrl+Y` | Copy the latest assistant response (raw markdown) |
-| `Ctrl+C` | Cancel the turn (again to quit) |
+| `Ctrl+C` | Quit when idle (points to `Esc Esc` during running turns) |
 | `Esc Esc` | Cancel the running turn |
 | `Ctrl+J` | Newline inside the composer |
 | `↑ ↓` | Prompt history |

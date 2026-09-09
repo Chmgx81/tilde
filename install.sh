@@ -122,4 +122,4 @@ printf '{"source":"%s","installed_at":"%s"}\n' "$esc" "$(date -u +%Y-%m-%dT%H:%M
 echo "installed to $dest/tilde"
 echo "next steps:"
 echo "  ollama serve & ollama pull qwen3.8-4b:16k"
-echo "  cd ~/my-project && ./tilde"
+echo "  cd ~/my-project && tilde"

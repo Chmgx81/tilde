@@ -108,6 +108,9 @@ func (t *WebFetch) Exec(ctx context.Context, args map[string]any) (string, error
 		if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
 			return fmt.Errorf("refused %q: only http(s) URLs are fetchable", req.URL.String())
 		}
+		if !netOK && t.HostAllow != nil && !t.HostAllow(req.URL.Hostname()) {
+			return fmt.Errorf("refused redirect to %q: host %q is not in policies.yaml allow_net", req.URL.String(), req.URL.Hostname())
+		}
 		if err := validateFetchTarget(req.Context(), req.URL); err != nil {
 			return err
 		}
