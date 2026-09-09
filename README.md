@@ -1,5 +1,13 @@
 # tilde (~)
 
+```text
+   ▄▄▄▄▄▄▄
+▄▄█▀▀▀▀▀▀▀█▄
+▀▀         ▀███▄         ▄
+               ▀█▄▄▄▄▄▄▄█▀
+                 ▀▀▀▀▀▀▀
+```
+
 > A security-first terminal coding agent for real repositories.
 
 tilde is a local-first coding harness for software work that needs more than a chat window: repository inspection, controlled tool use, explicit approvals, resumable sessions, plugins, MCP servers, and scriptable output.
