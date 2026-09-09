@@ -60,9 +60,9 @@ const (
 	maxAppWidth     = 120
 )
 
-// appVersion is shown on splash and help. Single source: update.Version —
-// bump there per tagged release, never here.
-var appVersion = update.Version
+// appVersion is shown on splash and help. It includes the source revision for
+// development/post-release builds while retaining the release version.
+var appVersion = update.BuildVersion()
 
 // Model is the Bubble Tea app.
 type Model struct {

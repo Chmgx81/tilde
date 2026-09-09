@@ -2,6 +2,9 @@
 
 ## v0.11.0 (unreleased)
 
+- `--version` and the TUI now include the short source revision for VCS
+  builds (for example, `v0.9.0+g5f94724`), while release comparisons still
+  use the stable release tag.
 - `tilde update`: repairs a stale or missing installed binary even when the
   source checkout is already current; CI now smoke-tests both version flag forms.
 - `tilde run-due`: scheduled headless runs from `.tilde/schedule.yaml`

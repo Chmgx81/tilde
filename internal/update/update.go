@@ -54,10 +54,8 @@ const (
 	envTarget = "TILDE_UPDATE_TARGET"
 )
 
-// Version is this binary's release version. Single source of truth:
-// the TUI splash/help and the MCP client handshake read it from here.
-// Bump on every tagged release; the freshness check compares it
-// against the newest remote tag.
+// Version is this binary's release version. It is the comparison value for
+// remote release tags and must only change when a release is tagged.
 const Version = "v0.9.0"
 
 // LocalSHA reports the commit this binary was built from (stamped by
@@ -76,6 +74,16 @@ func LocalSHA() string {
 		}
 	}
 	return ""
+}
+
+// BuildVersion identifies the release line and exact source revision for VCS
+// builds. Version remains separate because update checks compare release tags,
+// while users need --version to distinguish post-release rebuilds.
+func BuildVersion() string {
+	if sha := LocalSHA(); sha != "" {
+		return Version + "+g" + short(sha)
+	}
+	return Version
 }
 
 func short(sha string) string {
@@ -531,13 +539,13 @@ func binaryRevision(path string) string {
 	return ""
 }
 
-// describeVersion names one checkout state for humans: the release
-// tag pointing at it when there is one, else the short SHA. Never
-// fails loud — "unknown" beats a broken update receipt.
+// describeVersion names one checkout state for humans, including its commit
+// distance from the nearest release tag when available. Never fails loud —
+// "unknown" beats a broken update receipt.
 func describeVersion(dir, sha string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
 	defer cancel()
-	if out, err := exec.CommandContext(ctx, "git", "-C", dir, "describe", "--tags", "--abbrev=0").CombinedOutput(); err == nil {
+	if out, err := exec.CommandContext(ctx, "git", "-C", dir, "describe", "--tags", "--always").CombinedOutput(); err == nil {
 		if tag := strings.TrimSpace(string(out)); tag != "" {
 			return tag
 		}

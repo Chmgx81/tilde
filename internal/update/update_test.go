@@ -20,6 +20,21 @@ func TestLocalSHAShape(t *testing.T) {
 	}
 }
 
+func TestBuildVersionIncludesRevisionWhenAvailable(t *testing.T) {
+	got := BuildVersion()
+	sha := LocalSHA()
+	if sha == "" {
+		if got != Version {
+			t.Fatalf("without VCS metadata BuildVersion() = %q, want %q", got, Version)
+		}
+		return
+	}
+	want := Version + "+g" + short(sha)
+	if got != want {
+		t.Fatalf("BuildVersion() = %q, want %q", got, want)
+	}
+}
+
 func TestNoticeOptOut(t *testing.T) {
 	t.Setenv("TILDE_NO_UPDATE_CHECK", "1")
 	if got := Notice(); got != "" {

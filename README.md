@@ -93,6 +93,10 @@ tilde update   # pull --ff-only, rebuild, smoke-test, reinstall, restart
 tilde --version
 ```
 
+VCS builds report the release line plus their short source revision (for
+example, `v0.9.0+g5f94724`), so a rebuilt binary is distinguishable even
+before the next release tag.
+
 Fail-closed like everything else: a dirty source tree refuses (commit or
 stash first — nothing is stashed or reset for you), and a failed build
 or smoke test never touches your installed binary (atomic rename, never

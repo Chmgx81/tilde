@@ -67,7 +67,7 @@ func main() {
 	flag.Parse()
 
 	if *versionFlag {
-		fmt.Println(update.Version)
+		fmt.Println(update.BuildVersion())
 		return
 	}
 
