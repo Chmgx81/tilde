@@ -646,7 +646,7 @@ As of v0.6+:
 | Audit wiring | DONE — registry `AuditSink` records one hashed-args event per dispatch into `~/.tilde/audit/audit.jsonl`; eval trials intentionally unaudited |
 | Scheduler (no daemon) | DONE — `.tilde/schedule.yaml` + state file, `tilde run-due` reexecs headless per due job; OS owns waking, failed jobs retry next tick |
 | Audit export | DONE — `tilde audit [--since] [--tool] [--decision] [--json]`, corrupt-line tolerant |
-| Plugin manifest v1 | DONE — `tilder-plugin.yaml` strict validation, `tilde plugin install/verify/list`, sha256 lockfile, drift refuses |
+| Plugin manifest v1 | DONE — `tilde-plugin.yaml` strict validation, `tilde plugin install/verify/list`, sha256 lockfile, drift refuses |
 | diagnose tool | DONE — stdlib gofmt/parse/TODO diagnostics, read-only, batches with grep |
 | Vector memory | DONE — TF-IDF default + Ollama `/api/embeddings` optional (`TILDE_EMBED_MODEL`), `.tilde/vectors.jsonl`, `remember` index/recall/status; index Plan-blocked + ask |
 | Browser screenshots | DONE — `web_shot` via headless Firefox viewport PNG (ask, Plan-OK, SSRF-gated); PNGs are human-review artifacts, no vision pipeline yet |

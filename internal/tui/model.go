@@ -120,16 +120,15 @@ type Model struct {
 	// §2.21) but every copy path expands tokens back to the real
 	// content — the transcript is a summary view, a copy of it is not.
 	pasteEcho map[int][]pasteSeg
-	// Provider abstraction (spec §2.24): creds is the on-disk key store
+	// provider abstraction (spec §2.24): creds is the on-disk key store
 	// (nil in tests without BindCreds — env-only), keyOverrides holds
 	// --api-key values for this process. keyProvider non-empty arms the
-	// masked key-entry overlay; loginSel tracks the /model dropdown.
+	// masked key-entry overlay.
 	creds        *creds.Store
 	keyOverrides map[string]string
 	keyProvider  string
 	keyInput     textinput.Model
 	keyErr       string
-	loginSel     int
 	// budgetExplicit is set once at startup (main): true when --budget
 	// or $TILDE_BUDGET was given. See SetBudgetExplicit in login.go.
 	budgetExplicit bool

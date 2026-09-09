@@ -1,7 +1,7 @@
 // Package plugin implements the P3-C plugin manifest v1 (local-only install).
 //
 // A plugin is a local directory the user has already vetted. It carries a
-// manifest file (tilder-plugin.yaml) declaring which files make up the
+// manifest file (tilde-plugin.yaml) declaring which files make up the
 // plugin; Install copies exactly those files into pluginHome/<name>/ and
 // pins a lockfile with the sha256 of every installed file. Verify re-hashes
 // the installed tree against the lockfile. Reinstall (--upgrade semantics)
@@ -40,9 +40,14 @@ import (
 // Manifest file and lockfile names.
 const (
 	// ManifestFileName is the manifest file read from the source dir.
-	ManifestFileName = "tilder-plugin.yaml"
+	ManifestFileName = "tilde-plugin.yaml"
+	// ManifestFileNameLegacy is the pre-v0.11 typo name, still accepted
+	// read-only so existing installs keep verifying.
+	ManifestFileNameLegacy = "tilder-plugin.yaml"
 	// LockFileName is the integrity lockfile written into the installed dir.
-	LockFileName = "tilder-plugin.lock.json"
+	LockFileName = "tilde-plugin.lock.json"
+	// LockFileNameLegacy is the old lockfile name, accepted on verify.
+	LockFileNameLegacy = "tilder-plugin.lock.json"
 )
 
 // Skill caps, carried over from the deferred marketplace notes.
@@ -60,7 +65,7 @@ var (
 	versionRe = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 )
 
-// Manifest is the parsed tilder-plugin.yaml.
+// Manifest is the parsed tilde-plugin.yaml.
 type Manifest struct {
 	Name        string   `yaml:"name"`
 	Version     string   `yaml:"version"`
@@ -77,11 +82,17 @@ type Lockfile struct {
 	Files   map[string]string `json:"files"`
 }
 
-// LoadManifest reads dir/tilder-plugin.yaml, parses it, and validates it.
+// LoadManifest reads dir/tilde-plugin.yaml, parses it, and validates it.
 // Read-only: loading never installs anything.
 func LoadManifest(dir string) (*Manifest, error) {
 	path := filepath.Join(dir, ManifestFileName)
 	data, err := os.ReadFile(path)
+	if err != nil && os.IsNotExist(err) {
+		// Legacy typo name from before the rename — read-only compat so
+		// existing checkouts keep loading; new installs pin the new name.
+		path = filepath.Join(dir, ManifestFileNameLegacy)
+		data, err = os.ReadFile(path)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("plugin: cannot read manifest %q: %v — create %s with name/version/description/skills", path, err, ManifestFileName)
 	}
@@ -111,7 +122,7 @@ func (m *Manifest) Validate(dir string) error {
 		return fmt.Errorf("plugin %q: missing description — add one line saying what the plugin is for", m.Name)
 	}
 	if len(m.Skills) == 0 {
-		return fmt.Errorf("plugin %q: no skills listed — add at least one .md file under skills:", m.Name)
+		return fmt.Errorf("plugin %q: no skills listed — add at least one .md file under skills", m.Name)
 	}
 	if len(m.Skills) > MaxSkillFiles {
 		return fmt.Errorf("plugin %q: %d skills listed (cap %d) — split the plugin or drop extras", m.Name, len(m.Skills), MaxSkillFiles)
@@ -262,6 +273,10 @@ func hashFile(path string) (string, error) {
 func LoadLockfile(installedDir string) (*Lockfile, error) {
 	path := filepath.Join(installedDir, LockFileName)
 	data, err := os.ReadFile(path)
+	if err != nil && os.IsNotExist(err) {
+		path = filepath.Join(installedDir, LockFileNameLegacy)
+		data, err = os.ReadFile(path)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("plugin: cannot read lockfile in %q: %v", installedDir, err)
 	}
@@ -408,8 +423,9 @@ func Verify(installedDir string) bool {
 			return false
 		}
 	}
-	allowed := make(map[string]bool, len(lf.Files)+1)
+	allowed := make(map[string]bool, len(lf.Files)+2)
 	allowed[LockFileName] = true
+	allowed[LockFileNameLegacy] = true
 	for rel := range lf.Files {
 		allowed[filepath.FromSlash(rel)] = true
 	}
