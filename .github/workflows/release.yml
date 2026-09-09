@@ -20,6 +20,9 @@ jobs:
           go-version: "1.25"
           cache: true
       - name: Run GoReleaser
-        run: go run github.com/goreleaser/goreleaser/v2@latest release --clean
+        run: |
+          extra=""
+          command -v syft >/dev/null 2>&1 || extra="--skip=sbom"
+          go run github.com/goreleaser/goreleaser/v2@latest release --clean $extra
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
