@@ -100,8 +100,17 @@ func (m Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // offered for shell_command only — never for mcp/tools, where an
 // "always" approval would be a pattern-shaped hole. Wire it at the
 // confirm panel (model.go View): Confirm + "\n" + confirmFooter(…).
-func confirmFooter(tool string, args map[string]any) string {
-	foot := fmt.Sprintf("Confirm\n%s\n[y] once   [n] deny (default — Enter denies)", policy.Describe(tool, args))
+func confirmFooter(tool string, args map[string]any, width int) string {
+	reason := "The active policy requires your approval before this action can run."
+	if supplied, ok := args["reason"].(string); ok && strings.TrimSpace(supplied) != "" {
+		reason = strings.TrimSpace(supplied)
+	}
+	lineWidth := width - 6 // rounded border + padding
+	if lineWidth < 20 {
+		lineWidth = 20
+	}
+	reasonLine := wrapLine("Reason: "+reason, lineWidth)
+	foot := fmt.Sprintf("Confirm\n%s\n\n%s\n[y] once   [n] deny (default — Enter denies)", policy.Describe(tool, args), reasonLine)
 	if tool == "shell_command" {
 		foot += "   [a] always this session (exact command)"
 	}

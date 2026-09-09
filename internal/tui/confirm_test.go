@@ -123,16 +123,24 @@ func TestConfirmAlwaysUppercase(t *testing.T) {
 }
 
 func TestConfirmFooterShellOnly(t *testing.T) {
-	shell := confirmFooter("shell_command", map[string]any{"command": "go test ./..."})
+	shell := confirmFooter("shell_command", map[string]any{"command": "go test ./..."}, 100)
 	if !strings.Contains(shell, "[a] always this session (exact command)") {
 		t.Fatalf("shell footer must offer [a]:\n%s", shell)
 	}
 	if !strings.Contains(shell, "[y] once") || !strings.Contains(shell, "[n] deny") {
 		t.Fatalf("footer must keep y/n:\n%s", shell)
 	}
-	mcp := confirmFooter("mcp_call", map[string]any{"server": "fs", "tool": "read"})
+	mcp := confirmFooter("mcp_call", map[string]any{"server": "fs", "tool": "read"}, 100)
 	if strings.Contains(mcp, "[a]") {
 		t.Fatalf("non-shell footer must not offer [a]:\n%s", mcp)
+	}
+}
+
+func TestConfirmFooterUsesSuppliedReason(t *testing.T) {
+	reason := "May I commit and push the verified updater fix that prevents historical unsigned tags from blocking current updates?"
+	got := confirmFooter("shell_command", map[string]any{"command": "git diff --check", "reason": reason}, 200)
+	if !strings.Contains(got, "Reason: "+reason) {
+		t.Fatalf("confirm footer must show supplied reason:\n%s", got)
 	}
 }
 

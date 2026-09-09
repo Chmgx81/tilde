@@ -597,11 +597,13 @@ only the *color and default* change:
 ```
 Confirm tier (amber):
 ┌ Confirm ─────────────────────────────────────────────────────────────┐
-│ Run: rm internal/provider/provider_old.go                                  │
-│                                                                            │
-│ [y] once   [n] deny (default — Enter denies)                               │
-│ [a] always this session (exact command — shell only)                       │
-└────────────────────────────────────────────────────────────────────────┘
+│ Run: rm internal/provider/provider_old.go                             │
+│ Reason: May I commit and push the verified updater fix that prevents   │
+│ historical unsigned tags from blocking current updates?               │
+│                                                                       │
+│ [y] once   [n] deny (default — Enter denies)                          │
+│ [a] always this session (exact command — shell only)                  │
+└───────────────────────────────────────────────────────────────────────┘
 
 Deny-tier panel (red, `[o] override once`): DEFERRED — no red deny-tier
 panel exists in code; policy denials currently render as an inline
@@ -611,6 +613,9 @@ panel exists in code; policy denials currently render as an inline
 - The exact command or action is shown verbatim, never summarized — a
   paraphrased confirm prompt ("run a cleanup command") defeats the entire
   purpose of asking.
+- If the tool request supplies a reason, it is shown explicitly after the
+  exact action. Otherwise the UI uses the truthful fallback that active policy
+  approval is required; it never invents model rationale.
 - Default focused option is always the safe one (`n` / deny) — Enter with no
   other input denies. This is a deliberate one-way door: it is much cheaper to
   make the user press one extra key to allow something than to make a
@@ -735,8 +740,8 @@ timeline vocabulary it's explaining.
   copies the rows as plain text (ANSI stripped) through the clipboard
   ladder and toasts the receipt; a bare click copies nothing. Collapsed
   pastes copy expanded (§2.21): tokens never leak into the clipboard.
-  Shift+drag still
-  reaches the terminal's own selection, and Alt+M pauses tracking
+  Shift+drag still reaches the terminal's own selection and is the
+  recommended way to copy arbitrary terminal contents. Alt+M pauses tracking
   entirely for native drag-select with rectangles and terminal copy
   chords — the wheel pauses with it and the hint bar says so until
   Alt+M re-arms scrolling. Clipboard writes go to xclip/xsel first and

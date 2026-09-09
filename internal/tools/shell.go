@@ -288,12 +288,13 @@ type Shell struct {
 
 func (t *Shell) Name() string { return "shell_command" }
 func (t *Shell) Description() string {
-	return "Run a shell command in the project directory. Returns exit code, stdout, stderr. Commands running longer than the detach threshold (default 30s, or timeout:) move to the background and return a task id + log path instead of blocking; poll with shell_poll."
+	return "Run a shell command in the project directory. Returns exit code, stdout, stderr. Commands running longer than the detach threshold (default 30s, or timeout:) move to the background and return a task id + log path instead of blocking; poll with shell_poll. When approval is required, optionally provide a concise reason to show the user."
 }
 func (t *Shell) Schema() map[string]any {
 	return map[string]any{"type": "object",
 		"properties": map[string]any{
 			"command":    map[string]any{"type": "string", "description": "Shell command, e.g. go test ./..."},
+			"reason":     map[string]any{"type": "string", "description": "Optional concise reason shown in the approval prompt; informational only"},
 			"background": map[string]any{"type": "boolean", "description": "Start detached immediately; returns task id + log path"},
 			"timeout":    map[string]any{"type": "integer", "description": "Seconds before the call detaches to background (default 30, capped by the background max)"},
 		}, "required": []string{"command"}}
