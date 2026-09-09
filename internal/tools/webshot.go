@@ -93,8 +93,12 @@ func (t *WebShot) Exec(ctx context.Context, args map[string]any) (string, error)
 	}
 	// Shared SSRF helpers from webfetch.go (same package): IP literal,
 	// DNS-resolution, and private/loopback/link-local rules. Firefox
-	// follows redirects on its own, so this pre-check covers the initial
-	// target; redirect chains run inside the browser.
+	// follows redirects on its own, so this pre-check covers only the
+	// initial target: a public start URL can still redirect the browser
+	// to a private/loopback host. Treat screenshots of untrusted pages
+	// as untrusted input — never screenshot URLs from untrusted content
+	// without user approval (ask-tier), and prefer web_fetch (which
+	// re-validates every redirect) when only the text is needed.
 	if err := validateFetchTarget(ctx, u); err != nil {
 		return "", err
 	}

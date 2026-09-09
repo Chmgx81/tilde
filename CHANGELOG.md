@@ -9,7 +9,9 @@
 - `diagnose`: gofmt/parse-error/TODO diagnostics over Go code, read-only.
 - `remember`: vector memory over the repo (offline TF-IDF default,
   Ollama embeddings via `TILDE_EMBED_MODEL`); index is ask + Plan-blocked.
-- `web_shot`: headless-Firefox viewport screenshots (ask, SSRF-gated).
+- `web_shot`: headless-Firefox viewport screenshots (ask, SSRF-gated on
+  the initial URL; Firefox follows redirects internally, so prefer
+  `web_fetch` when only text is needed).
 - `tilde ide-bridge`: stdio JSON bridge for IDE hosts (chat approvals deny).
 - `tilde models [provider]`: catalog windows + prices without network.
 - `sandbox.Containerfile` + image doc: digest-pinned podman backend image.
@@ -24,6 +26,10 @@
 - `tilde --export`: headless brief export (cwd-contained).
 - Plan banner + Update Todos block; subagent ⋮/│ timeline rows.
 - Contrast-verified accent-select; exit 3 for all cloud providers.
+- Secret scrubbing is one pattern set (`internal/scrub`; tools/hooks/session/audit
+  consume it — hooks previously redacted a narrower subset).
+- `web_fetch` allow_net redirects refuse unless the target host is listed;
+  `web_search` backend redirects re-validate scheme/userinfo/SSRF.
 
 P1+P2 user-visible changes (binary still reports `v0.9.0` until release):
 

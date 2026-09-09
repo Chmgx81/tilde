@@ -213,7 +213,7 @@ already does those jobs.
 
 | File | Scope | Notes |
 |---|---|---|
-| `policies.yaml` | project root | Live tiers; deny beats `--yes` and Auto; `allow_net` lists hosts `web_fetch` may reach without `TILDE_ALLOW_NET=1`; `deny_paths` denies file-tool paths by glob before tiers |
+| `policies.yaml` | project root | Live tiers; deny beats `--yes` and Auto; `allow_net` lists hosts `web_fetch` / `web_search` may reach without `TILDE_ALLOW_NET=1` (`web_shot` honors it for the initial URL; redirects run inside Firefox); `deny_paths` denies file-tool paths by glob before tiers |
 | `.tilde/skills/*.md` | project | Needs `--skills-project`; progressive disclosure (one-liners in prompt, bodies on load) |
 | `AGENTS.md` / `CLAUDE.md` / `.tilde/RULES.md` | project | First existing wins; auto-loaded into the prompt under the project-skills trust gate; 8KB cap |
 | `~/.tilde/skills/*.md` | user | Same, personal |
@@ -229,7 +229,7 @@ already does those jobs.
 | `TILDE_NO_SANDBOX=1` | Disable bwrap (loud warning, not recommended) |
 | `TILDE_BACKEND=podman` | Run shell calls in an ephemeral digest-pinned podman container instead of bwrap (needs `TILDE_SANDBOX_IMAGE` with `@sha256:` digest) |
 | `TILDE_SANDBOX_IMAGE` | Container image for the podman backend (digest-pin required, e.g. `img@sha256:<64 hex>`) |
-| `TILDE_ALLOW_NET=1` | Lift the sandbox network ban (policy still judges commands; required for `web_fetch`) |
+| `TILDE_ALLOW_NET=1` | Lift the sandbox network ban (policy still judges commands; required for `web_fetch` / `web_search` / `web_shot` unless the host is in `allow_net`) |
 | `TILDE_MCP_PROJECT=1` / `TILDE_HOOKS_PROJECT=1` / `TILDE_SKILLS_PROJECT=1` | Opt into project MCP / hooks / skills |
 | `TILDE_PASTE_LINES` | Large-paste collapse threshold in lines (default 4, `0` disables) |
 | `TILDE_ARROWS=scroll` | Arrows scroll the transcript instead of recalling history |
@@ -297,6 +297,7 @@ internal/plugin/         hash-pinned local plugin installs (manifest v1 + lockfi
 internal/schedule/       due-checker for .tilde/schedule.yaml (no daemon; run-due reexecs headless)
 internal/rules/          project rules auto-load (AGENTS.md/CLAUDE.md/.tilde/RULES.md, trust-gated)
 internal/vec/            vector memory engine (TF-IDF default, Ollama embeddings optional)
+internal/scrub/          shared secret-redaction patterns (single source of truth; tools/hooks/session/audit consume it)
 internal/mcp/            stdio client, lazy gateway (names in prompt)
 internal/hooks/          before/after tool scripts, session start/end
 internal/ide/            stdio JSON bridge for IDE hosts (initialize/health/session.chat/history)

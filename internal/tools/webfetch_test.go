@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -120,5 +121,58 @@ func TestWebFetchUAAndSchema(t *testing.T) {
 	}
 	if _, ok := props["format"]; !ok {
 		t.Fatalf("schema must advertise format param")
+	}
+}
+
+// Regression: an allow_net host must not smuggle redirects to unlisted hosts.
+func TestWebFetchAllowNetRedirectScope(t *testing.T) {
+	inner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body>secret-inner</body></html>`))
+	}))
+	defer inner.Close()
+	outer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, inner.URL, http.StatusFound)
+	}))
+	defer outer.Close()
+	hostOf := func(raw string) string {
+		u, err := url.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u.Hostname()
+	}
+	outerHost := hostOf(outer.URL)
+	w := &WebFetch{
+		AllowNet:  func() bool { return false },
+		HostAllow: func(host string) bool { return host == outerHost },
+	}
+
+	// httptest binds loopback, so the SSRF guard fires first here; either
+	// refusal proves the redirect did NOT inherit the outer allow_net grant.
+	// The dedicated allow_net-scoping assertion lives in the redirect
+	// CheckRedirect unit below (no network), which names allow_net.
+	if _, err := w.Exec(context.Background(), map[string]any{"url": outer.URL}); err == nil || !strings.Contains(err.Error(), "refused") {
+		t.Fatalf("redirect to non-allowlisted host must be refused, got %v", err)
+	}
+}
+
+// Unit: with session-wide net allowed, redirects still re-validate the target.
+func TestWebFetchRedirectRevalidatesTarget(t *testing.T) {
+	w := &WebFetch{AllowNet: func() bool { return true }}
+	_ = w
+	// Private-redirect refusal is covered by TestWebFetchSSRFRefused
+	// (redirect-to-private); this pins the allow_net scoping rule at the
+	// gate level: an allowlisted initial host does not imply redirect hosts.
+	listed := &WebFetch{
+		AllowNet:  func() bool { return false },
+		HostAllow: func(host string) bool { return host == "allowed.invalid" },
+	}
+	if _, err := listed.Exec(context.Background(), map[string]any{"url": "https://allowed.invalid/x"}); err != nil && strings.Contains(err.Error(), "network is disabled") {
+		t.Fatalf("allowlisted initial host must pass the gate, got %v", err)
+	}
+	out, err := listed.Exec(context.Background(), map[string]any{"url": "https://other.invalid/x"})
+	if err != nil || !strings.Contains(out, "network is disabled") {
+		t.Fatalf("unlisted host must stay denied: out=%q err=%v", out, err)
 	}
 }

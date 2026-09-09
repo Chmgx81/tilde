@@ -7,13 +7,14 @@ main.go (composition root) -> internal/* (flat packages)
 ```
 
 - `main.go` wires everything; `internal/*` holds flat, single-purpose
-  packages (agent, compact, creds, eval, hooks, mcp, mode, policy,
-  provider, repair, sandbox, session, skills, tools, tui, update,
-  plus the `trust` gate).
+  packages (agent, audit, compact, creds, eval, export, hooks, ide,
+  mcp, mode, plugin, policy, provider, repair, rules, sandbox,
+  schedule, scrub, session, skills, tools, trust, tui, update, vec).
 - Dependency direction rule: `main.go` may import `internal/*`;
   `internal/*` packages must not import `main.go`, and new
-  cross-package deps should point inward toward policy/sandbox/trust
-  style leaf gates, never form cycles.
+  cross-package deps should point inward toward policy/sandbox/trust/scrub
+  style leaf gates, never form cycles (`tools` imports `hooks`, so shared
+  secrets patterns live in the `scrub` leaf, never in `tools`).
 
 - Trust denies by default; tool output is scrubbed — see `docs/Plan.md`.
 Behavioral spec: see `docs/Plan.md` (source of truth for behavior).

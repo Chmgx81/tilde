@@ -27,8 +27,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
+	"tilde/internal/scrub"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -206,35 +206,12 @@ func TrustHash(path string) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-// scrubLocal redacts key-like tokens from hook output for audit lines.
-// NOTE: tools.Scrub cannot be used here — internal/tools imports
-// internal/hooks (registry.go), so that would be an import cycle.
-// This is a minimal local subset; keep in sync conceptually.
-var (
-	reHookPEM       = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----`)
-	reHookAnthropic = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]{20,}`)
-	reHookOpenAI    = regexp.MustCompile(`sk-[A-Za-z0-9_-]{20,}`)
-	reHookXAI       = regexp.MustCompile(`xai-[A-Za-z0-9_-]{20,}`)
-	reHookAWS       = regexp.MustCompile(`(?:AKIA|ASIA)[0-9A-Z]{16}`)
-	reHookGitHub    = regexp.MustCompile(`(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}`)
-	reHookGitLab    = regexp.MustCompile(`glpat-[A-Za-z0-9_-]{20,}`)
-	reHookSlack     = regexp.MustCompile(`(?:xox[abps]|xapp)-[A-Za-z0-9-]+`)
-	reHookBearer    = regexp.MustCompile(`Bearer\s+[A-Za-z0-9_.~+/=-]+`)
-	reHookJWT       = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
-)
-
+// scrubLocal redacts via the shared leaf internal/scrub (full pattern set).
+// tools.Scrub still cannot be used here (import cycle via registry.go),
+// but the leaf has no such cycle.
 func scrubLocal(s string) string {
-	s = reHookPEM.ReplaceAllString(s, "<<REDACTED:pem>>")
-	s = reHookAnthropic.ReplaceAllString(s, "<<REDACTED:anthropic>>")
-	s = reHookOpenAI.ReplaceAllString(s, "<<REDACTED:openai>>")
-	s = reHookXAI.ReplaceAllString(s, "<<REDACTED:xai>>")
-	s = reHookAWS.ReplaceAllString(s, "<<REDACTED:aws>>")
-	s = reHookGitHub.ReplaceAllString(s, "<<REDACTED:github>>")
-	s = reHookGitLab.ReplaceAllString(s, "<<REDACTED:gitlab>>")
-	s = reHookSlack.ReplaceAllString(s, "<<REDACTED:slack>>")
-	s = reHookBearer.ReplaceAllString(s, "Bearer <<REDACTED:bearer>>")
-	s = reHookJWT.ReplaceAllString(s, "<<REDACTED:jwt>>")
-	return s
+	clean, _ := scrub.Scrub(s)
+	return clean
 }
 
 func trunc(s string, max int) string {

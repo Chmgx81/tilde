@@ -130,9 +130,18 @@ func (t *WebSearch) runSearch(ctx context.Context, q string, n int) ([]searchRes
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	client := t.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: searchTimeout, CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+		client = &http.Client{Timeout: searchTimeout, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("stopped after 5 redirects")
+			}
+			if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+				return fmt.Errorf("refused redirect to %q: only http(s) URLs are fetchable", req.URL.String())
+			}
+			if req.URL.User != nil {
+				return fmt.Errorf("refused redirect to %q: userinfo in URL is not allowed", req.URL.String())
+			}
+			if err := validateFetchTarget(req.Context(), req.URL); err != nil {
+				return err
 			}
 			return nil
 		}}
