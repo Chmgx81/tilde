@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"tilde/internal/marketplace"
 	"tilde/internal/mcp"
@@ -66,7 +67,7 @@ func (m *Model) openMarketplace() {
 	m.marketplaceOpen = true
 }
 
-func (m Model) updateMarketplace(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) updateMarketplace(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	rows := m.marketplaceItems.Items(marketplaceTabs[m.marketplaceTab], m.marketplaceQuery)
 	switch msg.Type {
 	case tea.KeyCtrlC:
@@ -105,29 +106,21 @@ func (m Model) updateMarketplace(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyRunes:
-		if msg.String() == "i" && len(rows) > 0 && m.marketplaceCursor < len(rows) {
+		key := string(msg.Runes)
+		if key == "i" && len(rows) > 0 && m.marketplaceCursor < len(rows) {
 			item := rows[m.marketplaceCursor]
 			if !item.Installable {
 				m.append("✗ " + item.Name + " is not an installable local marketplace package")
 				return m, nil
 			}
-			home, err := os.UserHomeDir()
-			if err != nil {
-				m.append("✗ cannot locate plugin home: " + err.Error())
-				return m, nil
-			}
-			if _, err := plugin.Install(item.InstallPath, filepath.Join(home, ".tilde", "plugins")); err != nil {
-				m.append("✗ plugin install failed: " + err.Error())
-				return m, nil
-			}
-			m.append("✓ Installed " + item.Name + " v" + item.Version + " — reopen /plugins to inspect its skills")
-			m.openMarketplace()
+			copy := item
+			m.marketplacePending = &copy
 			return m, nil
 		}
-		if msg.String() == "/" {
+		if key == "/" {
 			m.marketplaceQuery = ""
 		} else {
-			m.marketplaceQuery += msg.String()
+			m.marketplaceQuery += key
 		}
 		m.marketplaceCursor = 0
 		return m, nil
@@ -141,6 +134,59 @@ func (m Model) updateMarketplace(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) updateMarketplaceConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.marketplacePending == nil {
+		return m, nil
+	}
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.marketplacePending = nil
+		return m, nil
+	case tea.KeyEnter:
+		return m.installMarketplacePending()
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyRunes:
+		switch strings.ToLower(msg.String()) {
+		case "y":
+			return m.installMarketplacePending()
+		case "n":
+			m.marketplacePending = nil
+			return m, nil
+		}
+	}
+	return m, nil
+}
+
+func (m *Model) installMarketplacePending() (tea.Model, tea.Cmd) {
+	item := m.marketplacePending
+	m.marketplacePending = nil
+	if item == nil {
+		return m, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		m.append("✗ cannot locate plugin home: " + err.Error())
+		return m, nil
+	}
+	if _, err := plugin.Install(item.InstallPath, filepath.Join(home, ".tilde", "plugins")); err != nil {
+		m.append("✗ plugin install failed: " + err.Error())
+		return m, nil
+	}
+	m.append("✓ Installed " + item.Name + " v" + item.Version + " — reopen /plugins to inspect its skills")
+	m.openMarketplace()
+	// Land on the installed package's skill list so the install action has a
+	// useful, deterministic next step instead of returning to the catalog.
+	m.marketplaceTab = 3 // Skills
+	for _, sk := range m.marketplaceItems.Items(marketplace.Skills, "") {
+		if strings.Contains(filepath.Clean(sk.Source), filepath.Clean(item.Name)) {
+			m.marketplaceQuery = sk.Name
+			break
+		}
 	}
 	return m, nil
 }
@@ -168,8 +214,10 @@ func (m Model) marketplaceView() string {
 	}
 	for i, item := range rows {
 		status := "[installed]"
+		statusStyle := lipgloss.NewStyle().Foreground(success)
 		if !item.Installed {
 			status = "[install]"
+			statusStyle = lipgloss.NewStyle().Foreground(accentSelect)
 		}
 		if item.Verified {
 			status = "[verified]"
@@ -182,10 +230,18 @@ func (m Model) marketplaceView() string {
 		if detail == "" {
 			detail = item.Source
 		}
-		line := fmt.Sprintf("  %s %-28s (%s) %s", map[bool]string{true: "›", false: " "}[i == m.marketplaceCursor], label, detail, status)
-		if m.vp.Width > 0 {
-			line = truncANSI(line, m.vp.Width)
+		width := m.vp.Width
+		if width <= 0 {
+			width = 80
 		}
+		statusWidth := ansi.StringWidth(status)
+		prefix := fmt.Sprintf("  %s ", map[bool]string{true: "›", false: " "}[i == m.marketplaceCursor])
+		available := max(width-ansi.StringWidth(prefix)-statusWidth-3, 12)
+		left := max(available*2/3, 8)
+		right := max(available-left-1, 8)
+		line := prefix + padRunesRight(truncANSI(label, left), left) + " " +
+			padRunesRight(truncANSI("("+detail+")", right), right)
+		line = line + strings.Repeat(" ", max(width-ansi.StringWidth(line)-statusWidth, 1)) + statusStyle.Render(status)
 		if i == m.marketplaceCursor {
 			line = lipgloss.NewStyle().Background(accentSelect).Render(line)
 		} else {
@@ -197,6 +253,24 @@ func (m Model) marketplaceView() string {
 		b.WriteString("  no matching items\n")
 	}
 	b.WriteString("  ←→ tabs · ↑↓ select · enter open · / search · esc close")
+	return b.String()
+}
+
+func (m Model) marketplaceConfirmView() string {
+	item := m.marketplacePending
+	if item == nil {
+		return m.marketplaceView()
+	}
+	var b strings.Builder
+	b.WriteString("Install marketplace package?\n\n")
+	fmt.Fprintf(&b, "  %s v%s\n", item.Name, item.Version)
+	fmt.Fprintf(&b, "  source: %s\n", item.Source)
+	fmt.Fprintf(&b, "  scope: %s\n", item.Scope)
+	if item.Description != "" {
+		fmt.Fprintf(&b, "  %s\n", item.Description)
+	}
+	b.WriteString("\n  This copies a reviewed local package into ~/.tilde/plugins.\n")
+	b.WriteString("  y/enter install · n/esc cancel")
 	return b.String()
 }
 

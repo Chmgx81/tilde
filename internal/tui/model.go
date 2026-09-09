@@ -137,33 +137,34 @@ type Model struct {
 	budgetExplicit bool
 
 	// Phase 4 surfaces.
-	helpOpen          bool
-	resumeOpen        bool
-	resumeItems       []SessionItem
-	resumeCursor      int
-	skillsOpen        bool
-	skillsItems       []skills.Skill
-	skillsCursor      int
-	skillsQuery       string
-	marketplaceOpen   bool
-	marketplaceItems  marketplace.Registry
-	marketplaceCursor int
-	marketplaceQuery  string
-	marketplaceTab    int
-	slashOpen         bool
-	slashItems        []slashRow
-	slashCursor       int
-	slashFilter       string // last filter (cursor resets only when it changes)
-	atOpen            bool
-	atItems           []atRow
-	atCursor          int
-	atQuery           string
-	dismissed         string   // composer text for which pickers stay shut (Esc)
-	atFiles           []string // session-cached file list for @ (reloaded on /clear)
-	atLoaded          bool
-	hist              []string // submitted prompts, oldest first (Up/Down ring)
-	histIdx           int      // len(hist) = live draft; below = recalled entry
-	histDraft         string   // stashed draft restored at the bottom of Down
+	helpOpen           bool
+	resumeOpen         bool
+	resumeItems        []SessionItem
+	resumeCursor       int
+	skillsOpen         bool
+	skillsItems        []skills.Skill
+	skillsCursor       int
+	skillsQuery        string
+	marketplaceOpen    bool
+	marketplaceItems   marketplace.Registry
+	marketplaceCursor  int
+	marketplaceQuery   string
+	marketplaceTab     int
+	marketplacePending *marketplace.Item
+	slashOpen          bool
+	slashItems         []slashRow
+	slashCursor        int
+	slashFilter        string // last filter (cursor resets only when it changes)
+	atOpen             bool
+	atItems            []atRow
+	atCursor           int
+	atQuery            string
+	dismissed          string   // composer text for which pickers stay shut (Esc)
+	atFiles            []string // session-cached file list for @ (reloaded on /clear)
+	atLoaded           bool
+	hist               []string // submitted prompts, oldest first (Up/Down ring)
+	histIdx            int      // len(hist) = live draft; below = recalled entry
+	histDraft          string   // stashed draft restored at the bottom of Down
 	// pasteSegs holds collapsed large pastes: the composer shows only
 	// the "[Pasted text #N +M lines]" token while the full body waits
 	// here for submit-time substitution (spec §2.21).
@@ -374,6 +375,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Approvals preempt everything: an open overlay must never
 		// starve a blocked agent turn of its y/n answer.
 		m.helpOpen, m.resumeOpen, m.skillsOpen, m.marketplaceOpen = false, false, false, false
+		m.marketplacePending = nil
 		m.slashOpen, m.atOpen = false, false
 		m.confirm = &confirmState{Tool: msg.Tool, Args: msg.Args, Done: msg.Done}
 		return m, nil
@@ -395,6 +397,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSkills(msg)
 		}
 		if m.marketplaceOpen {
+			if m.marketplacePending != nil {
+				return m.updateMarketplaceConfirm(msg)
+			}
 			return m.updateMarketplace(msg)
 		}
 		if m.confirm != nil {
@@ -1906,6 +1911,9 @@ func (m Model) View() string {
 		return m.centerFrame(m.skillsView())
 	}
 	if m.marketplaceOpen {
+		if m.marketplacePending != nil {
+			return m.centerFrame(m.marketplaceConfirmView())
+		}
 		return m.centerFrame(m.marketplaceView())
 	}
 	border := borderBuild

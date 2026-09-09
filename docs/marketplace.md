@@ -17,6 +17,12 @@ Marketplace packages are declared by a project-owned catalog at:
 .tilde/marketplace/catalog.yaml
 ```
 
+Tilde also reads compatible local marketplace layouts from
+`.tilde/marketplace/catalog.json`, `.agents/plugins/marketplace.json`,
+`.claude-plugin/marketplace.json`, and `.cursor-plugin/marketplace.json`.
+User-scoped catalogs are read from `~/.tilde/marketplace/catalog.yaml` and
+`~/.agents/plugins/marketplace.json`.
+
 Sources must be local directories containing a valid `tilde-plugin.yaml`.
 Remote URLs are intentionally rejected. A catalog item is installable only
 when its name and version exactly match the source manifest.
@@ -37,9 +43,11 @@ entrypoints, `references/` for conditional reading, `scripts/` for reviewed
 deterministic helpers, and `assets/` for output templates. Tilde copies only
 manifest-listed files and never executes scripts during discovery or install.
 
-The user selects the row and presses `i` to perform the explicit install. The
+The user selects the row and presses `i`, then confirms with `y` or Enter. The
 existing plugin installer then copies only manifest-listed files and creates a
-SHA-256 lockfile. Installation never executes installed content.
+SHA-256 lockfile. Installation never executes installed content. Catalog paths
+must remain inside their project or user root, including after symlink
+resolution.
 
 Press Enter on a plugin to inspect its listed skills. Press Enter on a skill to
 load its body into the current session. Skill names are deduplicated by the
@@ -52,7 +60,8 @@ not create duplicate rows.
 - Left/right or Tab changes the registry kind.
 - Up/down changes the selected row.
 - Enter opens a skill or shows a plugin's skills.
-- `i` installs only a verified local marketplace source.
+- `i` opens an explicit install confirmation for a verified local marketplace
+  source; installed packages land on their skill list.
 - Esc clears search first, then closes the browser.
 
 This keeps hooks, plugins, marketplace packages, skills, and MCP servers in
