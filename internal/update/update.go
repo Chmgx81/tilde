@@ -256,7 +256,37 @@ func Notice() string {
 	if err := json.Unmarshal(data, &c); err != nil || !c.Available || c.Remote == "" {
 		return ""
 	}
-	return noticeFor(Version, LocalSHA(), c)
+	localSHA := LocalSHA()
+	if !isReleaseVersion(c.Remote) && cachedRemoteIsAncestor(c.Remote, localSHA) {
+		return ""
+	}
+	return noticeFor(Version, localSHA, c)
+}
+
+func isReleaseVersion(s string) bool {
+	_, _, _, ok := parseVersion(s)
+	return ok
+}
+
+// cachedRemoteIsAncestor prevents a stale SHA fallback cache from reporting
+// an update when the cached remote commit is already contained in this build.
+// This is intentionally best-effort: if the source checkout or commit object
+// is unavailable, noticeFor keeps the conservative existing behavior.
+func cachedRemoteIsAncestor(remote, local string) bool {
+	if len(remote) != 40 || len(local) != 40 {
+		return false
+	}
+	if remote == local {
+		return true
+	}
+	install, err := readInstall()
+	if err != nil || install.Source == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", install.Source, "merge-base", "--is-ancestor", remote, local)
+	return cmd.Run() == nil
 }
 
 // noticeFor renders the notice from this binary's version and a parsed
@@ -499,6 +529,11 @@ func Run() error {
 		return fmt.Errorf("reinstall failed: %v — fresh binary is at %s", err, filepath.Join(dir, "tilde"))
 	}
 	_ = RecordInstall(dir)
+	// A successful update has resolved any previous cached SHA notice. Mark
+	// the cache current so the next startup cannot repeat stale advice.
+	if p, err := checkPath(); err == nil {
+		writeCheck(p, checkFile{CheckedAt: time.Now().Unix(), Available: false, Remote: Version})
+	}
 	fmt.Printf("tilde: updated %s → %s — restart tilde to use it\n", describeVersion(dir, before), describeVersion(dir, after))
 	return nil
 }

@@ -71,6 +71,12 @@ func TestNoticeForShapes(t *testing.T) {
 	}
 }
 
+func TestIsReleaseVersion(t *testing.T) {
+	if !isReleaseVersion("v0.9.0") || isReleaseVersion("4bd32a8c4cf7b0e7b9c09a2520718c8ed2fde0bf") {
+		t.Fatal("release-version classification is incorrect")
+	}
+}
+
 func TestCompareVersion(t *testing.T) {
 	cases := []struct {
 		a, b string
