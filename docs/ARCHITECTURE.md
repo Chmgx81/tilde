@@ -1,4 +1,8 @@
-# Architecture (pointer doc)
+# Architecture
+
+> Current implementation map and dependency rules.
+
+This is intentionally a pointer document, not a package-by-package encyclopedia. Read [Plan.md](Plan.md) for product decisions and [tui-design-spec.md](tui-design-spec.md) for user-facing behavior.
 
 Module layout:
 
@@ -15,6 +19,16 @@ main.go (composition root) -> internal/* (flat packages)
   cross-package deps should point inward toward policy/sandbox/trust/scrub
   style leaf gates, never form cycles (`tools` imports `hooks`, so shared
   secrets patterns live in the `scrub` leaf, never in `tools`).
+
+## Runtime boundaries
+
+- `policy`, `trust`, and `sandbox` decide whether work may execute.
+- `tools` exposes bounded capabilities; it does not grant trust by itself.
+- `provider` adapts model APIs without changing the agent loop.
+- `session` and `audit` preserve an inspectable record of work and decisions.
+- `plugin`, `skills`, `hooks`, `mcp`, and `marketplace` are extension boundaries; failures are isolated and must not silently widen permissions.
+
+Keep the composition root small, prefer explicit interfaces at external boundaries, and add tests at the boundary whenever a new integration is introduced.
 
 - Trust denies by default; tool output is scrubbed — see `docs/Plan.md`.
 Behavioral spec: see `docs/Plan.md` (source of truth for behavior).

@@ -1,5 +1,8 @@
 # Changelog
 
+Release notes are grouped by version and describe shipped behavior. For
+planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
+
 ## v0.11.0 (unreleased)
 
 - `--version` and the TUI now include the short source revision for VCS

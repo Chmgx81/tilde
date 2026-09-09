@@ -1,9 +1,15 @@
 # tilde (~) — Master Build Plan
 
+> Product scope, architectural decisions, and implementation status.
+
 One file that answers: what are we building, why does it look the way it
 does, and what order do we build it in. Everything else (TUI spec, policies,
 detailed tool code) hangs off this document. If a decision here conflicts
 with an older note, this file wins.
+
+For a quick orientation, see the [documentation index](README.md). Treat `DONE` as a
+claim that must remain backed by code and tests; use `TODO` and deferred notes
+to distinguish planned work from shipped behavior.
 
 ---
 

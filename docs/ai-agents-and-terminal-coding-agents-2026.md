@@ -2,6 +2,13 @@
 
 *Compiled from current industry documentation, benchmark publishers, security research, and academic literature as of September 2026. The field moves weekly — treat exact figures (star counts, benchmark percentages, pricing) as snapshots, not permanent facts.*
 
+> Research reference, not product documentation.
+
+Use this report to understand ecosystem patterns and threat classes. For
+tilde's current behavior, use [docs/README.md](README.md) and
+[docs/Plan.md](Plan.md). Verify every external claim before using it in a
+production, investment, or compliance decision.
+
 ---
 
 ## 1. What "AI Agent" Means in 2026

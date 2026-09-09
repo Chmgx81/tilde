@@ -120,7 +120,7 @@ See [docs/marketplace.md](docs/marketplace.md) for the registry model and lifecy
 
 - **MCP:** supported as a controlled extension boundary; a failed server does not take down the session.
 - **Web access:** provider/tool dependent. tilde does not pretend that every configured model can browse the web.
-- **Vision:** image paths can be passed to a vision-capable provider or vision fallback when configured. A text-only provider is told clearly when it cannot inspect an image.
+- **Vision:** image support is specified but not yet implemented. `web_shot` can produce screenshots for human review; it does not currently send image bytes to a model. See [docs/vision-design.md](docs/vision-design.md).
 - **Browser automation:** available only when an appropriate browser tool or MCP server is installed and approved.
 
 This separation is deliberate: capability discovery is explicit, and unavailable integrations fail clearly rather than producing invented results.

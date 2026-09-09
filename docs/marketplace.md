@@ -1,4 +1,8 @@
-# Tilde marketplace and extension registry
+# Marketplace and extension registry
+
+> One discovery surface for local, workspace, project, user, and remote capabilities.
+
+Status: the local registry and lifecycle are implemented. Remote catalog verification primitives exist, while public remote installation remains an explicit trust-gated integration rather than an implicit network action.
 
 `/plugins` and `/marketplace` open one registry with five filters:
 
@@ -71,6 +75,13 @@ not create duplicate rows.
 
 This keeps hooks, plugins, marketplace packages, skills, and MCP servers in
 one spatial model while preserving their different action boundaries.
+
+## Trust model
+
+Discovery is read-only. Installation, enablement, upgrade, removal, and MCP or
+hook execution are separate state-changing actions. Each action must preserve
+source provenance, validate paths and manifests, and remain reversible where
+possible. Never install an extension solely because it appears in a catalog.
 
 ## Signed remote catalog foundation
 

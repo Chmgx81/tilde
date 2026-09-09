@@ -1,5 +1,11 @@
 # tilde — TUI Design Specification
 
+> The interaction and presentation contract for tilde's terminal UI.
+
+Status: living specification. Entries marked `DONE` describe implemented
+behavior; `TODO` entries are design targets and must not be advertised as
+available features.
+
 Scope: every screen and interaction surface of tilde's terminal UI, plus the design
 system underneath them (color, glyph, spacing, hierarchy, rhythm, alignment,
 consistency rules). Stack assumed: Bubble Tea (event loop) + Lip Gloss (styling) +

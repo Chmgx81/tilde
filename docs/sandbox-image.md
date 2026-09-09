@@ -1,4 +1,9 @@
-# Sandbox image (P4-B)
+# Sandbox image
+
+> Reproducible Podman backend for agent execution.
+
+Status: optional. Bubblewrap remains the default sandbox; use this image when
+the deployment environment standardizes on Podman.
 
 Minimal agent-execution image: `fedora-minimal` + go, git, coreutils,
 bash. Chosen over `archlinux:base` because Fedora ships versioned
@@ -40,6 +45,9 @@ export TILDE_SANDBOX_IMAGE='localhost/tilde-sandbox@sha256:<hex>'
 Runtime mounts the project dir read-write, root read-only, network
 denied unless `TILDE_ALLOW_NET=1` / `AllowNet`. Pass `--tmpfs /tmp`
 (or equivalent) so `GOCACHE`/`GOPATH` under `/tmp` stay writable.
+
+The image is defense in depth, not a replacement for approval checks. Do not
+place credentials in the image or repository.
 
 ## Supply-chain notes
 

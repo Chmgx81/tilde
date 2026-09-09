@@ -1,9 +1,16 @@
 # Vision design
 
+> Acceptance contract for image-aware sessions.
+
 Vision is not implemented yet. Tilde currently accepts text prompts only; its
 provider `Message` interface has no image parts and the TUI has no image
 attachment state. This document is the acceptance contract for the feature so
 it is not accidentally represented as supported.
+
+**Current status:** `web_shot` can create a screenshot artifact for human
+review, but tilde does not yet send image bytes through the provider or invoke
+a vision fallback. Keep this limitation visible until the implementation and
+tests below land.
 
 ## Contract
 
