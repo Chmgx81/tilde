@@ -627,6 +627,44 @@ As of v0.6+:
 | Startup config validation, fail-closed before TUI (§11) | DONE — sandbox/provider/policies refuse pre-TUI; unknown tiers and tool names refuse (exit 2) |
 | Crash-line + unclosed-session resume offer (§11) | DONE — panic crash line; stderr hint plus same-project picker auto-offer |
 | Classified exit codes (§11) | DONE — headless exits 0/2/3/4/5/1 per the spec §4 table (config/startup, provider-exhausted, handoff, deny-tier, other) |
+| web_search (ask-tier) | DONE — keyless DuckDuckGo backend, `TILDE_ALLOW_NET`/allow_net-gated, SSRF-guarded, 5-min cache |
+| Per-host net approval (allow_net) | DONE — `policies.yaml allow_net` exact-host match via `policy.NetAllowed`, wired into fetch + search; shell egress stays all-or-nothing |
+| Fetch extractor (text/markdown) | DONE — HTML→text/markdown extractor, `format:` arg, Mozilla UA, 5-redirect cap, userinfo refusal |
+| Task caps (background + batch fan-out) | DONE — `TaskManager` max 16 running tasks, loop batch flush max 8 (`FlushParallel`) |
+| Work subagents (spawn/apply/discard) | DONE — single-writer `WorkState`, 8 calls / 12 iters / 6 min per session, `PlanAllow` worktree writes |
+| Podman backend file | DONE — `internal/sandbox/podman.go` digest-pinned ephemeral run, selected via `TILDE_BACKEND=podman` + `TILDE_SANDBOX_IMAGE`; bwrap stays default |
+| Creds encryption (envelope) | DONE — AES-GCM `credentials.enc.json` sealed with machine-id key, legacy plaintext kept as compat |
+| Audit package | DONE — `internal/audit` append-only `audit.jsonl`, arg hashes never raw args, scrubbed, `0600` |
+| Release automation | DONE — `.goreleaser.yml` tag builds + SBOM + checksums, CI dry-run, `install.sh --from-release` sha256-verified |
+| Signed update verification | DONE — `verifyTag` refuses unsigned tags via `git verify-tag --raw` before pull |
+| Session scrub at rest | DONE — `session.Append` scrubs via `tools.Scrub`, `0600` heal, crypto-random IDs |
+| Hook safe-env + session hooks | DONE — minimal env (no `*_KEY/*_TOKEN/*_SECRET/*_PASSWORD`), 32KB scrubbed output cap, `session_start`/`session_end` |
+| MCP user-authoritative merge | DONE — project config only adds servers or tightens approval; remote type + `headersFile`, SSRF-guarded URLs |
+| Streaming providers | DONE — optional `Streamer` (ollama NDJSON + openai SSE) carrying the same tool defs as `Chat`; `Collect` assembles prose + native calls + length-cut signal with `Chat` fallback on any stream error; a text-only fast path that dropped calls was caught live and fixed |
+| symbol_search tool | DONE — stdlib definition index (go/py/ts/js/rs) + reference fallback, read-only, counts as seen |
+| memory tool | DONE — project `.tilde/memory.md` save/recall/forget, recall Plan-safe, save/forget Plan-blocked + ask-tier |
+| Audit wiring | DONE — registry `AuditSink` records one hashed-args event per dispatch into `~/.tilde/audit/audit.jsonl`; eval trials intentionally unaudited |
+| Scheduler (no daemon) | DONE — `.tilde/schedule.yaml` + state file, `tilde run-due` reexecs headless per due job; OS owns waking, failed jobs retry next tick |
+| Audit export | DONE — `tilde audit [--since] [--tool] [--decision] [--json]`, corrupt-line tolerant |
+| Plugin manifest v1 | DONE — `tilder-plugin.yaml` strict validation, `tilde plugin install/verify/list`, sha256 lockfile, drift refuses |
+| diagnose tool | DONE — stdlib gofmt/parse/TODO diagnostics, read-only, batches with grep |
+| Vector memory | DONE — TF-IDF default + Ollama `/api/embeddings` optional (`TILDE_EMBED_MODEL`), `.tilde/vectors.jsonl`, `remember` index/recall/status; index Plan-blocked + ask |
+| Browser screenshots | DONE — `web_shot` via headless Firefox viewport PNG (ask, Plan-OK, SSRF-gated); PNGs are human-review artifacts, no vision pipeline yet |
+| IDE stdio bridge | DONE — `tilde ide-bridge` line-JSON (initialize/health/session.create/chat/history), approvals deny-by-default, sessions per-process |
+| Sandbox image | DONE — `sandbox.Containerfile` (fedora-minimal, agent uid, no secrets) + `docs/sandbox-image.md` with digest-pin workflow |
+| models CLI | DONE — `tilde models [provider]` renders catalog windows + prices, unknown provider fails loud |
+| P3 eval tasks | DONE — symbol/diagnose/memory/web-unavailable trajectory tasks with filesystem evidence |
+| Project rules | DONE — AGENTS.md/CLAUDE.md/.tilde/RULES.md auto-load under the project-skills trust gate, 8KB cap, per-iteration reload |
+| Memory hardening | DONE — recency-weighted recall (opt-in half-life), dated memory saves, poisoning trust-model notes |
+| Eval costs | DONE — MED_COST column (median over passing trials, $0 when unpriced), JSON reports carry it |
+| Retention | DONE — `tilde prune` for sessions (keep-5 floor) + audit trim (atomic, 0600), dry run by default |
+| Path-scoped policy | DONE — `deny_paths` globs deny file-tool paths before tiers (beats --yes); loop names the pattern, audit records it |
+| Session fork | DONE — `tilde fork <id> [--at]` byte-identical branch + marker, source untouched |
+| Cost meter | DONE — TUI status bar shows session $ (hidden when unpriced, $0.0000 when known-free) |
+| Loop-level audit | DONE — mode-gate/policy/user denials audited (previously only dispatched calls were) |
+| Headless export | DONE — `tilde --export <id> [--out]` (cwd-contained, 0600, conflict guards) |
+| Plan banner + todos | DONE — banner at start/demotion, Update Todos block from manager state |
+| Subagent view | DONE — ⋮ running / │ [done\|failed] completion rows, per-row model |
 
 ---
 

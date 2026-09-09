@@ -2,6 +2,7 @@ package update
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -197,5 +198,58 @@ func TestRunRefusesDirtyTree(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "install.json"), append(data, '\n'), 0o600)
 	if err := Run(); err == nil || !strings.Contains(err.Error(), "uncommitted") {
 		t.Fatalf("dirty tree must refuse loudly, got %v", err)
+	}
+}
+
+func TestVerifyTagHelperRefusesUnsigned(t *testing.T) {
+	stub := func(args ...string) (string, error) {
+		return "gpg: no signature found", errors.New("exit status 1")
+	}
+	if err := verifyTag(stub, "v0.9.1"); err == nil {
+		t.Fatal("verifyTag must refuse when git verify-tag fails")
+	} else if !strings.Contains(strings.ToLower(err.Error()), "fix") || !strings.Contains(strings.ToLower(err.Error()), "verify-tag") {
+		t.Fatalf("refusal must name the fix (verify-tag/gnupg/sign), got %q", err.Error())
+	}
+	if err := verifyTag(stub, ""); err != nil {
+		t.Fatalf("empty tag (no version tags) must skip verification, got %v", err)
+	}
+	okStub := func(args ...string) (string, error) { return "GOODSIG", nil }
+	if err := verifyTag(okStub, "v0.9.1"); err != nil {
+		t.Fatalf("signed tag must pass, got %v", err)
+	}
+}
+
+func TestRunRefusesUnsignedTag(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git required")
+	}
+	work := t.TempDir()
+	repo := filepath.Join(work, "repo")
+	t.Setenv("HOME", filepath.Join(work, "home"))
+	t.Setenv("TILDE_UPDATE_TARGET", filepath.Join(work, "bin", "tilde"))
+	os.MkdirAll(repo, 0o755)
+	gitRun(t, repo, "init", "-b", "main", "-q", ".")
+	os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x\n"), 0o644)
+	gitRun(t, repo, "add", "-A")
+	gitRun(t, repo, "commit", "-qm", "v1")
+	// Unsigned (non-`-s`) version tag: no signature for verify-tag.
+	gitRun(t, repo, "tag", "v0.9.1")
+	dir := filepath.Join(work, "home", ".tilde")
+	os.MkdirAll(dir, 0o700)
+	data, _ := json.Marshal(installFile{Source: repo})
+	os.WriteFile(filepath.Join(dir, "install.json"), append(data, '\n'), 0o600)
+	err := Run()
+	if err == nil {
+		t.Fatal("unsigned tag must refuse the update")
+	}
+	lower := strings.ToLower(err.Error())
+	if !strings.Contains(lower, "verif") || !strings.Contains(lower, "fix") {
+		t.Fatalf("refusal must name verification + the fix, got %q", err.Error())
+	}
+	if strings.Contains(lower, "already up to date") {
+		t.Fatalf("must refuse before pull/build, got %q", err.Error())
+	}
+	if _, statErr := os.Stat(filepath.Join(work, "bin", "tilde")); !os.IsNotExist(statErr) {
+		t.Fatal("refused update must not install anything")
 	}
 }

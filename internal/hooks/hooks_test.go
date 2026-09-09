@@ -98,6 +98,88 @@ func TestTruncNamesResume(t *testing.T) {
 	}
 }
 
+// P0-3 sandbox: hook env must be stripped to a safe baseline.
+func TestHookEnvStripped(t *testing.T) {
+	t.Setenv("TILDE_TEST_SECRET_TOKEN", "should-not-leak")
+	t.Setenv("MY_API_KEY", "should-not-leak")
+	c := Config{Before: map[string][]string{
+		"probe": {"echo \"tok=${TILDE_TEST_SECRET_TOKEN:-empty} key=${MY_API_KEY:-empty} tool=$TILDE_TOOL\"; exit 1"},
+	}}
+	err := c.RunBefore(context.Background(), "probe", "{}")
+	if err == nil {
+		t.Fatal("probe hook must block to expose output")
+	}
+	msg := err.Error()
+	if !contains(msg, "tok=empty") || !contains(msg, "key=empty") {
+		t.Fatalf("secrets leaked into hook env: %q", msg)
+	}
+	if !contains(msg, "tool=probe") {
+		t.Fatalf("TILDE_TOOL must survive: %q", msg)
+	}
+}
+
+// P0-3 sandbox: combined output capped at 32KB with truncation note.
+func TestHookOutputCapped(t *testing.T) {
+	c := Config{Before: map[string][]string{
+		"big": {"head -c 100000 /dev/zero | tr '\\0' 'x'; exit 1"},
+	}}
+	err := c.RunBefore(context.Background(), "big", "{}")
+	if err == nil {
+		t.Fatal("big hook must block")
+	}
+	// runHook itself must cap at 32KB + note before the 500-char trunc.
+	out, _ := runHook(context.Background(), "big", "{}", "", "head -c 100000 /dev/zero | tr '\\0' 'x'")
+	if len(out) > maxHookOutput+256 {
+		t.Fatalf("output not capped: %d bytes", len(out))
+	}
+	if !contains(out, "hooks sandbox output cap") {
+		t.Fatalf("cap note must name the fix: %q", out[len(out)-120:])
+	}
+}
+
+// P0-3 sandbox: TrustHash stable + sensitive to content.
+func TestTrustHashStable(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "hook.sh")
+	os.WriteFile(p, []byte("echo hi\n"), 0o644)
+	h1, err := TrustHash(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h2, err := TrustHash(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h1 != h2 || len(h1) != 64 {
+		t.Fatalf("hash must be stable 64-hex: %q %q", h1, h2)
+	}
+	os.WriteFile(p, []byte("echo changed\n"), 0o644)
+	h3, err := TrustHash(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h3 == h1 {
+		t.Fatal("hash must change with content")
+	}
+	if _, err := TrustHash(filepath.Join(dir, "missing.sh")); err == nil {
+		t.Fatal("missing file must error")
+	}
+}
+
+// P0-3 sandbox: audit lines scrubbed of key-like tokens.
+func TestHookAuditScrubbed(t *testing.T) {
+	c := Config{After: map[string][]string{
+		"leak": {"echo sk-ant-abcdefghij1234567890abcdef; exit 0"},
+	}}
+	notes := c.RunAfter(context.Background(), "leak", "{}", "ok")
+	if contains(notes, "sk-ant-abcdefghij1234567890abcdef") {
+		t.Fatalf("secret leaked into audit line: %q", notes)
+	}
+	if !contains(notes, "<<REDACTED:anthropic>>") {
+		t.Fatalf("expected redaction marker: %q", notes)
+	}
+}
+
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {

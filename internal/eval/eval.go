@@ -19,6 +19,7 @@ import (
 	"tilde/internal/agent"
 	"tilde/internal/compact"
 	"tilde/internal/mode"
+	"tilde/internal/provider"
 )
 
 // sawKind reports whether any event of the given kind fired (e.g.
@@ -81,12 +82,27 @@ type TaskReport struct {
 	MedianMS   int64
 	MedianIn   int
 	MedianOut  int
-	P90Call    int      // 90th percentile tool calls — tail cost, not just median
-	P90MS      int64    // 90th percentile wall time — catches timeout-adjacent trials
-	MaxCall    int      // worst trial — bounds the retry budget
-	ZeroTokens bool     // true when every trial reported 0 tokens (provider silent)
-	Reasons    []string // failure reasons, deduped
-	Digests    [][]string
+	// MedianCostUSD is the P6-C cost-per-successful-task: the median over
+	// PASSING trials of CostUSD(trial in/out, catalog prices), in USD.
+	// Zero when the price is unknown (provider.PriceFor !ok — never
+	// fabricated), when no trial passed, or when the runner was built
+	// without ProviderID/Model. Free models (0/0) report 0 with a known
+	// price — zero-cost, not unknown.
+	MedianCostUSD float64
+	P90Call       int      // 90th percentile tool calls — tail cost, not just median
+	P90MS         int64    // 90th percentile wall time — catches timeout-adjacent trials
+	MaxCall       int      // worst trial — bounds the retry budget
+	ZeroTokens    bool     // true when every trial reported 0 tokens (provider silent)
+	Reasons       []string // failure reasons, deduped
+	Digests       [][]string
+}
+
+// CostUSD converts per-trial token counts to USD using the catalog's
+// stored per-1M prices: (in*pin + out*pout)/1e6. No currency math beyond
+// tokens/1M*price; callers pass the exact figures from
+// provider.PriceFor — no new data here.
+func CostUSD(in, out int, pin, pout float64) float64 {
+	return (float64(in)*pin + float64(out)*pout) / 1e6
 }
 
 // LoopFactory builds a fresh headless loop rooted at dir. Production wires
@@ -100,6 +116,12 @@ type Runner struct {
 	TrialTimeout time.Duration
 	NewLoop      LoopFactory
 	OutDir       string // trial workdirs parent ("" → os temp)
+	// ProviderID/Model select the catalog shelf for MedianCostUSD via
+	// provider.PriceFor (e.g. "openai", "gpt-5.2-mini"). Empty means
+	// unknown: MedianCostUSD stays 0, never guessed. main.go runEval
+	// owns wiring these from prov.Name() via provider.ParseModelRef.
+	ProviderID string
+	Model      string
 }
 
 func (r *Runner) trials() int {
@@ -138,6 +160,12 @@ func (r *Runner) runTask(ctx context.Context, base string, task Task, progress f
 	var calls []int
 	var mss []int64
 	var tins, touts []int
+	// passCosts holds one USD figure per PASSING trial, computed from
+	// that trial's own loop.TotPrompt/TotCompletion (per-trial usage the
+	// runner already tracks in runTrial) — not cost-of-medians, so a
+	// heavy failing trial cannot inflate the success price.
+	var passCosts []float64
+	pin, pout, priceOK := provider.PriceFor(r.ProviderID, r.Model)
 	for i := 0; i < n; i++ {
 		dir, err := os.MkdirTemp(base, task.Name+"-trial-*")
 		if err != nil {
@@ -166,6 +194,9 @@ func (r *Runner) runTask(ctx context.Context, base string, task Task, progress f
 		}
 		if res.Pass {
 			rep.Passes++
+			if priceOK {
+				passCosts = append(passCosts, CostUSD(res.TokensIn, res.TokensOut, pin, pout))
+			}
 		} else if !seenReasons[res.Reason] {
 			seenReasons[res.Reason] = true
 			rep.Reasons = append(rep.Reasons, res.Reason)
@@ -192,6 +223,12 @@ func (r *Runner) runTask(ctx context.Context, base string, task Task, progress f
 	if len(tins) > 0 {
 		rep.MedianIn = tins[len(tins)/2]
 		rep.MedianOut = touts[len(touts)/2]
+	}
+	// Median over passing trials; zero when price unknown (!ok), when no
+	// trial passed, or when the runner carries no provider/model.
+	if priceOK && len(passCosts) > 0 {
+		sort.Float64s(passCosts)
+		rep.MedianCostUSD = passCosts[len(passCosts)/2]
 	}
 	// Local providers often report no usage: surface it so medians
 	// are not mistaken for measured efficiency.

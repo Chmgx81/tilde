@@ -45,6 +45,8 @@ var mutating = map[string]bool{
 	"git_worktree_add":    true,
 	"git_worktree_remove": true,
 	"mcp_call":            true,
+	"spawn_work":          true,
+	"discard_work":        true,
 }
 
 // IsMutating reports whether a tool can change state.
@@ -56,6 +58,21 @@ func IsMutating(name string) bool { return mutating[name] }
 func IsMutatingCall(name string, args map[string]any) bool {
 	if name == "shell_poll" {
 		if a, _ := args["action"].(string); strings.EqualFold(strings.TrimSpace(a), "kill") {
+			return true
+		}
+		return false
+	}
+	if name == "memory" {
+		// recall reads; save/forget write .tilde/memory.md — same
+		// op-aware split as shell_poll above.
+		if op, _ := args["op"].(string); strings.EqualFold(strings.TrimSpace(op), "recall") {
+			return false
+		}
+		return true
+	}
+	if name == "remember" {
+		// recall/status read the vector store; index rebuilds it.
+		if op, _ := args["op"].(string); strings.EqualFold(strings.TrimSpace(op), "index") {
 			return true
 		}
 		return false

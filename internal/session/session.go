@@ -3,12 +3,15 @@ package session
 
 import (
 	"bufio"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"tilde/internal/tools"
 )
 
 // Entry is one log line.
@@ -45,6 +48,7 @@ func Open(id string) (*Log, error) {
 	if err != nil {
 		return nil, fmt.Errorf("session: cannot open %s: %w", path, err)
 	}
+	_ = os.Chmod(path, 0o600) // heal pre-existing perms; best effort
 	return &Log{Path: path, f: f, w: bufio.NewWriter(f)}, nil
 }
 
@@ -58,7 +62,8 @@ func (l *Log) Append(typ string, data map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("session: marshal entry: %w", err)
 	}
-	if _, err := l.w.Write(append(b, '\n')); err != nil {
+	clean, _ := tools.Scrub(string(b))
+	if _, err := l.w.Write(append([]byte(clean), '\n')); err != nil {
 		return fmt.Errorf("session: write entry: %w", err)
 	}
 	if err := l.w.Flush(); err != nil {
@@ -79,7 +84,11 @@ func (l *Log) Close() error {
 	return l.f.Close()
 }
 
-// NewID generates a session id like session_a1b2c3d4.
+// NewID generates a session id like session_a1b2c3d4 (crypto-random 16 bytes hex).
 func NewID() string {
-	return fmt.Sprintf("session_%x", time.Now().UnixNano()&0xffffffff)
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err == nil {
+		return fmt.Sprintf("session_%x", b[:])
+	}
+	return fmt.Sprintf("session_%x", time.Now().UnixNano())
 }

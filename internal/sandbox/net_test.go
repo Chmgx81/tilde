@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"tilde/internal/policy"
 )
 
 // Egress default: sandbox denies network unless explicitly lifted.
@@ -40,5 +42,22 @@ func TestNetOptInLiftsBan(t *testing.T) {
 	}
 	if joined := strings.Join(cmd.Args, " "); strings.Contains(joined, "--unshare-net") {
 		t.Fatalf("session opt-in must drop --unshare-net: %q", joined)
+	}
+}
+
+// P1-G boundary: a policy allow_net entry approves web_fetch hosts only —
+// it never lifts the shell sandbox's --unshare-net ban.
+func TestPolicyAllowlistDoesNotLiftSandboxBan(t *testing.T) {
+	t.Setenv("TILDE_ALLOW_NET", "")
+	f := &policy.File{AllowNet: []string{"example.com"}}
+	if !f.NetAllowed("example.com") {
+		t.Fatal("setup: policy must allowlist example.com")
+	}
+	cmd, err := (&Config{Root: t.TempDir()}).Command(context.Background(), "echo hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if joined := strings.Join(cmd.Args, " "); !strings.Contains(joined, "--unshare-net") {
+		t.Fatalf("sandbox ban must stand despite policy allowlist: %q", joined)
 	}
 }

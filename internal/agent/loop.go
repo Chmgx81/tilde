@@ -15,6 +15,7 @@ import (
 	"tilde/internal/mode"
 	"tilde/internal/policy"
 	"tilde/internal/provider"
+	"tilde/internal/rules"
 	"tilde/internal/session"
 	"tilde/internal/skills"
 	"tilde/internal/tools"
@@ -22,15 +23,24 @@ import (
 
 // Config tunes the loop.
 type Config struct {
-	MaxIters    int // hard iteration cap (fail loud, fail cheap)
-	DoomRepeats int // same tool+args this many times → handoff to Plan
-	Root        string
-	Mode        mode.Mode
-	Pol         *policy.Policy
-	AskUser     func(tool string, args map[string]any) bool // nil = deny asks
-	Compactor   *compact.Compactor                          // nil = default budget + fallback summary
-	Skills      *skills.Index                               // nil = no skills (prompt extras empty)
-	MCP         MCPStatus                                   // nil = no MCP servers (prompt extras empty)
+	MaxIters      int // hard iteration cap (fail loud, fail cheap)
+	DoomRepeats   int // same tool+args this many times → handoff to Plan
+	FlushParallel int // batch-flush concurrency cap (default 8)
+	// PlanAllow whitelists tools past the Plan-mode loop gate (writer
+	// children allow write_file/edit_file inside their worktree). Nil =
+	// strict Plan, exactly as before.
+	PlanAllow []string
+	Root      string
+	Mode      mode.Mode
+	Pol       *policy.Policy
+	AskUser   func(tool string, args map[string]any) bool // nil = deny asks
+	Compactor *compact.Compactor                          // nil = default budget + fallback summary
+	Skills    *skills.Index                               // nil = no skills (prompt extras empty)
+	MCP       MCPStatus                                   // nil = no MCP servers (prompt extras empty)
+	// RulesOK loads project rules (AGENTS.md/CLAUDE.md/.tilde/RULES.md)
+	// into the prompt when set. Main sets it from the same trust gate
+	// as project skills — never auto-on for untrusted checkouts.
+	RulesOK bool
 }
 
 // MCPStatus is the agent-visible slice of the MCP manager: server names
@@ -163,6 +173,18 @@ func (l *Loop) MsgsSnapshot() []provider.Message {
 	return out
 }
 
+// planAllowed reports whether a Plan-blocked call is whitelisted for
+// this loop (writer children allow write_file/edit_file inside their
+// worktree). Empty for every other loop: strict Plan, as before.
+func (l *Loop) planAllowed(name string) bool {
+	for _, n := range l.Cfg.PlanAllow {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 // systemPrompt assembles identity + tool docs + mode rule.
 func systemPrompt(toolNames []string, m mode.Mode) string {
 	var b strings.Builder
@@ -260,6 +282,22 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 		// System prompt is composed fresh every iteration so mid-session
 		// installs (skills, MCP servers) appear with no restart.
 		sys := systemPrompt(l.Reg.Names(), l.GetMode()) + l.systemExtra()
+		// Project ground truth outranks generic harness rules. Reloaded
+		// per iteration like skills/MCP so a mid-session AGENTS.md
+		// drop-in works with no restart; RulesOK mirrors the project
+		// skills trust gate (main.go), never auto-on.
+		if l.Cfg.RulesOK {
+			if r, ok := rules.Load(l.Cfg.Root); ok {
+				sys = r.PromptBlock() + "\n" + sys
+			}
+		}
+		// Writer children are Plan-locked except their whitelist: say so,
+		// or the stock Plan rule ("do NOT call write_file") contradicts
+		// the task. No other loop sets PlanAllow, so no other prompt moves.
+		if l.GetMode() == mode.Plan && len(l.Cfg.PlanAllow) > 0 {
+			sys += "Exception: you MAY call " + strings.Join(l.Cfg.PlanAllow, ", ") +
+				" (confined to your worktree); all other mutating tools stay blocked.\n"
+		}
 		defs := l.toolDefs()
 		live := l.MsgsSnapshot()
 		// Pre-check + auto-compaction: never silently overflow. The
@@ -278,7 +316,7 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 		emit(Event{Kind: "usage", Text: compact.Label(used, budget), Pct: pct})
 		l.maybeCompact(ctx, comp, emit)
 		full := append([]provider.Message{{Role: "system", Content: sys}}, l.MsgsSnapshot()...)
-		resp, err := l.CurrentProvider().Chat(ctx, full, defs)
+		resp, err := l.chatTurn(ctx, full, defs)
 		if err != nil {
 			emit(Event{Kind: "system", Text: "model error [" + provider.Classify(err) + "]: " + err.Error()})
 			return "", err
@@ -357,9 +395,11 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 			}
 			// Mode gate (registry level — cannot be prompt-hacked around).
 			// Arg-aware: shell_poll kill is mutating (Plan-blocked) while
-			// status/log stay read-only.
-			if err := l.GetMode().AllowedCall(tc.Name, tc.Args); err != nil {
+			// status/log stay read-only. PlanAllow whitelists writer-child
+			// writes past this gate; the registry gate re-checks below.
+			if err := l.GetMode().AllowedCall(tc.Name, tc.Args); err != nil && !l.planAllowed(tc.Name) {
 				out := err.Error() + " Do not retry this call."
+				l.Reg.AuditDecision(tc.Name, "deny", tc.Args, "blocked by mode gate: "+err.Error())
 				emit(Event{Kind: "tool_result", Text: out})
 				l.AppendMsg(provider.Message{Role: "user", Content: "Tool " + tc.Name + " result: " + out})
 				continue
@@ -378,7 +418,20 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 			}
 			switch dec {
 			case policy.Deny:
-				out := fmt.Sprintf("tool %q denied by policy (%s). Do not retry; propose an alternative.", tc.Name, policy.Describe(tc.Name, tc.Args))
+				// Name the winning rule: a path-scoped deny reports its
+				// pattern + fix instead of the generic tier message. The
+				// "denied by policy" prefix is load-bearing: headless
+				// exit-code classification keys on that substring.
+				denied := fmt.Sprintf("tool %q denied by policy (%s). Do not retry; propose an alternative.", tc.Name, policy.Describe(tc.Name, tc.Args))
+				detail := "denied by policy tier"
+				if l.Cfg.Pol != nil && l.Cfg.Pol.File != nil {
+					if reason := l.Cfg.Pol.File.PathDenyReason(tc.Name, tc.Args); reason != "" {
+						denied = fmt.Sprintf("tool %q denied by policy — %s. Do not retry; propose an alternative.", tc.Name, reason)
+						detail = reason
+					}
+				}
+				l.Reg.AuditDecision(tc.Name, "deny", tc.Args, detail)
+				out := denied
 				emit(Event{Kind: "tool_result", Text: out})
 				l.AppendMsg(provider.Message{Role: "user", Content: out})
 				continue
@@ -389,6 +442,7 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 				}
 				emit(Event{Kind: "tool_result", Text: fmt.Sprintf("%s → %s", policy.Describe(tc.Name, tc.Args), map[bool]string{true: "approved", false: "denied"}[ok])})
 				if !ok {
+					l.Reg.AuditDecision(tc.Name, "ask-denied", tc.Args, "user declined the confirm")
 					l.AppendMsg(provider.Message{Role: "user", Content: fmt.Sprintf("User denied %s. Do not retry; find another way or ask.", tc.Name)})
 					continue
 				}
@@ -421,6 +475,36 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 	return lastText, fmt.Errorf("%s", msg)
 }
 
+// chatTurn is the per-turn model call. When the backend offers the
+// optional provider.Streamer fast path, the stream carries the same
+// tool definitions as Chat and Collect assembles both prose and tool
+// calls — the fast path sees everything Chat would, so tool behavior
+// is unchanged. Any stream failure (transport error, 30s first-event
+// timeout, mid-stream abort) falls back to the existing non-streaming
+// Chat with its retry/Classify/backoff intact, so the surfaced error
+// is always an ordinary provider error; a turn with neither text nor
+// calls falls back too. Ctx cancellation never triggers a fallback
+// request — it returns ctx.Err() directly, matching the Chat path's
+// existing cancel semantics.
+func (l *Loop) chatTurn(ctx context.Context, full []provider.Message, defs []provider.ToolDef) (provider.Response, error) {
+	prov := l.CurrentProvider()
+	if s, ok := prov.(provider.Streamer); ok && ctx.Err() == nil {
+		// Child ctx: cancelling it aborts the in-flight stream request
+		// before the Chat fallback, so a hung stream holds no
+		// connection past the turn. Parent cancel still propagates.
+		sctx, cancel := context.WithCancel(ctx)
+		resp, serr := provider.Collect(sctx, s, full, defs)
+		cancel()
+		if serr == nil && (resp.Content != "" || len(resp.ToolCalls) > 0) {
+			return resp, nil
+		}
+		if ctx.Err() != nil {
+			return provider.Response{}, ctx.Err()
+		}
+	}
+	return prov.Chat(ctx, full, defs)
+}
+
 // ParallelSafe names tools with no observable side effects: safe to run
 // concurrently within one turn. Everything else (writes, shell, unknown
 // or MCP-executed tools) runs serially as an ordering barrier. The set is
@@ -429,7 +513,8 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 func ParallelSafe(name string) bool {
 	switch name {
 	case "read_file", "grep", "glob", "git_status", "git_diff",
-		"git_worktree_list", "mcp_list", "load_skill":
+		"git_worktree_list", "mcp_list", "load_skill", "symbol_search",
+		"diagnose":
 		return true
 	}
 	return false
@@ -450,6 +535,17 @@ func (l *Loop) execApproved(ctx context.Context, tc provider.ToolCall, emit func
 	return nil
 }
 
+// defaultFlushParallel caps concurrent Dispatch goroutines per batch.
+const defaultFlushParallel = 8
+
+// flushParallel reports the batch concurrency cap (override or default).
+func (l *Loop) flushParallel() int {
+	if l != nil && l.Cfg.FlushParallel > 0 {
+		return l.Cfg.FlushParallel
+	}
+	return defaultFlushParallel
+}
+
 // flushBatch runs pending read-only calls concurrently and processes
 // results strictly in request order: timeline, log, and context all read
 // as if serial, at a fraction of the wall time.
@@ -463,10 +559,23 @@ func (l *Loop) flushBatch(ctx context.Context, batch []provider.ToolCall, emit f
 	outs := make([]res, len(batch))
 	var wg sync.WaitGroup
 	var mu sync.Mutex // guards outs so a cancelled wait can read them safely
+	// Semaphore: at most flushParallel Dispatch calls in flight — one
+	// goroutine per call with no bound burns FDs on wide turns.
+	sem := make(chan struct{}, l.flushParallel())
+	acquireFailed := false
 	for i, tc := range batch {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			acquireFailed = true
+		}
+		if acquireFailed {
+			break
+		}
 		wg.Add(1)
 		go func(i int, tc provider.ToolCall) {
 			defer wg.Done()
+			defer func() { <-sem }()
 			out := l.Reg.Dispatch(ctx, tc.Name, tc.Args)
 			mu.Lock()
 			outs[i].out = out

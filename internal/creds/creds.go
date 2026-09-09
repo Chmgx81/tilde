@@ -5,6 +5,11 @@
 package creds
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -104,6 +109,20 @@ func (s *Store) Path() string {
 }
 
 func (s *Store) read() (map[string]string, error) {
+	// Primary: AES-GCM envelope file. Present-but-undecryptable is a
+	// hard error (refuse, don't silently fall back to legacy).
+	enc := s.encPath()
+	if data, err := os.ReadFile(enc); err == nil {
+		key, err := deriveKey()
+		if err != nil {
+			return nil, err
+		}
+		return decryptMap(data, key, enc)
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("read %s: %w", enc, err)
+	}
+	// Legacy fallback: plaintext credentials.json (compat / migration
+	// source — a Set will re-seal it into the envelope file).
 	data, err := os.ReadFile(s.path)
 	if os.IsNotExist(err) {
 		return map[string]string{}, nil
@@ -127,11 +146,30 @@ func (s *Store) write(m map[string]string) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return fmt.Errorf("create %s: %w", filepath.Dir(s.path), err)
 	}
-	data, err := json.MarshalIndent(m, "", "  ")
+	key, err := deriveKey()
 	if err != nil {
 		return err
 	}
-	tmp := s.path + ".tmp"
+	encData, err := encryptMap(m, key)
+	if err != nil {
+		return err
+	}
+	// Primary: sealed envelope only. The legacy plaintext file is never
+	// written here — Get keeps an enc-first then legacy-read fallback
+	// purely as a migration source for pre-envelope installs.
+	if err := writeFile0600(s.encPath(), encData); err != nil {
+		return err
+	}
+	// Best-effort cleanup of a legacy plaintext left by older builds
+	// (e.g. just migrated via the read fallback on Set/Delete). Ignore
+	// errors: the envelope is authoritative and a stale plaintext must
+	// not fail the write.
+	_ = os.Remove(s.path)
+	return nil
+}
+
+func writeFile0600(path string, data []byte) error {
+	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
@@ -139,11 +177,116 @@ func (s *Store) write(m map[string]string) error {
 		os.Remove(tmp)
 		return err
 	}
-	if err := os.Rename(tmp, s.path); err != nil {
+	if err := os.Rename(tmp, path); err != nil {
 		os.Remove(tmp)
 		return err
 	}
 	return nil
+}
+
+// encPath is the AES-GCM envelope sibling of the legacy plaintext file:
+// credentials.json -> credentials.enc.json.
+func (s *Store) encPath() string {
+	if strings.HasSuffix(s.path, ".json") {
+		return strings.TrimSuffix(s.path, ".json") + ".enc.json"
+	}
+	return s.path + ".enc.json"
+}
+
+// deriveKey returns the AES-256 key sealing the envelope file.
+//
+// Opportunistic — not a keychain: key = SHA256(/etc/machine-id else
+// hostname). It defeats casual file reads (dotfile scrapers, pasted
+// directory listings) but not a local attacker who can read the same
+// machine-id. No new dependencies: stdlib crypto/aes (GCM), sha256,
+// rand only.
+func deriveKey() ([32]byte, error) {
+	seed := ""
+	if data, err := os.ReadFile("/etc/machine-id"); err == nil {
+		seed = strings.TrimSpace(string(data))
+	}
+	if seed == "" {
+		h, err := os.Hostname()
+		if err != nil || strings.TrimSpace(h) == "" {
+			return [32]byte{}, fmt.Errorf("derive credential key: no machine-id or hostname available — delete the envelope file and /login again")
+		}
+		seed = strings.TrimSpace(h)
+	}
+	return sha256.Sum256([]byte(seed)), nil
+}
+
+// envelope is the on-disk JSON wrapper: GCM nonce + ciphertext.
+type envelope struct {
+	V     int    `json:"v"`
+	Nonce string `json:"nonce"`
+	Data  string `json:"data"`
+}
+
+func encryptMap(m map[string]string, key [32]byte) ([]byte, error) {
+	plain, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("seal credentials: %w", err)
+	}
+	ct := gcm.Seal(nil, nonce, plain, nil)
+	env := envelope{
+		V:     1,
+		Nonce: base64.StdEncoding.EncodeToString(nonce),
+		Data:  base64.StdEncoding.EncodeToString(ct),
+	}
+	return json.MarshalIndent(env, "", "  ")
+}
+
+func decryptMap(encJSON []byte, key [32]byte, encPath string) (map[string]string, error) {
+	remedy := "delete the file and /login again"
+	var env envelope
+	if err := json.Unmarshal(encJSON, &env); err != nil {
+		return nil, fmt.Errorf("parse %s: %w — %s", encPath, err, remedy)
+	}
+	if env.V != 1 {
+		return nil, fmt.Errorf("parse %s: unsupported envelope version %d — %s", encPath, env.V, remedy)
+	}
+	nonce, err := base64.StdEncoding.DecodeString(env.Nonce)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: bad nonce: %w — %s", encPath, err, remedy)
+	}
+	ct, err := base64.StdEncoding.DecodeString(env.Data)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: bad payload: %w — %s", encPath, err, remedy)
+	}
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	plain, err := gcm.Open(nil, nonce, ct, nil)
+	if err != nil {
+		// Wrong machine key (file copied from another host) or tampered
+		// file: refuse outright, name the fix.
+		return nil, fmt.Errorf("decrypt %s: wrong machine key or tampered file — %s: %w", encPath, remedy, err)
+	}
+	var m map[string]string
+	if err := json.Unmarshal(plain, &m); err != nil {
+		return nil, fmt.Errorf("parse %s: %w — %s", encPath, err, remedy)
+	}
+	if m == nil {
+		m = map[string]string{}
+	}
+	return m, nil
 }
 
 // Mask renders a key for display: only the last four characters are

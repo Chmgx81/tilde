@@ -161,6 +161,9 @@ func (a *Anthropic) Chat(ctx context.Context, messages []Message, tools []ToolDe
 		if resp.StatusCode == 401 {
 			hint = "run /login anthropic to update the stored key, then retry."
 		}
+		if resp.StatusCode == 403 {
+			hint = "check billing on the Anthropic console, then retry."
+		}
 		if resp.StatusCode == 404 {
 			hint = "run /model to pick from the catalog — the model id may be wrong or retired."
 		}

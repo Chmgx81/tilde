@@ -157,6 +157,25 @@ func BudgetFor(providerID, model string) int {
 	return 0
 }
 
+// PriceFor returns the catalog's stored per-1M USD prices for a
+// provider/model pair: (in, out, true) on a hit, (0, 0, false) when the
+// model is not in the catalog or its price is unreported (negative =
+// pay-per-use, rendered as such — never as free, never fabricated).
+// Free models (0/0) report (0, 0, true): known-free, not unknown.
+// Provider id match is case-insensitive (same as BudgetFor); model id
+// match is exact (catalog wire id). Read-only: no network, no mutation.
+func PriceFor(providerID, model string) (in, out float64, ok bool) {
+	for _, cm := range Catalog[strings.ToLower(providerID)] {
+		if cm.ID == model {
+			if cm.InCost < 0 || cm.OutCost < 0 {
+				return 0, 0, false
+			}
+			return cm.InCost, cm.OutCost, true
+		}
+	}
+	return 0, 0, false
+}
+
 // ParseModelRef splits "provider/model" (the /model select form). The
 // one-element form means "model on the current provider" and is the
 // caller's to interpret; on !ok both returns are empty.

@@ -2,6 +2,7 @@
 package provider
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -123,6 +124,9 @@ func (o *OpenAI) Chat(ctx context.Context, messages []Message, tools []ToolDef) 
 			if status == 401 {
 				hint = "run /login openai to update the stored key, then retry."
 			}
+			if status == 403 {
+				hint = "check billing on the OpenAI console, then retry."
+			}
 			if status == 404 {
 				hint = "run /model to pick from the catalog — the model id may be wrong or retired."
 			}
@@ -239,4 +243,187 @@ func parseToolArgs(name string, raw json.RawMessage) (map[string]any, error) {
 		return map[string]any{}, nil
 	}
 	return args, nil
+}
+
+// Stream implements Streamer: POST /chat/completions with stream:true
+// (tools included, same shape as Chat), yielding
+// choices[0].delta.content text and assembling indexed
+// delta.tool_calls fragments (id/name first-seen wins, arguments
+// concatenated) until the [DONE] terminator, when the complete call
+// set goes out as one event with the finish_reason truncation signal.
+// Malformed argument payloads degrade exactly like Chat: the call is
+// kept with empty args and a retry note lands in prose. Add-only fast
+// path — Chat (retry/backoff) is untouched, and there is no retry
+// here: any failure is one error on errs so the caller falls back.
+func (o *OpenAI) Stream(ctx context.Context, messages []Message, defs []ToolDef) (<-chan StreamEvent, <-chan error) {
+	events := make(chan StreamEvent, 16)
+	errs := make(chan error, 1)
+	go func() {
+		defer close(events)
+		defer close(errs)
+		msgs := make([]map[string]string, 0, len(messages))
+		for _, m := range messages {
+			msgs = append(msgs, map[string]string{"role": m.Role, "content": m.Content})
+		}
+		payload := map[string]any{
+			"model": o.Model, "messages": msgs, "stream": true,
+		}
+		if len(defs) > 0 {
+			ots := make([]openAITool, 0, len(defs))
+			for _, t := range defs {
+				ots = append(ots, openAITool{Type: "function", Function: map[string]any{
+					"name": t.Name, "description": t.Description, "parameters": t.Schema,
+				}})
+			}
+			payload["tools"] = ots
+		}
+		body, _ := json.Marshal(payload)
+		req, err := http.NewRequestWithContext(ctx, "POST", o.Base+"/chat/completions", bytes.NewReader(body))
+		if err != nil {
+			errs <- fmt.Errorf("openai: build stream request for %s: %w — check the base url and retry", o.Base, err)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "text/event-stream")
+		if o.Key != "" {
+			req.Header.Set("Authorization", "Bearer "+o.Key)
+		}
+		resp, err := o.http.Do(req)
+		if err != nil {
+			errs <- fmt.Errorf("openai: POST %s/chat/completions: %w — is the endpoint reachable? check the base url and retry", o.Base, err)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+			errs <- fmt.Errorf("openai: status %d for model %q: %s — retry the request or check the endpoint", resp.StatusCode, o.Model, strings.TrimSpace(string(raw)))
+			return
+		}
+		emit := func(ev StreamEvent) bool {
+			select {
+			case events <- ev:
+				return true
+			case <-ctx.Done():
+				errs <- ctx.Err()
+				return false
+			}
+		}
+		type asmCall struct {
+			id, name string
+			args     strings.Builder
+			hasArgs  bool
+		}
+		var asm []asmCall
+		finishReason := ""
+		// Deltas are small, but a proxy may emit long lines: 1MB cap.
+		sc := bufio.NewScanner(resp.Body)
+		sc.Buffer(make([]byte, 64<<10), 1<<20)
+		finish := func(truncated bool) bool {
+			var calls []ToolCall
+			var notes strings.Builder
+			for i, a := range asm {
+				if !a.hasArgs && a.name == "" {
+					continue
+				}
+				id := a.id
+				if id == "" {
+					id = fmt.Sprintf("call_%d", i)
+				}
+				if !a.hasArgs {
+					// Zero-argument call: no fragments arrived, which
+					// is valid — not malformed.
+					calls = append(calls, ToolCall{ID: id, Name: a.name, Args: map[string]any{}})
+					continue
+				}
+				args, err := parseToolArgs(a.name, json.RawMessage(a.args.String()))
+				if err != nil {
+					calls = append(calls, ToolCall{ID: id, Name: a.name, Args: map[string]any{}})
+					notes.WriteString(fmt.Sprintf("tool %q returned malformed tool arguments — retry the call with valid JSON arguments", a.name))
+					continue
+				}
+				calls = append(calls, ToolCall{ID: id, Name: a.name, Args: args})
+			}
+			if notes.Len() > 0 {
+				if !emit(StreamEvent{Text: notes.String()}) {
+					return false
+				}
+			}
+			ev := StreamEvent{Truncated: truncated}
+			if len(calls) > 0 {
+				ev.Calls = calls
+			}
+			return emit(ev)
+		}
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" || strings.HasPrefix(line, ":") {
+				continue
+			}
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if data == "[DONE]" {
+				finish(finishReason == "length")
+				return
+			}
+			if data == "" {
+				continue
+			}
+			var ev struct {
+				Choices []struct {
+					Delta struct {
+						Content   string `json:"content"`
+						ToolCalls []struct {
+							Index    int    `json:"index"`
+							ID       string `json:"id"`
+							Function struct {
+								Name      string `json:"name"`
+								Arguments string `json:"arguments"`
+							} `json:"function"`
+						} `json:"tool_calls"`
+					} `json:"delta"`
+					FinishReason string `json:"finish_reason"`
+				} `json:"choices"`
+			}
+			if err := json.Unmarshal([]byte(data), &ev); err != nil {
+				errs <- fmt.Errorf("openai: decode stream event: %w — the model returned malformed JSON; retry the request", err)
+				return
+			}
+			for _, ch := range ev.Choices {
+				if finishReason == "" && ch.FinishReason != "" {
+					finishReason = ch.FinishReason
+				}
+				if ch.Delta.Content != "" {
+					if !emit(StreamEvent{Text: ch.Delta.Content}) {
+						return
+					}
+				}
+				for _, tc := range ch.Delta.ToolCalls {
+					for len(asm) <= tc.Index {
+						asm = append(asm, asmCall{})
+					}
+					a := &asm[tc.Index]
+					if tc.ID != "" && a.id == "" {
+						a.id = tc.ID
+					}
+					if tc.Function.Name != "" && a.name == "" {
+						a.name = tc.Function.Name
+					}
+					if tc.Function.Arguments != "" {
+						a.args.WriteString(tc.Function.Arguments)
+						a.hasArgs = true
+					}
+				}
+			}
+		}
+		if err := sc.Err(); err != nil {
+			errs <- fmt.Errorf("openai: read stream from %s: %w — retry the request", o.Base, err)
+			return
+		}
+		// EOF without [DONE] (some proxies just close): assemble what
+		// arrived rather than dropping the turn.
+		finish(finishReason == "length")
+	}()
+	return events, errs
 }

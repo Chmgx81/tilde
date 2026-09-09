@@ -7,8 +7,11 @@
 package policy
 
 import (
+	"fmt"
 	"os"
 	"path"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -48,11 +51,33 @@ type Policy struct {
 	sessionAllow map[string]struct{}
 }
 
-// File is the policies.yaml shape: tool-name lists per tier.
+// File is the policies.yaml shape: tool-name lists per tier, plus the
+// per-host network allowlist below (P1-G).
 type File struct {
 	Deny  []string `yaml:"deny"`
 	Ask   []string `yaml:"ask"`
 	Allow []string `yaml:"allow"`
+	// AllowNet lists hostnames web_fetch may retrieve without the
+	// session-wide TILDE_ALLOW_NET=1 opt-in. Exact hostname match,
+	// case-insensitive; SSRF guards (private/loopback/link-local) still
+	// apply after the gate.
+	AllowNet []string `yaml:"allow_net"`
+	// DenyPaths is the P7-A path-scoped deny list (yaml `deny_paths`):
+	// ordered globs evaluated in Check BEFORE tier lookup — a match
+	// denies with the same supremacy as the deny tier (beats ask, allow,
+	// and AlwaysAllow/--yes). Applies only to file-path args of the
+	// path tools (read_file/write_file/edit_file `path`, grep `dir`,
+	// glob `pattern`); every other tool — shell_command included —
+	// ignores the list. Matching is pure string on the slash-normalized,
+	// path.Clean-ed value as given (no filesystem access, no
+	// root-joining): containment still owns `..` escapes at exec time.
+	// Shell cwd scoping is deliberately OUT: shell stays argv-judged
+	// per segment (shellDeny), and its cwd is already containment-bound.
+	// NOTE (owner wiring, outside internal/policy): main.go loadPolicies
+	// rejects unknown top-level keys — it must allowlist `deny_paths`
+	// alongside deny/ask/allow/allow_net, or a file using this key
+	// refuses to start.
+	DenyPaths []string `yaml:"deny_paths"`
 }
 
 // Load reads a policies.yaml overlay. Missing file = defaults, not an
@@ -69,7 +94,47 @@ func Load(path string) (*File, error) {
 	if err := yaml.Unmarshal(data, &f); err != nil {
 		return nil, err
 	}
+	// Fail LOUD at startup: an unparseable deny_paths glob must refuse
+	// the file (same posture as malformed YAML above), never silently
+	// narrow the guard toward defaults.
+	if err := f.Validate(); err != nil {
+		return nil, err
+	}
 	return &f, nil
+}
+
+// NetAllowed reports whether host is allowlisted for web_fetch without
+// the session-wide egress opt-in. Comparison is exact on the normalized
+// hostname (lowercased, trailing dot stripped, :port tolerated); nil
+// file allows nothing.
+func (f *File) NetAllowed(host string) bool {
+	if f == nil {
+		return false
+	}
+	h := normalizeNetHost(host)
+	if h == "" {
+		return false
+	}
+	for _, a := range f.AllowNet {
+		if normalizeNetHost(a) == h {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeNetHost lowercases, trims space/trailing dot, and tolerates
+// entries carrying a path or a single :port (IPv6 literals with multiple
+// colons are left intact).
+func normalizeNetHost(h string) string {
+	h = strings.ToLower(strings.TrimSpace(h))
+	if i := strings.IndexByte(h, '/'); i >= 0 {
+		h = h[:i]
+	}
+	if strings.Count(h, ":") == 1 {
+		h = h[:strings.IndexByte(h, ':')]
+	}
+	return strings.TrimSuffix(h, ".")
 }
 
 func listed(list []string, tool string) bool {
@@ -104,6 +169,153 @@ func (f *File) UnknownTools(known []string) []string {
 		}
 	}
 	return out
+}
+
+// Validate rejects unparseable deny_paths entries — malformed globs
+// and empty entries alike — naming the offending pattern and the fix,
+// so Load fails LOUD at startup instead of running a silently narrowed
+// guard. Nil/empty list is valid (the list is off). Tier-name typos
+// stay the caller's job (UnknownTools); this covers only the globs.
+func (f *File) Validate() error {
+	if f == nil {
+		return nil
+	}
+	for _, pat := range f.DenyPaths {
+		if strings.TrimSpace(pat) == "" {
+			return fmt.Errorf("invalid deny_paths entry %q (expected a glob like \"**/secrets/**\") — remove it or fix the pattern", pat)
+		}
+		if _, err := compileDenyPattern(normDenyPath(pat)); err != nil {
+			return fmt.Errorf("invalid deny_paths pattern %q — fix the pattern or remove it", pat)
+		}
+	}
+	return nil
+}
+
+// PathDenyReason reports why a tool call is path-denied: the matched
+// (or broken) deny_paths pattern plus the fix. Empty string = not
+// path-denied. This is the single choke point Check uses, and future
+// deny surfacing in main.go should print it verbatim — it always names
+// the pattern. Non-path tools yield "" without looking at args.
+// A broken pattern denies path-tool calls fail-CLOSED here (Load
+// already refuses such files at startup; this covers Files built
+// without Load, e.g. in tests or embeddings of defaults).
+func (f *File) PathDenyReason(tool string, args map[string]any) string {
+	if f == nil || len(f.DenyPaths) == 0 {
+		return ""
+	}
+	cand, ok := pathArgForTool(tool, args)
+	if !ok {
+		return ""
+	}
+	target := normDenyPath(cand)
+	for _, pat := range f.DenyPaths {
+		if strings.TrimSpace(pat) == "" {
+			return fmt.Sprintf("invalid deny_paths entry %q — remove it or fix the pattern", pat)
+		}
+		m, err := compileDenyPattern(normDenyPath(pat))
+		if err != nil {
+			return fmt.Sprintf("invalid deny_paths pattern %q — fix the pattern or remove it", pat)
+		}
+		if m(target) {
+			return fmt.Sprintf("deny_paths pattern %q matched — narrow the path or amend deny_paths", pat)
+		}
+	}
+	return ""
+}
+
+// pathArgForTool returns the file-path argument a path-scoped deny
+// applies to, per tool. read/write/edit take a concrete `path`; grep's
+// `pattern` is a content substring (never a path — matching it would
+// deny on file CONTENTS), so grep scopes on its `dir` subdir instead;
+// glob's `pattern` is itself a file glob, matched as a string (a broad
+// `**/*.go` still lists — per-file reads stay gated). Absent or
+// non-string args yield false (nothing to judge). Shell is explicitly
+// OUT: argv-judged per segment, cwd containment-bound (see File).
+func pathArgForTool(tool string, args map[string]any) (string, bool) {
+	var key string
+	switch tool {
+	case "read_file", "write_file", "edit_file":
+		key = "path"
+	case "grep":
+		key = "dir"
+	case "glob":
+		key = "pattern"
+	default:
+		return "", false
+	}
+	s, _ := args[key].(string)
+	if s == "" {
+		return "", false
+	}
+	return s, true
+}
+
+// normDenyPath slash-normalizes and Cleans a path or pattern for
+// comparison: `a/../b` judges as `b`, `./x` as `x`. Pure string — no
+// filesystem access, no symlink resolution; containment owns escapes.
+func normDenyPath(s string) string {
+	return path.Clean(filepath.ToSlash(s))
+}
+
+// compileDenyPattern builds a whole-target matcher for one normalized
+// deny glob: minimal doublestar — `**/` spans any depth including
+// zero, a trailing `/**` also matches the dir itself (policy targets
+// include bare dirs like grep's `dir`, where tools.walkGlob only ever
+// sees file paths — the one deliberate difference from that helper),
+// bare `**` spans everything, and single `*`/`?` stay inside one path
+// segment via path.Match (so `*.key` never matches `sub/id.key`).
+func compileDenyPattern(pat string) (func(string) bool, error) {
+	if strings.Contains(pat, "**") {
+		rx, err := denyGlobRegex(pat)
+		if err != nil {
+			return nil, err
+		}
+		return rx.MatchString, nil
+	}
+	if _, err := path.Match(pat, ""); err != nil {
+		return nil, err
+	}
+	return func(t string) bool {
+		ok, _ := path.Match(pat, t)
+		return ok
+	}, nil
+}
+
+// denyGlobRegex translates a doublestar glob to a regex, mirroring
+// tools.globRegex (`**/` = any depth incl. zero, `*`/`?` stay within
+// one segment) plus the trailing-`/**`-matches-the-dir-itself rule
+// documented on compileDenyPattern.
+func denyGlobRegex(pat string) (*regexp.Regexp, error) {
+	var b strings.Builder
+	b.WriteString("^")
+	for i := 0; i < len(pat); {
+		switch {
+		case strings.HasPrefix(pat[i:], "**/"):
+			b.WriteString("(.*/)?")
+			i += 3
+		case strings.HasPrefix(pat[i:], "/**") && i+3 == len(pat):
+			// Trailing /** consumed WITH its slash, so `secrets/**`
+			// matches the dir itself as well as everything under it
+			// (emitting `/` + `(/.*)?` instead would require the slash
+			// and miss the bare dir).
+			b.WriteString("(/.*)?")
+			i += 3
+		case strings.HasPrefix(pat[i:], "**"):
+			b.WriteString(".*")
+			i += 2
+		case pat[i] == '*':
+			b.WriteString("[^/]*")
+			i++
+		case pat[i] == '?':
+			b.WriteString("[^/]")
+			i++
+		default:
+			b.WriteString(regexp.QuoteMeta(string(pat[i])))
+			i++
+		}
+	}
+	b.WriteString("$")
+	return regexp.Compile(b.String())
 }
 
 // ApproveSession records one literal shell command string as approved
@@ -141,6 +353,11 @@ func (p *Policy) sessionAllowed(cmd string) bool {
 
 // Check returns the decision for a tool call.
 func (p *Policy) Check(tool string, args map[string]any) Decision {
+	if p != nil && p.File != nil {
+		if reason := p.File.PathDenyReason(tool, args); reason != "" {
+			return Deny // path-scoped deny beats everything, including --yes
+		}
+	}
 	var f File
 	if p != nil && p.File != nil {
 		f = *p.File
@@ -149,7 +366,11 @@ func (p *Policy) Check(tool string, args map[string]any) Decision {
 		return Deny // deny beats everything, including --yes
 	}
 	switch tool {
-	case "write_file", "edit_file", "git_worktree_add", "git_worktree_remove", "mcp_call":
+	case "write_file", "edit_file", "git_worktree_add", "git_worktree_remove", "mcp_call",
+		"spawn_work", "discard_work":
+		// spawn/discard create/remove git worktrees — same class as
+		// git_worktree_add/remove, so Ask even when policies.yaml is
+		// missing (apply_work is read-only review: yaml-listed instead).
 		if p != nil && p.AlwaysAllow {
 			return Allow
 		}
@@ -440,10 +661,10 @@ judged:
 		}
 		return false
 	case "python", "python3", "perl", "ruby", "node", "php":
-		if hasFlag(rest, "-c", "-e", "-r", "-M") {
+		if hasFlag(rest, "-c", "--command", "-e", "--eval", "--exec", "-r", "--require", "-M") {
 			return true // inline/required code: judge the string, not the runner
 		}
-		if hasFlag(rest, "-m") {
+		if hasFlag(rest, "-m", "--module") {
 			return true // module mode (http.server et al.) hides intent
 		}
 		if strings.Contains(joined, "socket") || strings.Contains(joined, "urllib") {
@@ -615,28 +836,51 @@ func isDuration(s string) bool {
 }
 
 // stripFlags drops leading -flags and their values. Value-takers (-t/-s
-// durations, -k keep-alive, -n niceness, -u user, -C dir, -o file) consume
-// the following token; anything else flag-shaped left standing fails
+// durations, -k keep-alive, -n niceness, -u user, -C dir, -o file,
+// --unset/--chdir/--directory/--cwd/--workdir dirs) consume
+// the following token; --flag=value forms are self-contained (strip one
+// token); --preserve-status/--recursive take no value and strip as plain
+// flags. Anything else flag-shaped left standing fails
 // closed downstream by the caller checking the remainder.
 func stripFlags(argv []string) []string {
 	i := 0
 	for i < len(argv) && len(argv[i]) > 0 && argv[i][0] == '-' {
-		// Value-taking flags consume the next token too.
-		if (argv[i] == "-t" || argv[i] == "-s" || argv[i] == "-k" ||
-			argv[i] == "-n" || argv[i] == "-u" || argv[i] == "-C" ||
-			argv[i] == "-o") && i+1 < len(argv) {
+		a := argv[i]
+		// --flag=value is self-contained: never consume the next token.
+		if strings.Contains(a, "=") {
 			i++
+			continue
+		}
+		// Value-taking flags consume the next token too.
+		if (a == "-t" || a == "-s" || a == "-k" ||
+			a == "-n" || a == "-u" || a == "-C" ||
+			a == "-o" ||
+			a == "--unset" || a == "--chdir" || a == "--directory" ||
+			a == "--cwd" || a == "--workdir") && i+1 < len(argv) {
+			i++
+		}
+		switch a {
+		case "--preserve-status", "--recursive":
+			// No value: strip one token via the generic i++ below.
+			// Listed so the long-form audit is explicit and greppable.
 		}
 		i++
 	}
 	return argv[i:]
 }
 
-// hasFlag reports a bare flag's presence.
+// hasFlag reports a flag's presence: exact match, --flag=value prefix
+// form, or combined short flags (-fdx matches -f). Mirrors the local
+// `has` closure in segmentDeny so long-flag spellings cannot bypass.
 func hasFlag(argv []string, flags ...string) bool {
 	for _, a := range argv {
 		for _, f := range flags {
-			if a == f {
+			if a == f || strings.HasPrefix(a, f+"=") {
+				return true
+			}
+			// Combined short flags: -fdx matches -f and -d.
+			if len(f) == 2 && f[0] == '-' && len(a) > 2 && a[0] == '-' && a[1] != '-' &&
+				strings.Contains(a[1:], f[1:]) {
 				return true
 			}
 		}

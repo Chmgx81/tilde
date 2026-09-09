@@ -19,7 +19,23 @@ type TodoManager struct {
 }
 type TodoWrite struct{ Mgr *TodoManager }
 
+// Snapshot returns a copy of the current todo list in insertion order.
+// The TUI renders its §2.9 Update-Todos block from this (live manager
+// state) rather than parsing tool-result text. Nil-safe: a nil manager
+// snapshots as empty.
+func (m *TodoManager) Snapshot() []TodoItem {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]TodoItem, len(m.items))
+	copy(out, m.items)
+	return out
+}
+
 func (t *TodoWrite) Name() string { return "todo_write" }
+
 func (t *TodoWrite) Description() string {
 	return "Serial session todo list: add, done, list, clear. In-memory only."
 }
@@ -66,9 +82,9 @@ func (t *TodoWrite) Exec(_ context.Context, args map[string]any) (string, error)
 	}
 	var b strings.Builder
 	for _, it := range m.items {
-		mark := "[ ]"
+		mark := "□"
 		if it.Done {
-			mark = "[x]"
+			mark = "☑"
 		}
 		fmt.Fprintf(&b, "%s %d: %s\n", mark, it.ID, it.Text)
 	}

@@ -51,21 +51,22 @@ what it is.
 | `accent-plan` | `#E5A00D` (amber) | Read-only / caution | Plan mode banner, warnings |
 | `accent-build` | `#E6E6E6` (neutral) | Normal editing state | Build mode — deliberately *unmarked* |
 | `accent-auto` | `#4FC3F7` (cyan) | Autonomous progression | Auto mode banner, background tasks |
-| `accent-select` | `#A855D9` (magenta) | Active selection / focus | Picker highlight, active tab |
+| `accent-select` | `#7E22CE` (magenta) | Active selection / focus | Picker highlight, active tab |
 | `success` | `#4CAF50` (green) | Completed, passed, approved | Done checkmarks, passed tests |
 | `danger` | `#F44747` (red) | Failed, denied, destructive | Errors, denied commands, deletions |
 | `border-idle` | `#30363D` | Resting frame | Unfocused boxes |
 | `border-focus` | matches active mode token | Focused frame | Composer border in current mode |
 
-**Contrast note on `accent-select` (2026-09-06):** the original `#C792EA` was
+**Contrast note on `accent-select` (2026-09-06, resolved 2026-09-09):** the original `#C792EA` was
 flagged in review as untested for contrast. It reads fine as text/border
 color against `bg`, but `accent-select` is also used as a **background fill**
 for a selected row (§1.6) with `fg` (`#E6E6E6`) text drawn on top of it — a
 light magenta behind near-white text is exactly the pairing that fails a
-contrast check. Darkened to `#A855D9` here, but treat this as unverified
-until it's actually run through a contrast checker (WCAG AA, ~4.5:1) against
-both `bg` and `fg` before shipping — swap the hex if it doesn't clear that
-bar, the token's *meaning* is what's load-bearing, not this specific value.
+contrast check. Darkened first to `#A855D9`, which still measured only
+3.39:1 as a fill behind `fg` (computed WCAG relative-luminance) — so
+darkened again to `#7E22CE` (5.60:1 vs `fg`), which clears WCAG AA for
+the fill use. The token is fill-only in code (picker selected rows);
+its *meaning* remains what's load-bearing, not the specific value.
 
 Rule: **mode color and risk color are the only two color systems that appear as
 borders.** Everything else (success/danger/muted) appears as *text or glyph*
@@ -259,7 +260,10 @@ up through history.
   dirty-file count (`fg-dim`).
 - Right: active model (`fg-muted`) → context usage as a percentage *and* raw
   count (`fg-muted`, turns `accent-plan` colored text — not border — past 80%,
-  see §2.11). Budget ceiling auto-sizes to the catalog window when known unless `--budget` / `TILDE_BUDGET` was set explicit (§2.24).
+  see §2.11). Budget ceiling auto-sizes to the catalog window when known unless `--budget` / `TILDE_BUDGET` was set explicit (§2.24). A session cost readout
+  (` $0.0012`, `fg-muted`, hidden when the model has no catalog price) trails
+  the context segment — display only, computed from live token totals, never
+  width-breaking before the drop order below applies.
 - This line never wraps. If the terminal is too narrow, drop the raw token
   count before dropping anything else; drop the branch dirty-count before the
   branch name; never drop the mode word.
@@ -326,6 +330,7 @@ Inline dropdown directly beneath the composer, replacing nothing above it.
     /login [provider]     Configure cloud-provider auth (§2.24)
     /logout [provider]    Remove stored provider auth
     /export [id]           Write a portable markdown brief for handoff
+    /quit                 Quit (same as Ctrl+C idle)
     /help                 Full keybinding + command reference
 ```
 
@@ -407,7 +412,7 @@ toast on the transition itself:
   anywhere else in the spec: a silent, unexplained mode change is the single
   fastest way to erode trust in an autonomy feature.
 - Full behavioral spec (promotion/demotion triggers, `--mode` flag parity)
-  lives in Plan.md §16; this section only owns how it's *presented*.
+  lives in Plan.md §6 (permissions) and §7 (Phase 1); this section only owns how it's *presented*.
 
 ### 2.9 Plan-Mode View (read-only banner + todos)
 
@@ -472,7 +477,12 @@ anything else, so its consistency matters more than its cleverness.
   thing a user scanning the gutter needs the verb column to answer without
   reading the `⎿` line underneath.
 - Target/argument follows in `fg-muted`.
-- New tools keep their raw names (outside the six-verb vocabulary above), all ask-tier and Plan-allowed (none are Plan-blocked mutating): `● todo_write` (serial checklist: `add|done|list|clear`); `● ask_user` (routes to the host AskUser callback — nil/unwired or denied reads as denied, propose a safe default); `● web_fetch` (http(s) GET only, 30s timeout, 5MB hard cap, needs `TILDE_ALLOW_NET=1` — denied otherwise without retry; allowed in Plan since it mutates no repo state).
+- New tools keep their raw names (outside the six-verb vocabulary above).
+  Most are ask-tier and Plan-allowed — except the mutating writers, which
+  are ask-tier *and* Plan-blocked like any other mutation:
+  `spawn_work` / `discard_work` (isolated worktree sessions),
+  `memory` save/forget and `remember` index (op-aware gating).
+  `● todo_write` (serial checklist: `add|done|list|clear`); `● ask_user` (routes to the host AskUser callback — nil/unwired or denied reads as denied, propose a safe default); `● web_fetch` (http(s) GET only, 30s timeout, 5MB hard cap, needs `TILDE_ALLOW_NET=1` — denied otherwise without retry; allowed in Plan since it mutates no repo state).
 - Result (`⎿`) is optional and only appears when there's something worth
   reporting beyond "it ran" — a diff stat, a test summary, an error. A silent
   success with nothing worth surfacing gets no `⎿` line at all; don't manufacture
@@ -627,7 +637,8 @@ Compaction event (inline, transcript):
   confirm prompt or a mode demotion.
 - The compaction marker line is always `fg-dim` and always collapsed to one
   line — it's a receipt, not a summary the user is meant to read in place. The
-  full pre-compaction log remains in the session file per Plan.md §17;
+  full pre-compaction log remains in the session file per Plan.md §7
+  (Phase 1: mode system + auto-compaction);
   the transcript marker exists purely so a scrollback read never has an
   unexplained gap.
 
@@ -736,7 +747,7 @@ timeline vocabulary it's explaining.
   full-width space fill is stripped at the render boundary), so copies
   contain only visible characters.
 
-  Slash commands: /mode /compact /clear /sandbox /diff /undo /sessions /export /model /skills /help
+  Slash commands: /mode /compact /clear /copy /sandbox /diff /undo /sessions /export /model /login /logout /skills /quit /help
 
                                                            press esc to close
 ```
@@ -914,23 +925,26 @@ actions before saying anything or taking a riskier action, collapse them
 under one parent line instead of one `●` per action:
 
 ```
-● Listed, read          2 directories, 2 files
+● Listed, Read ×4
   Listed apps
   Read package.json
   Listed apps/web
   Read apps/web/package.json
 ```
 
-- The parent line names the *kinds* present (comma-separated, in the order
-  they occurred) and a total count, in the same fixed verb-column position
-  a single action would use.
+- The parent line names the distinct kinds present (comma-separated, in the
+  order they occurred) plus the total count (`● Listed, Read ×4`), in the
+  same fixed verb-column position a single action would use.
 - Nested lines are plain text, `fg-muted`, indented one level, **no
   glyph** — this is the one place §1.2's "every event line gets a glyph"
   rule is deliberately relaxed, because the parent line already carries
   the glyph for the whole group and repeating it four times adds ink
-  without adding meaning.
-- Grouping applies only to read-only, low-signal actions (`list`, `read`,
-  `grep`) run back-to-back with no intervening prose or risk-gated action.
+  without adding meaning. Worthwhile results still render indented
+  beneath their call line (same §2.10 `⎿` rules).
+- Grouping applies to batchable read-only actions (the `ParallelSafe`
+  set: list/read/grep plus git status/diff, skill loads, and the newer
+  read-only tools) run back-to-back with no intervening prose or
+  risk-gated action.
   An `Edit`, `Run`, or anything that produced a `⎿` result worth reporting
   (§2.10) always breaks the group and starts its own `●` line — grouping
   exists to reduce noise from lookups, never to bury something the user
@@ -1202,6 +1216,7 @@ must never require reading tilde's docs.
 
 **Credentials ladder (unambiguous, no silent fallback).**
 
+0. `--api-key` flag — this process only, wins outright.
 1. Stored credential from `/login` — `~/.tilde/credentials.json`, mode
    `0600`, one entry per provider.
 2. Ambient env var — `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (existing
@@ -1270,14 +1285,16 @@ rule — a dead daemon surfaces as a provider error once the loop calls
 it). A static two-line panel is the whole v1.
 
 ```
-  no model backend found.
-    local:  run `ollama serve` (model: ollama pull qwen3.8-4b:16k)
-    cloud:  /login openai  (key from platform.openai.com)
+    local: run `ollama serve` + `ollama pull qwen3.8-4b:16k`
+    cloud: /login <provider> arms a key, /model <provider/model> switches
 ```
 
-Both lines are exact, runnable text; the cloud line works because `/login`
-exists — guidance without the command behind it is what §2.23's original
-auth message got wrong.
+Both lines are exact, runnable text; the provider list derives from the
+registry so it never goes stale. There is no `no model backend found`
+header — the guidance renders unconditionally on fresh splash (reachability
+would need a startup dial, which main deliberately skips). The cloud line
+works because `/login` exists — guidance without the command behind it is
+what §2.23's original auth message got wrong.
 
 **Error remedies become command-shaped (amends §2.23).**
 
@@ -1296,7 +1313,8 @@ remedy is now executable, not documentary.
 **Non-goals (deferred, stated so absence is a decision not an omission):**
 OAuth/subscription flows (pi-style device-code login — the status matrix
 renders a `subscription` row marked `not yet`), OS keychain integration
-(a `0600` file is the whole v1; keychain later), custom base-URL/proxy UI
+(keys live in an AES-GCM envelope beside the `0600` file, not a keychain;
+see the creds package), custom base-URL/proxy UI
 (`policies.yaml` remains the power path), and automated catalog syncing.
 
 Implementation home: `internal/creds` (store + ladder, beside `internal/
@@ -1365,16 +1383,18 @@ second product:
 |---|---|
 | Mode (Tab / toast) | `--mode plan\|build\|auto` |
 | Confirm prompt | `--yes` (accepts confirm-tier only) / exits non-zero on deny-tier |
-| Compaction marker | Written to session log only; no stdout noise |
+| Compaction marker | Written to session log only; no stdout noise on piped/`NO_COLOR` runs (a TTY headless run still prints the marker line) |
 | Handoff panel | Printed as plain `ERROR:` line + non-zero exit code |
 | Skill picker | `--skill <name>` |
-| Session export (§2.22) | `--export <session-id> [--out path.md]` (not yet built) |
-| Provider retry loop (§2.23) | Retries silently on stderr as `[retrying: <kind>, attempt N/5]`; unretryable errors print once and exit |
+| Session export (§2.22) | `--export <session-id> [--out path.md]` (cwd-contained, 0600) |
+| Provider retry loop (§2.23) | Retries silently (3 attempts, fail-fast auth, `Retry-After` honored); failures print once as `tilde [class]:`; unretryable errors print once and exit |
 
 Headless output drops all color/glyph styling by default when stdout isn't a
 TTY (standard `NO_COLOR`-style detection) — the glyph vocabulary in §1.2
-degrades to plain word labels (`[action]`, `[done]`, `[failed]`) rather than
-disappearing silently. Action grouping (§2.20) also degrades: headless mode
+degrades to plain word labels (`[action]`, `[done]`) rather than
+disappearing silently. There is no `[failed]` label: failures surface as
+the event text itself (tool-result error lines, `ERROR (handoff…)`), and
+exit codes carry the machine-readable verdict. Action grouping (§2.20) also degrades: headless mode
 prints one line per action, ungrouped, since the point of grouping is visual
 density and a script parsing output wants one event per line regardless.
 
@@ -1400,14 +1420,14 @@ new section per version:
 
 | Component | Status |
 |---|---|
-| Status bar | DONE |
+| Status bar | DONE (incl. session cost readout — ` $0.0012`, hidden when unpriced) |
 | Composer (3 mode states) | DONE |
 | Mode toast / Tab cycle | DONE |
-| Confirm / deny prompts | DONE |
+| Confirm / deny prompts | DONE (confirm-tier bordered panel + inline `✗ denied by policy` lines; red deny-tier panel deferred per §2.12) |
 | Compaction ambient + marker | DONE |
 | Tool-call timeline | DONE — fixed verb vocabulary (Read/Listed/Grep/Write/Edit/Run) + fixed-width column (2026-09-08); read-only success carries no result line, failures/notices still show, grep counts lift to the call line |
 | Diff rendering | DONE — edit diffs (`⎿ +N -M` + numbered hunk, 2026-09-08) and new-file write rendering (`+N (new file)` + plain numbered body, 2026-09-08); video-regression test replays glob/read/edit/re-read end to end |
-| Plan-mode banner + todos | TODO (spec §2.9 ready; no banner/todo rendering in agent or TUI yet) |
+| Plan-mode banner + todos | DONE — banner once at session start + per Build→Plan demotion; `● Update Todos` block from live manager state with □/☑, active bold, unchanged-state suppression |
 | Handoff panel | DONE |
 | Splash screen | DONE |
 | Slash command palette | DONE |
@@ -1418,14 +1438,14 @@ new section per version:
 | Headless flag parity | DONE (`--mode`/`--model`/`--yes`/`--skill` all exist) |
 | Plugin/extension marketplace (§2.17) | TODO — blocked on skills loader + MCP (Plan.md Phase 6) |
 | Structured multi-question prompts (§2.18) | TODO — no current trigger; spec ready for first-run setup |
-| Subagent exploration view (§2.19) | DEFERRED — behind multi-agent orchestration (Plan.md §8, not v0.1 scope) |
+| Subagent exploration view (§2.19) | DONE (render-state) — `⋮ type · model` running rows, `│ task type · model [done|failed]` completions, prose synthesis below batch; no focus model, no toggles |
 | Thinking indicator (§2.20) | DONE — live rotating microcopy (2s tick while running) + post-turn `◆ Thought for 3.4s · 38 tok/s` receipt on success (rate omitted when provider tokens unknown; shell escapes receipt-free) |
-| Action grouping (§2.20) | DONE — static parent + indented children for runs of 2+ read-only pairs; lone pairs render ungrouped; no toggle key; children carry call lines only (results suppressed per §2.10, 2026-09-08) |
+| Action grouping (§2.20) | DONE — static parent (`● Listed, Read ×N`) + indented children for runs of 2+ batchable read-only calls; lone pairs render ungrouped; no toggle key; worthwhile results render indented under their call line |
 | Large-paste collapse (§2.21) | DONE — token + off-screen body, submit-time substitution, Backspace unit-delete, orphan notice, submit-time cap |
 | Mouse scroll + drag-select copy (2026-09-08) | DONE — cell-motion tracking, transcript-absolute drag-select with edge autoscroll, clipboard ladder + OSC 52 fallback, `Alt+M` passthrough |
 | Image/file paste path (§2.21) | TODO — `@`-reference of an existing image file works today via §2.5; no clipboard-to-file helper documented or built yet |
 | Cloud onboarding (§2.24) | DONE (v1) — registry + ladder (flag>stored 0600>env), masked /login with validate-before-store, /logout, /model provider switching + catalog listing, budget auto-size unless explicit, command-shaped 401/404 hints; openrouter (free shelf) + gemini (free tier) + opencode Zen (live-verified catalog, chat/completions-only discipline) first-class; splash cloud list derives from registry; deferred: OAuth, keychain, native clients, conditional reachability splash, closest-id 404 suggestion |
-| Session export / brief (§2.22) | DONE — `/export [id]` writes a distilled scrubbed `<id>-brief.md` (goal, files, direction, open steps; 0600) |
+| Session export (§2.22) | DONE — `/export [id]` palette + `tilde --export <id> [--out]` headless; distilled scrubbed brief (goal, files, direction, open steps; 0600, cwd-contained) |
 | Provider retry/backoff + classified errors (§2.23) | DONE — backoff + Retry-After + fail-fast auth; `provider.Classify` names every model error in the transcript and headless JSON |
 | Startup config validation, fail-closed (§2.23) | DONE — sandbox, provider, and policies refuse pre-TUI with file+line; unknown tiers and unknown tool names refuse (exit 2) |
 | Crash recovery / unclosed-session resume offer (§2.23) | DONE — panic writes a crash line; next launch hints, and auto-opens the picker when the unclosed session belongs to the cwd |

@@ -1,0 +1,82 @@
+package tools
+
+import (
+	"context"
+	"io"
+	"os/exec"
+	"sync"
+	"testing"
+	"time"
+)
+
+func startSleepTask(t *testing.T, m *TaskManager, cancels *[]context.CancelFunc) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	*cancels = append(*cancels, cancel)
+	_, err := m.Start("sleep 30", ctx, cancel, func(stdout, stderr io.Writer) *exec.Cmd {
+		cmd := exec.Command("sleep", "30")
+		cmd.Stdout, cmd.Stderr = stdout, stderr
+		return cmd
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTaskManagerMaxTasksRefusesWithFix(t *testing.T) {
+	m := &TaskManager{LogDir: t.TempDir(), MaxTasks: 2}
+	var cancels []context.CancelFunc
+	defer func() {
+		m.KillAll()
+		for _, c := range cancels {
+			c()
+		}
+	}()
+	startSleepTask(t, m, &cancels)
+	startSleepTask(t, m, &cancels)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if _, err := m.Start("sleep 30", ctx, cancel, func(stdout, stderr io.Writer) *exec.Cmd {
+		cmd := exec.Command("sleep", "30")
+		cmd.Stdout, cmd.Stderr = stdout, stderr
+		return cmd
+	}); err == nil {
+		t.Fatal("third start past MaxTasks=2 must refuse")
+	} else if got := err.Error(); !contains(got, "task limit") || !contains(got, "shell_poll") {
+		t.Fatalf("refusal must name the limit and the fix (shell_poll), got: %q", got)
+	}
+}
+
+func TestTaskManagerDefaultMaxTasks(t *testing.T) {
+	m := &TaskManager{}
+	if m.maxTasks() != 16 {
+		t.Fatalf("zero MaxTasks must default to 16, got %d", m.maxTasks())
+	}
+	m2 := &TaskManager{MaxTasks: 3}
+	if m2.maxTasks() != 3 {
+		t.Fatalf("MaxTasks override lost, got %d", m2.maxTasks())
+	}
+}
+
+func TestTaskManagerLogDirStableUnderConcurrency(t *testing.T) {
+	m := &TaskManager{}
+	const n = 32
+	got := make([]string, n)
+	var wg sync.WaitGroup
+	for i := range got {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			got[i] = m.logDir()
+		}(i)
+	}
+	wg.Wait()
+	for _, d := range got[1:] {
+		if d != got[0] {
+			t.Fatalf("concurrent logDir diverged: %q vs %q", got[0], d)
+		}
+	}
+	if got[0] == "" {
+		t.Fatal("logDir must never be empty")
+	}
+}

@@ -613,7 +613,7 @@ func TestSplashResizeRebuildsOnlyWhenFresh(t *testing.T) {
 	if after.vp.Width != 116 {
 		t.Fatalf("vp width must track the resize, got %d", after.vp.Width)
 	}
-	want := splashLines(m.root, m.model, m.budget, after.vp.Width)
+	want := m.freshLines(after.vp.Width)
 	if len(after.lines) != len(want) || after.splashN != len(after.lines) {
 		t.Fatalf("fresh splash must rebuild on resize: lines=%d want=%d splashN=%d",
 			len(after.lines), len(want), after.splashN)
@@ -1917,7 +1917,7 @@ func TestThoughtReceipt(t *testing.T) {
 	loop.TotCompletion = 82
 	m := New(loop, mode.Plan, t.TempDir(), "ollama/m", 32000)
 	m.running = true
-	m.turnStart = time.Now().Add(-2 * time.Second)
+	m.turnStart = time.Now().Add(-3 * time.Second)
 	nm, _ := m.Update(agentDoneMsg{NoDone: true})
 	after := nm.(Model)
 	joined := stripANSI(strings.Join(after.lines, "\n"))
@@ -1933,7 +1933,7 @@ func TestThoughtReceipt(t *testing.T) {
 	// Unknown tokens: wall time only, never an invented rate.
 	m2 := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
 	m2.running = true
-	m2.turnStart = time.Now().Add(-2 * time.Second)
+	m2.turnStart = time.Now().Add(-3 * time.Second)
 	nm2, _ := m2.Update(agentDoneMsg{NoDone: true})
 	j2 := stripANSI(strings.Join(nm2.(Model).lines, "\n"))
 	if !strings.Contains(j2, "◆ Thought for") || strings.Contains(j2, "tok/s") {
@@ -1948,6 +1948,37 @@ func TestThoughtReceipt(t *testing.T) {
 	}
 	if strings.Contains(j3, "Thought for") {
 		t.Fatalf("no turn, no receipt:\n%s", j3)
+	}
+	// Below the live-verb floor: success still closes with ✓ Done, but
+	// the ◆ Thought receipt is skipped (spec §2.20).
+	m4 := New(newTestLoop(), mode.Plan, t.TempDir(), "ollama/m", 32000)
+	m4.running = true
+	m4.turnStart = time.Now().Add(-500 * time.Millisecond)
+	nm4, _ := m4.Update(agentDoneMsg{NoDone: true})
+	j4 := stripANSI(strings.Join(nm4.(Model).lines, "\n"))
+	if strings.Contains(j4, "Thought for") {
+		t.Fatalf("sub-floor turn must skip the receipt:\n%s", j4)
+	}
+}
+
+func TestAtDropdownSelectedKeepsMatchSpans(t *testing.T) {
+	// The selected @-row must keep the bold match spans: the
+	// accentSelect background is composed per highlight run, not via
+	// the plain truncMiddle path (which drops the spans).
+	rows := matchFiles([]string{"internal/provider/stream.go"}, "stream")
+	if len(rows) == 0 {
+		t.Fatal("matchFiles must match stream.go for query stream")
+	}
+	got := atDropdown(rows, 0, 60)
+	if stripped := stripANSI(got); !strings.Contains(stripped, "internal/provider/stream.go") {
+		t.Fatalf("selected row must carry the full path: %q", stripped)
+	}
+	// Bold assertion only when the lipgloss profile emits SGR at all
+	// (plain test runs default to Ascii, which strips styling).
+	if strings.Contains(highlight(rows[0].path, rows[0].idx), "\x1b[") {
+		if !strings.Contains(got, "\x1b[1m") {
+			t.Fatalf("selected row dropped the bold match spans:\n%q", got)
+		}
 	}
 }
 

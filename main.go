@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,15 +20,20 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"tilde/internal/agent"
+	"tilde/internal/audit"
 	"tilde/internal/compact"
 	"tilde/internal/creds"
 	"tilde/internal/eval"
+	"tilde/internal/export"
 	"tilde/internal/hooks"
+	"tilde/internal/ide"
 	"tilde/internal/mcp"
 	"tilde/internal/mode"
+	"tilde/internal/plugin"
 	"tilde/internal/policy"
 	"tilde/internal/provider"
 	"tilde/internal/sandbox"
+	"tilde/internal/schedule"
 	"tilde/internal/session"
 	"tilde/internal/skills"
 	"tilde/internal/tools"
@@ -44,6 +50,8 @@ func main() {
 	noSandbox := flag.Bool("no-sandbox", false, "Disable bwrap sandboxing (same as TILDE_NO_SANDBOX=1; not recommended)")
 	budgetFlag := flag.Int("budget", 0, "Token budget before auto-compaction (default 32000, or $TILDE_BUDGET)")
 	resumeFlag := flag.Bool("resume", false, "Pick a past session and resume it")
+	exportFlag := flag.String("export", "", "Export a session brief to markdown and exit")
+	exportOut := flag.String("out", "", "Output path for --export (default <id>-brief.md in cwd)")
 	skillFlag := flag.String("skill", "", "Preload a skill by name at startup")
 	evalFlag := flag.Bool("eval", false, "Run the trajectory consistency suite and exit")
 	evalTask := flag.String("eval-task", "", "Comma-separated task names (default: all)")
@@ -70,6 +78,32 @@ func main() {
 		os.Exit(2)
 	}
 
+	// --export runs one file write and exits; combining it with a
+	// session-shaped flag would silently drop the latter — fail loud
+	// instead (exit 2). --out without --export is likewise a usage
+	// error, never a silent no-op.
+	if *exportFlag != "" && (*prompt != "" || *resumeFlag || *evalFlag) {
+		fmt.Fprintln(os.Stderr, "tilde: --export cannot be combined with --prompt, --resume or --eval — run one at a time")
+		os.Exit(2)
+	}
+	if *exportOut != "" && *exportFlag == "" {
+		fmt.Fprintln(os.Stderr, "tilde: --out needs --export <session-id> — nothing to write")
+		os.Exit(2)
+	}
+
+	// `tilde --export <session-id> [--out path.md]` writes a portable
+	// markdown brief (spec §2.22 + §4 row). Dispatched before anything
+	// session-shaped: it needs no provider, no log, and no TUI — and
+	// it must never create them.
+	if *exportFlag != "" {
+		if err := runExportCmd(*exportFlag, *exportOut); err != nil {
+			fmt.Fprintln(os.Stderr, "tilde:", err)
+			os.Exit(1)
+		}
+		markCleanExit()
+		return
+	}
+
 	// `tilde update` pulls, rebuilds, and reinstalls from the install
 	// source. Dispatched before anything session-shaped: it needs no
 	// provider, no log, and no TUI — and it must never create them.
@@ -86,6 +120,75 @@ func main() {
 	// trust without this explicit action; a miss always reads as denied.
 	if flag.NArg() > 0 && (flag.Arg(0) == "trust" || flag.Arg(0) == "untrust") {
 		if err := runTrustCmd(flag.Arg(0), flag.Args()); err != nil {
+			fmt.Fprintln(os.Stderr, "tilde:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// `tilde audit [--since ...] [--tool ...] [--decision ...] [--json]`
+	// reads the governance trail. `tilde run-due [--yes]` executes due
+	// schedule entries by re-invoking this binary headlessly per job.
+	// `tilde plugin install <dir> [--upgrade] | verify <name> | list`
+	// manages hash-pinned local plugins. All three dispatch before any
+	// session-shaped setup: they need no provider, no log, no TUI.
+	if flag.NArg() > 0 && flag.Arg(0) == "audit" {
+		if err := runAuditCmd(flag.Args()); err != nil {
+			fmt.Fprintln(os.Stderr, "tilde:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if flag.NArg() > 0 && flag.Arg(0) == "run-due" {
+		if err := runDueCmd(flag.Args()); err != nil {
+			fmt.Fprintln(os.Stderr, "tilde:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if flag.NArg() > 0 && flag.Arg(0) == "plugin" {
+		if err := runPluginCmd(flag.Args()); err != nil {
+			fmt.Fprintln(os.Stderr, "tilde:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	// `tilde models [provider]` prints the model catalog (windows +
+	// prices) with no network and no session. Unknown providers fail
+	// loud (exit 2), never a silent fallback.
+	if flag.NArg() > 0 && flag.Arg(0) == "models" {
+		arg := ""
+		if len(flag.Args()) > 1 {
+			arg = flag.Args()[1]
+		}
+		out, err := provider.FormatCatalog(arg)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "tilde: "+err.Error())
+			os.Exit(2)
+		}
+		fmt.Println(out)
+		markCleanExit()
+		return
+	}
+
+	// `tilde prune --sessions 30d --audit 90d --yes` enforces retention
+	// windows on session logs and the audit trail. Without --yes it
+	// prints the plan (dry run) and changes nothing. Destructive and
+	// explicit: no other flag combination deletes.
+	if flag.NArg() > 0 && flag.Arg(0) == "prune" {
+		if err := runPruneCmd(flag.Args()); err != nil {
+			fmt.Fprintln(os.Stderr, "tilde:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// `tilde fork <id> [--at RFC3339]` branches a session at an earlier
+	// point (or tip): the copy is byte-identical through the cutoff plus
+	// one fork marker line, and the source is never modified. Prints the
+	// new session id.
+	if flag.NArg() > 0 && flag.Arg(0) == "fork" {
+		if err := runForkCmd(flag.Args()); err != nil {
 			fmt.Fprintln(os.Stderr, "tilde:", err)
 			os.Exit(1)
 		}
@@ -119,11 +222,24 @@ func main() {
 		m = mode.Auto
 	default:
 		fmt.Fprintf(os.Stderr, "tilde: unknown --mode %q (use plan|build|auto)\n", *modeFlag)
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	h := buildHarness(root)
 	polFile := loadPolicies(root)
+	// P1-G per-host net approval: the allow_net hostname list is checked
+	// in webfetch via HostAllow; the session-wide TILDE_ALLOW_NET=1
+	// opt-in in AllowNet above is untouched.
+	h.fetch.HostAllow = func(host string) bool { return polFile.NetAllowed(host) }
+	h.search.HostAllow = func(host string) bool { return polFile.NetAllowed(host) }
+	h.shot.HostAllow = func(host string) bool { return polFile.NetAllowed(host) }
+	// Audit trail: append-only ~/.tilde/audit/audit.jsonl, distinct from
+	// the session transcript. Nil-safe by construction — a home-dir
+	// failure degrades to unaudited rather than blocking startup.
+	if auditLog := openAuditLog(); auditLog != nil {
+		defer auditLog.Close()
+		h.reg.Audit = &auditSink{log: auditLog}
+	}
 	reg := h.reg
 	reg.Hooks = loadHooks(root, *hooksProject || os.Getenv("TILDE_HOOKS_PROJECT") == "1")
 	allowSkills := *skillsProject || os.Getenv("TILDE_SKILLS_PROJECT") == "1"
@@ -263,6 +379,9 @@ func main() {
 				Summarize: compact.SummarizeWithProvider(prov),
 			},
 			Skills: skIx,
+			// Project rules ride the project-skills trust gate:
+			// explicit opt-in or a recorded `tilde trust`.
+			RulesOK: allowSkills,
 		},
 	}
 	if mcpMgr != nil {
@@ -298,12 +417,38 @@ func main() {
 	reg.Register(&agent.ExploreTool{NewChild: func(task string) *agent.Loop {
 		return agent.NewExploreChild(loop, task)
 	}})
+	// Single-writer subagents: spawn/apply/discard share one WorkState so
+	// a second spawn refuses while a session is pending. Wired beside
+	// ExploreTool so checkPolicyTools below sees the full registry.
+	workState := &agent.WorkState{Root: root}
+	workState.NewChild = func(task, workRoot string) *agent.Loop {
+		return agent.NewWorkChild(loop, task, workRoot)
+	}
+	reg.Register(&agent.SpawnWorkTool{State: workState})
+	reg.Register(&agent.ApplyWorkTool{State: workState})
+	reg.Register(&agent.DiscardWorkTool{State: workState})
 	// Unknown tool names in policies.yaml refuse here, after every
 	// tool (core + skills + MCP + subagents) is registered — earlier
 	// would false-positive on tools registered below. MCP names are
 	// always known: those tools register only when servers exist, but
 	// policies may name them regardless.
 	checkPolicyTools(root, polFile, append(reg.Names(), "mcp_list", "mcp_call"))
+
+	// `tilde ide-bridge` serves line-delimited JSON over stdio for IDE
+	// hosts (initialize/health/session.create/session.chat/history).
+	// Stdin is the protocol stream, so approvals can never ask there:
+	// AskUser denies by default (fail closed). --mode governs autonomy
+	// (Plan default); --yes auto-approves ask-tier like headless.
+	if flag.NArg() > 0 && flag.Arg(0) == "ide-bridge" {
+		_ = sessLog.Append("meta", map[string]any{"root": root, "model": prov.Name(), "budget": budget})
+		loop.Cfg.AskUser = func(string, map[string]any) bool { return *yesFlag }
+		br := ide.New(reg.Names(), func(ctx context.Context, prompt string) (string, error) {
+			return loop.Run(ctx, prompt, func(agent.Event) {})
+		})
+		br.Serve(os.Stdin, os.Stdout)
+		markCleanExit()
+		return
+	}
 
 	if *prompt != "" {
 		_ = sessLog.Append("meta", map[string]any{"root": root, "model": prov.Name(), "budget": budget})
@@ -378,13 +523,47 @@ func main() {
 // Skills and MCP ride on top (main only); eval uses the same core so the
 // measured harness never drifts from the shipped one.
 type harness struct {
-	reg   *tools.Registry
-	seen  *tools.SeenMap
-	tasks *tools.TaskManager
-	undo  *tools.UndoManager
-	todos *tools.TodoManager
-	ask   *tools.Ask
-	fetch *tools.WebFetch
+	reg    *tools.Registry
+	seen   *tools.SeenMap
+	tasks  *tools.TaskManager
+	undo   *tools.UndoManager
+	todos  *tools.TodoManager
+	ask    *tools.Ask
+	fetch  *tools.WebFetch
+	search *tools.WebSearch
+	shot   *tools.WebShot
+}
+
+// auditSink adapts *audit.AuditLog to the registry's AuditSink interface
+// (defined in tools to avoid an import cycle: audit imports tools for
+// Scrub, so tools cannot import audit back). Plain wrapper holding the
+// log pointer — no type conversion.
+type auditSink struct{ log *audit.AuditLog }
+
+func (s *auditSink) AppendEvent(tool, decision, argsHash, detail string) {
+	if s == nil || s.log == nil {
+		return
+	}
+	_ = s.log.Append(audit.AuditEvent{
+		Tool: tool, Decision: decision, RedactedArgsHash: argsHash, Detail: detail,
+	})
+}
+
+// openAuditLog opens the global append-only audit trail at
+// ~/.tilde/audit/audit.jsonl. Nil on any home-dir failure — the caller
+// degrades to unaudited with a warning, never a startup refusal.
+func openAuditLog() *audit.AuditLog {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tilde: warning: audit trail off (%v)\n", err)
+		return nil
+	}
+	l, err := audit.Open(filepath.Join(home, ".tilde", "audit"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tilde: warning: audit trail off (%v)\n", err)
+		return nil
+	}
+	return l
 }
 
 // loadPolicies reads policies.yaml (missing = built-in defaults).
@@ -470,8 +649,8 @@ func loadPolicies(root string) *policy.File {
 			var keys map[string]any
 			if yerr := yaml.Unmarshal(data, &keys); yerr == nil {
 				for k := range keys {
-					if k != "deny" && k != "ask" && k != "allow" {
-						fmt.Fprintf(os.Stderr, "tilde: %s: invalid tier %q (expected deny/ask/allow) — refusing to start. Fix the policy file and try again.\n", path, k)
+					if k != "deny" && k != "ask" && k != "allow" && k != "allow_net" && k != "deny_paths" {
+						fmt.Fprintf(os.Stderr, "tilde: %s: invalid tier %q (expected deny/ask/allow/allow_net/deny_paths) — refusing to start. Fix the policy file and try again.\n", path, k)
 						os.Exit(2)
 					}
 				}
@@ -505,6 +684,12 @@ func buildHarness(root string) harness {
 		todos: &tools.TodoManager{},
 		ask:   &tools.Ask{},
 		fetch: &tools.WebFetch{AllowNet: func() bool { return os.Getenv("TILDE_ALLOW_NET") == "1" }},
+		search: &tools.WebSearch{AllowNet: func() bool {
+			return os.Getenv("TILDE_ALLOW_NET") == "1"
+		}},
+		shot: &tools.WebShot{AllowNet: func() bool {
+			return os.Getenv("TILDE_ALLOW_NET") == "1"
+		}},
 	}
 	h.reg.Undo = h.undo
 	h.seen.Tasks = h.tasks // stale checks see in-flight background work
@@ -523,6 +708,12 @@ func buildHarness(root string) harness {
 	h.reg.Register(&tools.TodoWrite{Mgr: h.todos})
 	h.reg.Register(h.ask)
 	h.reg.Register(h.fetch)
+	h.reg.Register(h.search)
+	h.reg.Register(h.shot)
+	h.reg.Register(&tools.SymbolSearch{Root: root, Seen: h.seen})
+	h.reg.Register(&tools.Memory{Root: root})
+	h.reg.Register(&tools.Diagnose{Root: root, Seen: h.seen})
+	h.reg.Register(&tools.Remember{Root: root, Seen: h.seen})
 	return h
 }
 
@@ -598,6 +789,7 @@ func runEval(root string, prov provider.Provider, filter string, trials int) {
 	tasks = append(tasks, eval.RepairTasks()...)
 	tasks = append(tasks, eval.ComplexTasks()...)
 	tasks = append(tasks, eval.InjectionTasks()...)
+	tasks = append(tasks, eval.P3Tasks()...)
 	if filter != "" {
 		want := map[string]bool{}
 		for _, n := range strings.Split(filter, ",") {
@@ -638,6 +830,9 @@ func runEval(root string, prov provider.Provider, filter string, trials int) {
 	newLoop := func(dir string) *agent.Loop {
 		closeTrialLive() // reap the previous trial before starting the next
 		h := buildHarness(dir)
+		h.fetch.HostAllow = func(host string) bool { return evalPol.NetAllowed(host) }
+		h.search.HostAllow = func(host string) bool { return evalPol.NetAllowed(host) }
+		h.shot.HostAllow = func(host string) bool { return evalPol.NetAllowed(host) }
 		reg := h.reg
 		// Trial-hermetic extras: trial skills only (never the user's real
 		// ones) and MCP only from the trial's own config.
@@ -680,9 +875,26 @@ func runEval(root string, prov provider.Provider, filter string, trials int) {
 		reg.Register(&agent.ExploreTool{NewChild: func(task string) *agent.Loop {
 			return agent.NewExploreChild(loop, task)
 		}})
+		// Same single-writer wiring as production above: eval parity so
+		// the measured harness never drifts from the shipped one.
+		// Audit is intentionally off here: trial traffic is synthetic
+		// and AlwaysAllow — it must not pollute the governance trail.
+		evalWork := &agent.WorkState{Root: dir}
+		evalWork.NewChild = func(task, workRoot string) *agent.Loop {
+			return agent.NewWorkChild(loop, task, workRoot)
+		}
+		reg.Register(&agent.SpawnWorkTool{State: evalWork})
+		reg.Register(&agent.ApplyWorkTool{State: evalWork})
+		reg.Register(&agent.DiscardWorkTool{State: evalWork})
+		// Core tools (search/memory/symbols/diagnose/remember/fetch)
+		// already ride along via buildHarness above — registering them
+		// again would panic on duplicates. Only subagents wire here.
 		return loop
 	}
 	r := &eval.Runner{Tasks: tasks, Trials: trials, NewLoop: newLoop}
+	if pid, mname, ok := provider.ParseModelRef(prov.Name()); ok {
+		r.ProviderID, r.Model = pid, mname
+	}
 	if r.Trials <= 0 {
 		r.Trials = 3
 	}
@@ -696,14 +908,14 @@ func runEval(root string, prov provider.Provider, filter string, trials int) {
 	if r.Trials < 5 {
 		fmt.Printf("tilde eval: note: --trials %d — rates move in 1/%d steps; use --trials 5+ for published numbers\n", r.Trials, r.Trials)
 	}
-	fmt.Printf("\n%-22s %6s %6s %8s %8s %8s %8s %8s %s\n", "TASK", "PASS", "OF", "MEDCALLS", "P90CALL", "MED_MS", "MED_IN", "MED_OUT", "NOTES")
+	fmt.Printf("\n%-22s %6s %6s %8s %8s %8s %8s %8s %10s %s\n", "TASK", "PASS", "OF", "MEDCALLS", "P90CALL", "MED_MS", "MED_IN", "MED_OUT", "MED_COST", "NOTES")
 	zeros := 0
 	for _, rep := range reports {
 		notes := strings.Join(rep.Reasons, " | ")
 		if rep.ZeroTokens {
 			notes = strings.TrimSpace(notes + " [tokens unreported]")
 		}
-		fmt.Printf("%-22s %6d %6d %8d %8d %8d %8d %8d %s\n", rep.Name, rep.Passes, rep.Trials, rep.MedianCall, rep.P90Call, rep.MedianMS, rep.MedianIn, rep.MedianOut, notes)
+		fmt.Printf("%-22s %6d %6d %8d %8d %8d %8d %8d $%9.4f %s\n", rep.Name, rep.Passes, rep.Trials, rep.MedianCall, rep.P90Call, rep.MedianMS, rep.MedianIn, rep.MedianOut, rep.MedianCostUSD, notes)
 		if rep.Passes == 0 {
 			zeros++
 		}
@@ -958,6 +1170,295 @@ func runTrustCmd(verb string, args []string) error {
 	return nil
 }
 
+// runAuditCmd implements `tilde audit [--since ...] [--tool ...]
+// [--decision ...] [--json]`: read-only rendering of the governance
+// trail. --since accepts RFC3339 or a Go duration ("24h" = last day).
+func runAuditCmd(args []string) error {
+	fs := flag.NewFlagSet("audit", flag.ContinueOnError)
+	since := fs.String("since", "", "RFC3339 time or Go duration (e.g. 24h)")
+	tool := fs.String("tool", "", "exact tool name filter")
+	decision := fs.String("decision", "", "exact decision filter")
+	asJSON := fs.Bool("json", false, "one JSON object per line")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot locate home: %w", err)
+	}
+	events, skipped, err := audit.ReadAllWithSkipped(filepath.Join(home, ".tilde", "audit", "audit.jsonl"))
+	if err != nil {
+		return err
+	}
+	opts := audit.FilterOpts{Tool: *tool, Decision: *decision}
+	if *since != "" {
+		ts, err := time.Parse(time.RFC3339, *since)
+		if err != nil {
+			d, derr := time.ParseDuration(*since)
+			if derr != nil {
+				return fmt.Errorf("bad --since %q: want RFC3339 or Go duration: %w", *since, derr)
+			}
+			ts = time.Now().Add(-d)
+		}
+		opts.Since = ts
+	}
+	events = audit.Filter(events, opts)
+	if *asJSON {
+		fmt.Print(audit.RenderJSON(events))
+	} else {
+		fmt.Print(audit.RenderText(events))
+	}
+	if skipped > 0 {
+		fmt.Fprintf(os.Stderr, "tilde: warning: skipped %d corrupt audit lines\n", skipped)
+	}
+	return nil
+}
+
+// runDueCmd implements `tilde run-due [--yes]`: load
+// .tilde/schedule.yaml in the project root, and for each due entry
+// re-invoke this binary headlessly (`--prompt ... --mode build`) as a
+// child process. Self-reexec keeps every headless semantic (session
+// logs, exit codes, approvals) in exactly one place; the scheduler
+// stays a thin due-checker because the OS owns waking (cron/systemd
+// calls run-due). Failed jobs are not marked (retry next tick).
+func runDueCmd(args []string) error {
+	yes := false
+	rest := args[1:]
+	if len(rest) > 0 && rest[0] == "--yes" {
+		yes = true
+		rest = rest[1:]
+	}
+	root := ""
+	if len(rest) > 0 {
+		root = rest[0]
+	}
+	if root == "" {
+		var err error
+		root, err = os.Getwd()
+		if err != nil {
+			return fmt.Errorf("cannot determine working dir: %w", err)
+		}
+	}
+	if strings.HasPrefix(root, "-") {
+		return fmt.Errorf("usage: tilde run-due [--yes] [dir] — got flag-like %q", root)
+	}
+	jobs, err := schedule.LoadFile(filepath.Join(root, ".tilde", "schedule.yaml"))
+	if err != nil {
+		return err
+	}
+	st, err := schedule.LoadState(filepath.Join(root, ".tilde", "schedule-state.json"))
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	due := schedule.Due(now, jobs, st)
+	if len(due) == 0 {
+		fmt.Println("tilde: run-due: nothing due")
+		return nil
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("cannot locate own binary: %w", err)
+	}
+	failed := 0
+	for _, j := range due {
+		fmt.Printf("tilde: run-due: job %q ...\n", j.ID)
+		cmdArgs := []string{"--prompt", j.Prompt, "--mode", "build"}
+		if yes {
+			cmdArgs = append(cmdArgs, "--yes")
+		}
+		cmd := exec.Command(self, cmdArgs...)
+		cmd.Dir = root
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "tilde: run-due: job %q failed (%v) — not marked, retries next tick\n", j.ID, err)
+			failed++
+			continue
+		}
+		st = schedule.MarkRun(st, j.ID, now)
+		if err := schedule.SaveState(filepath.Join(root, ".tilde", "schedule-state.json"), st); err != nil {
+			return err
+		}
+		fmt.Printf("tilde: run-due: job %q done\n", j.ID)
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d jobs failed", failed, len(due))
+	}
+	return nil
+}
+
+// pluginHome returns the user plugin dir (~/.tilde/plugins).
+func pluginHome() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot locate home: %w", err)
+	}
+	return filepath.Join(home, ".tilde", "plugins"), nil
+}
+
+// runPruneCmd implements `tilde prune`: retention windows for session
+// logs (default 30d, newest 5 always kept) and the audit trail (default
+// 90d). Dry run without --yes. Cron-friendly: missing dirs are no-ops.
+func runPruneCmd(args []string) error {
+	fs := flag.NewFlagSet("prune", flag.ContinueOnError)
+	sessionsAge := fs.String("sessions", "30d", "delete session logs older than this (Go duration)")
+	auditAge := fs.String("audit", "90d", "drop audit events older than this (Go duration)")
+	yes := fs.Bool("yes", false, "actually delete (without it: dry-run plan only)")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	sAge, err := parseRetention(sessionsAge, "sessions")
+	if err != nil {
+		return err
+	}
+	aAge, err := parseRetention(auditAge, "audit")
+	if err != nil {
+		return err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot locate home: %w", err)
+	}
+	sessDir := filepath.Join(home, ".tilde", "sessions")
+	auditPath := filepath.Join(home, ".tilde", "audit", "audit.jsonl")
+	if !*yes {
+		fmt.Printf("tilde: prune plan (dry run — pass --yes to delete):\n")
+		fmt.Printf("  sessions older than %s in %s (newest 5 kept)\n", sAge, sessDir)
+		fmt.Printf("  audit events older than %s in %s\n", aAge, auditPath)
+		return nil
+	}
+	deleted, err := session.Prune(sessDir, sAge, 5)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("tilde: pruned %d session(s)\n", len(deleted))
+	for _, n := range deleted {
+		fmt.Printf("  deleted %s\n", n)
+	}
+	kept, dropped, err := audit.Trim(auditPath, aAge)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("tilde: audit: kept %d, dropped %d\n", kept, dropped)
+	return nil
+}
+
+// parseRetention parses a retention window: a Go duration ("720h")
+// or a day count ("30d" = 720h). Negative values refuse.
+func parseRetention(raw *string, flag string) (time.Duration, error) {
+	s := strings.TrimSpace(*raw)
+	if n, ok := strings.CutSuffix(s, "d"); ok {
+		var days float64
+		if _, err := fmt.Sscanf(n, "%g", &days); err != nil || days < 0 {
+			return 0, fmt.Errorf("bad --%s %q: want a day count like 30d or a Go duration like 720h", flag, *raw)
+		}
+		return time.Duration(days * 24 * float64(time.Hour)), nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d < 0 {
+		return 0, fmt.Errorf("bad --%s %q: want a day count like 30d or a Go duration like 720h", flag, *raw)
+	}
+	return d, nil
+}
+
+// runForkCmd implements `tilde fork <id> [--at RFC3339]`.
+func runForkCmd(args []string) error {
+	fs := flag.NewFlagSet("fork", flag.ContinueOnError)
+	at := fs.String("at", "", "RFC3339 cutoff (inclusive); empty = branch from tip")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	rest := fs.Args()
+	if len(rest) != 1 || strings.HasPrefix(rest[0], "-") {
+		return fmt.Errorf("usage: tilde fork <id> [--at RFC3339]")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot locate home: %w", err)
+	}
+	newID, err := session.Fork(filepath.Join(home, ".tilde", "sessions"), rest[0], *at)
+	if err != nil {
+		return err
+	}
+	fmt.Println(newID)
+	return nil
+}
+
+// runExportCmd implements `tilde --export <session-id> [--out path.md]`:
+// one distilled, scrubbed brief on disk (0600), one line on stdout in
+// the timeline's `● Exported` shape rendered as text.
+func runExportCmd(sessionID, out string) error {
+	path, n, err := export.WriteBriefFile(sessionID, out)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Exported %s → %s (%d bytes)\n", sessionID, path, n)
+	return nil
+}
+
+// runPluginCmd implements `tilde plugin install <dir> [--upgrade] |
+// verify <name> | list`: explicit, hash-pinned local plugin management.
+// Install sources are local dirs only (no network, no clone); every
+// install pins sha256 per file and refuses drift.
+func runPluginCmd(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade] | verify <name> | list")
+	}
+	home, err := pluginHome()
+	if err != nil {
+		return err
+	}
+	switch args[1] {
+	case "list":
+		entries, err := os.ReadDir(home)
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Println("tilde: no plugins installed")
+				return nil
+			}
+			return err
+		}
+		for _, e := range entries {
+			m, err := plugin.LoadManifest(filepath.Join(home, e.Name()))
+			if err != nil {
+				fmt.Printf("%s\t(unreadable: %v)\n", e.Name(), err)
+				continue
+			}
+			ok := plugin.Verify(filepath.Join(home, e.Name()))
+			fmt.Printf("%s\t%s\tverified=%v\n", m.Name, m.Version, ok)
+		}
+		return nil
+	case "verify":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: tilde plugin verify <name>")
+		}
+		dir := filepath.Join(home, filepath.Clean(args[2]))
+		if !plugin.Verify(dir) {
+			return fmt.Errorf("plugin %q failed verification (drifted or unlocked) — reinstall from its source dir", args[2])
+		}
+		fmt.Printf("tilde: plugin %q verified\n", args[2])
+		return nil
+	case "install":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade]")
+		}
+		upgrade := len(args) > 3 && args[3] == "--upgrade"
+		if upgrade {
+			if _, err := plugin.Reinstall(args[2], home); err != nil {
+				return err
+			}
+		} else if _, err := plugin.Install(args[2], home); err != nil {
+			return err
+		}
+		fmt.Printf("tilde: plugin installed from %s\n", args[2])
+		return nil
+	default:
+		return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade] | verify <name> | list")
+	}
+}
+
 // headlessExitCode maps a loop outcome to the spec §4 table: 3 = provider
 // error exhausted, 4 = doom-loop / iteration-cap handoff, 5 = deny-tier
 // hit, 1 = uncategorized. Config/startup is 2, wired at the call sites.
@@ -975,7 +1476,8 @@ func headlessExitCode(err error, text string, denyHit bool) int {
 		return 4
 	}
 	if strings.HasPrefix(msg, "ollama:") || strings.HasPrefix(msg, "openai:") ||
-		strings.HasPrefix(msg, "anthropic:") ||
+		strings.HasPrefix(msg, "anthropic:") || strings.HasPrefix(msg, "gemini:") ||
+		strings.HasPrefix(msg, "openrouter:") || strings.HasPrefix(msg, "opencode:") ||
 		strings.Contains(msg, "model error") {
 		return 3
 	}

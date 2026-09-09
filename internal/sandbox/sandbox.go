@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // Config tunes one sandboxed command.
@@ -26,8 +27,39 @@ type Config struct {
 	// modules). Deny-by-default; the caller must opt in explicitly.
 	// TILDE_ALLOW_NET=1 lifts it session-wide instead (loud, visible in
 	// the status line); the policy layer still judges each command.
+	// Per-host policy allowlists (policies.yaml allow_net) apply at the
+	// web_fetch gate only and never lift this ban: shell egress stays
+	// all-or-nothing per call / session-wide by construction (bwrap has
+	// no per-host egress shape).
 	AllowNet bool
 }
+
+// Backend names selected via TILDE_BACKEND.
+const (
+	BackendBwrap  = "bwrap"
+	BackendPodman = "podman"
+)
+
+// ResolveBackend maps TILDE_BACKEND to a backend name: "" or "bwrap" is
+// the default bwrap backend, "podman" selects the podman backend, and
+// anything else errors naming the fix.
+func ResolveBackend() (string, error) {
+	v := strings.TrimSpace(os.Getenv("TILDE_BACKEND"))
+	switch v {
+	case "", BackendBwrap:
+		return BackendBwrap, nil
+	case BackendPodman:
+		return BackendPodman, nil
+	default:
+		return "", fmt.Errorf("sandbox: unknown backend %q — set TILDE_BACKEND to \"bwrap\" or \"podman\" (empty means bwrap)", v)
+	}
+}
+
+// Backend resolves this command's sandbox backend (see ResolveBackend).
+func Backend() (string, error) { return ResolveBackend() }
+
+// Backend resolves this command's sandbox backend (see ResolveBackend).
+func (c *Config) Backend() (string, error) { return ResolveBackend() }
 
 // Disabled reports whether the TILDE_NO_SANDBOX escape hatch is set.
 func Disabled() bool { return os.Getenv("TILDE_NO_SANDBOX") == "1" }
@@ -39,14 +71,47 @@ func Available() bool {
 }
 
 // Enforced reports whether commands will actually be sandboxed.
-func Enforced() bool { return !Disabled() && Available() }
+// It follows the selected backend: bwrap checks for bwrap, podman checks
+// for podman. An unknown backend fails closed (false); StatusLine and
+// Command surface the error naming the fix.
+func Enforced() bool {
+	if Disabled() {
+		return false
+	}
+	be, err := ResolveBackend()
+	if err != nil {
+		return false
+	}
+	if be == BackendPodman {
+		return PodmanAvailable()
+	}
+	return Available()
+}
 
-// Command builds the bwrap-wrapped bash invocation. It does not start it.
+// Command builds the sandbox-wrapped bash invocation. It does not start it.
+// The backend comes from Backend(): the default bwrap path is unchanged,
+// while "podman" delegates to the podman backend (BuildPodmanArgs via
+// PodmanConfig) with the digest-pinned image from TILDE_SANDBOX_IMAGE.
 func (c *Config) Command(ctx context.Context, shellCmd string) (*exec.Cmd, error) {
 	if Disabled() {
 		cmd := exec.CommandContext(ctx, "bash", "-c", shellCmd)
 		cmd.Dir = c.Root
 		return cmd, nil
+	}
+	be, err := c.Backend()
+	if err != nil {
+		return nil, err
+	}
+	if be == BackendPodman {
+		image := os.Getenv("TILDE_SANDBOX_IMAGE")
+		if !strings.Contains(image, "@sha256:") {
+			return nil, fmt.Errorf("sandbox: podman backend needs TILDE_SANDBOX_IMAGE pinned with a digest (name@sha256:<hex>) — set TILDE_SANDBOX_IMAGE to a digest-pinned image and retry (got %q)", image)
+		}
+		if c.Root != "" && filepath.Clean(c.Root) == "/" {
+			return nil, fmt.Errorf("sandbox: refusing to run with / as the project dir — that binds the whole host read-write. cd into the project and retry")
+		}
+		pc := &PodmanConfig{Root: c.Root, AllowNet: c.AllowNet, Image: image}
+		return pc.Command(ctx, shellCmd)
 	}
 	if !Available() {
 		return nil, fmt.Errorf("sandbox: bwrap not found on PATH — install bubblewrap (e.g. `apt install bubblewrap`), or set TILDE_NO_SANDBOX=1 to run unsandboxed (not recommended)")
@@ -114,10 +179,25 @@ func (c *Config) Command(ctx context.Context, shellCmd string) (*exec.Cmd, error
 // Default form matches the spec §2.1 mockup exactly
 // (`Sandbox: ● enforced (OS)`); only the exceptional opt-in state spends
 // extra ink — the default already says it in the safety prose above.
+// The podman backend reports its own name (`● enforced (podman)`).
 func StatusLine() string {
-	switch {
-	case Disabled():
+	if Disabled() {
 		return "○ sandbox disabled (TILDE_NO_SANDBOX=1)"
+	}
+	be, err := ResolveBackend()
+	if err != nil {
+		return "✗ " + err.Error()
+	}
+	if be == BackendPodman {
+		if !PodmanAvailable() {
+			return "✗ podman missing — shell calls will refuse to run"
+		}
+		if NetAllowed() {
+			return "● enforced (podman) + NET ALLOWED via TILDE_ALLOW_NET=1"
+		}
+		return "● enforced (podman)"
+	}
+	switch {
 	case Available():
 		if NetAllowed() {
 			return "● enforced (OS) + NET ALLOWED via TILDE_ALLOW_NET=1"

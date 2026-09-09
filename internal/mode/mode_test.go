@@ -27,4 +27,38 @@ func TestPlanGate(t *testing.T) {
 	if IsMutatingCall("shell_poll", map[string]any{"action": "status"}) {
 		t.Fatal("status must be read-only")
 	}
+	// Worktree writers: spawn/discard mutate (.git worktrees), apply
+	// only reviews a diff — same split as git_worktree_add/remove.
+	if err := Plan.AllowedCall("spawn_work", nil); err == nil {
+		t.Fatal("Plan must block spawn_work")
+	}
+	if err := Plan.AllowedCall("discard_work", nil); err == nil {
+		t.Fatal("Plan must block discard_work")
+	}
+	if err := Plan.AllowedCall("apply_work", nil); err != nil {
+		t.Fatalf("Plan must allow apply_work (read-only review): %v", err)
+	}
+	if err := Build.AllowedCall("spawn_work", nil); err != nil {
+		t.Fatalf("Build must allow spawn_work: %v", err)
+	}
+	// Memory is op-aware: recall reads, save/forget write.
+	if err := Plan.AllowedCall("memory", map[string]any{"op": "recall"}); err != nil {
+		t.Fatalf("Plan must allow memory recall: %v", err)
+	}
+	if err := Plan.AllowedCall("memory", map[string]any{"op": "save"}); err == nil {
+		t.Fatal("Plan must block memory save")
+	}
+	if err := Plan.AllowedCall("memory", map[string]any{"op": "forget"}); err == nil {
+		t.Fatal("Plan must block memory forget")
+	}
+	// remember: index rebuilds the vector store; recall/status read it.
+	if err := Plan.AllowedCall("remember", map[string]any{"op": "recall"}); err != nil {
+		t.Fatalf("Plan must allow remember recall: %v", err)
+	}
+	if err := Plan.AllowedCall("remember", map[string]any{"op": "status"}); err != nil {
+		t.Fatalf("Plan must allow remember status: %v", err)
+	}
+	if err := Plan.AllowedCall("remember", map[string]any{"op": "index"}); err == nil {
+		t.Fatal("Plan must block remember index")
+	}
 }

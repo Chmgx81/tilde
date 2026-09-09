@@ -17,6 +17,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/netip"
+	"net/url"
 	"os"
 	"os/exec"
 	"sort"
@@ -28,10 +31,85 @@ import (
 )
 
 // ServerConfig launches one server.
+//
+// Type is "local" (stdio child, default) or "remote" (HTTP POST
+// JSON-RPC). URL is remote-only. Enabled nil means true. HeadersFile
+// points at a headers file (never inline secrets in mcp.json).
+// Approval gates mcp_call per tool: "auto" or "prompt" (default prompt).
 type ServerConfig struct {
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`
 	Env     map[string]string `json:"env"`
+
+	Type            string            `json:"type"`
+	URL             string            `json:"url"`
+	Enabled         *bool             `json:"enabled"`
+	HeadersFile     string            `json:"headersFile"`
+	Approval        map[string]string `json:"approval"`
+	ApprovalDefault string            `json:"approvalDefault"`
+}
+
+// UnmarshalJSON rejects inline "headers" — secrets must live in a
+// HeadersFile, never in mcp.json.
+func (c *ServerConfig) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["headers"]; ok {
+		return fmt.Errorf("inline `headers` is rejected — never put secrets in mcp.json; store headers in a file and set `headersFile` instead")
+	}
+	type plain ServerConfig
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*c = ServerConfig(p)
+	return nil
+}
+
+// IsEnabled reports whether the server should start (nil = true).
+func (c ServerConfig) IsEnabled() bool {
+	return c.Enabled == nil || *c.Enabled
+}
+
+// effType normalizes empty to "local" (direct maps skip LoadFile).
+func (c ServerConfig) effType() string {
+	if c.Type == "" {
+		return "local"
+	}
+	return c.Type
+}
+
+func validateServerConfig(name string, cfg *ServerConfig) error {
+	if cfg.Type == "" {
+		cfg.Type = "local"
+	}
+	if cfg.Type != "local" && cfg.Type != "remote" {
+		return fmt.Errorf("mcp: server %q has unknown type %q — fix mcp.json: set \"type\" to \"local\" or \"remote\"", name, cfg.Type)
+	}
+	for tool, v := range cfg.Approval {
+		if v != "auto" && v != "prompt" {
+			return fmt.Errorf("mcp: server %q tool %q has bad approval %q — fix mcp.json: use \"auto\" or \"prompt\"", name, tool, v)
+		}
+	}
+	if cfg.ApprovalDefault != "" && cfg.ApprovalDefault != "auto" && cfg.ApprovalDefault != "prompt" {
+		return fmt.Errorf("mcp: server %q has bad approvalDefault %q — fix mcp.json: use \"auto\" or \"prompt\"", name, cfg.ApprovalDefault)
+	}
+	if cfg.Type == "local" {
+		if cfg.URL != "" {
+			return fmt.Errorf("mcp: server %q is local but sets \"url\" — fix mcp.json: \"url\" is remote-only", name)
+		}
+		return nil
+	}
+	// Remote.
+	if cfg.URL == "" {
+		return fmt.Errorf("mcp: server %q is remote but missing \"url\" — fix mcp.json: remote servers need \"url\": \"https://...\"", name)
+	}
+	if !strings.HasPrefix(cfg.URL, "http://") && !strings.HasPrefix(cfg.URL, "https://") {
+		return fmt.Errorf("mcp: server %q has non-http(s) url %q — fix mcp.json: \"url\" must be http(s)", name, cfg.URL)
+	}
+	return nil
 }
 
 // FileConfig matches the {"mcpServers": {...}} convention.
@@ -55,17 +133,54 @@ func LoadFile(path string) (FileConfig, error) {
 	if fc.Servers == nil {
 		fc.Servers = map[string]ServerConfig{}
 	}
+	for name, cfg := range fc.Servers {
+		if err := validateServerConfig(name, &cfg); err != nil {
+			return fc, err
+		}
+		fc.Servers[name] = cfg
+	}
 	return fc, nil
 }
 
-// Merge overlays project config on user config (project wins per server).
+// Merge overlays project config on user config. The user config is
+// authoritative: a project entry may only ADD a brand-new server name,
+// or — on a user-defined name — disable it (enabled=false) or tighten
+// per-tool approval toward "prompt". A project command/args/env/url/
+// headersFile/type change on a user-defined name is dropped, as is any
+// loosening of approval toward "auto": a repo must not rewire or
+// silently authorize your trusted servers.
 func Merge(user, project FileConfig) map[string]ServerConfig {
 	out := map[string]ServerConfig{}
 	for n, s := range user.Servers {
 		out[n] = s
 	}
-	for n, s := range project.Servers {
-		out[n] = s
+	for n, p := range project.Servers {
+		u, ok := user.Servers[n]
+		if !ok {
+			out[n] = p // brand-new names stay project-wins
+			continue
+		}
+		merged := u
+		if p.Enabled != nil && !*p.Enabled {
+			off := false
+			merged.Enabled = &off // project may only disable, never enable
+		}
+		if len(p.Approval) > 0 {
+			next := map[string]string{}
+			for k, v := range u.Approval {
+				next[k] = v
+			}
+			for k, v := range p.Approval {
+				if v == "prompt" {
+					next[k] = v // tighten only; "auto" is dropped
+				}
+			}
+			merged.Approval = next
+		}
+		if p.ApprovalDefault == "prompt" {
+			merged.ApprovalDefault = "prompt" // tighten only
+		}
+		out[n] = merged
 	}
 	return out
 }
@@ -206,6 +321,11 @@ func (m *Manager) Start(ctx context.Context) error {
 }
 
 func (m *Manager) startOne(ctx context.Context, name string, cfg ServerConfig) error {
+	if cfg.effType() == "remote" {
+		if err := checkRemoteURL(name, cfg.URL); err != nil {
+			return err
+		}
+	}
 	if cfg.Command == "" {
 		return fmt.Errorf("missing command — set command/args in mcp.json")
 	}
@@ -310,6 +430,56 @@ func missingRequired(schema map[string]any, args map[string]any) []string {
 	}
 	return out
 }
+
+// cgnat is the carrier-grade NAT shared-address space: not private by
+// RFC 1918 but never a public MCP host.
+var cgnat = netip.MustParsePrefix("100.64.0.0/10")
+
+// nonPublicIP reports whether ip is loopback, private, link-local,
+// multicast, unspecified, or carrier-grade NAT — never a valid remote
+// MCP host (SSRF guard, stdlib only).
+func nonPublicIP(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	return ip.IsPrivate() || ip.IsLoopback() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsMulticast() || !ip.IsValid() || ip.IsUnspecified() ||
+		cgnat.Contains(ip)
+}
+
+// checkRemoteURL rejects remote server URLs pointing at non-public
+// targets: IP literals, localhost-family names, and hostnames resolving
+// to non-public addresses (fail closed when unresolvable). Transport
+// behavior is unchanged — this is only a gate.
+func checkRemoteURL(name, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("mcp: server %q has non-http(s) url %q — fix mcp.json: \"url\" must be http(s)", name, raw)
+	}
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") {
+		return fmt.Errorf("mcp: server %q url %q targets a local host — fix mcp.json: remote \"url\" must be a public http(s) host", name, raw)
+	}
+	if ip, err := netip.ParseAddr(u.Hostname()); err == nil {
+		if nonPublicIP(ip) {
+			return fmt.Errorf("mcp: server %q url %q targets a private/loopback address — fix mcp.json: remote \"url\" must be a public http(s) host", name, raw)
+		}
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil || len(addrs) == 0 {
+		return fmt.Errorf("mcp: server %q url %q does not resolve to a verifiable public address (%v) — fix mcp.json: remote \"url\" must be a public http(s) host", name, raw, err)
+	}
+	for _, a := range addrs {
+		ip, ok := netip.AddrFromSlice(a.IP.To16())
+		if !ok || nonPublicIP(ip) {
+			return fmt.Errorf("mcp: server %q url %q resolves to a private/loopback address — fix mcp.json: remote \"url\" must be a public http(s) host", name, raw)
+		}
+	}
+	return nil
+}
+
 func (m *Manager) serverToolNames(server string) []string {
 	m.mu.Lock()
 	s, ok := m.servers[server]
@@ -327,8 +497,30 @@ func (m *Manager) serverToolNames(server string) []string {
 	return out
 }
 
+// toolApproval resolves the effective gate for one tool: the per-tool
+// entry, else ApprovalDefault, else "prompt" (fail closed).
+func (c ServerConfig) toolApproval(tool string) string {
+	if v, ok := c.Approval[tool]; ok && v != "" {
+		return v
+	}
+	if c.ApprovalDefault != "" {
+		return c.ApprovalDefault
+	}
+	return "prompt"
+}
+
 // Call invokes server.tool with args (120s cap, fenced by the caller).
+// Tools gated approval=prompt need an approved caller — use CallApproved
+// once the policy tier has approved the call.
 func (m *Manager) Call(ctx context.Context, server, tool string, args map[string]any) (string, error) {
+	return m.CallApproved(ctx, server, tool, args, false)
+}
+
+// CallApproved is Call with the policy-tier verdict attached: approved
+// must be true when the tool resolves to approval=prompt (the mcp_call
+// gateway passes true — the agent loop's Ask gate already approved that
+// exact call). Unapproved prompt-gated calls fail with the fix attached.
+func (m *Manager) CallApproved(ctx context.Context, server, tool string, args map[string]any, approved bool) (string, error) {
 	m.mu.Lock()
 	s, ok := m.servers[server]
 	m.mu.Unlock()
@@ -348,6 +540,13 @@ func (m *Manager) Call(ctx context.Context, server, tool string, args map[string
 	}
 	if !known {
 		return "", fmt.Errorf("unknown tool %q on server %q. Tools: %s", tool, server, strings.Join(names, ", "))
+	}
+	if cfg, ok := m.configs[server]; ok {
+		if cfg.toolApproval(tool) != "auto" && !approved {
+			return "", fmt.Errorf("mcp %s.%s needs user approval (approval=prompt) — ask the user, then retry the call as approved", server, tool)
+		}
+	} else if !approved {
+		return "", fmt.Errorf("mcp %s.%s needs user approval (approval=prompt) — ask the user, then retry the call as approved", server, tool)
 	}
 	if args == nil {
 		args = map[string]any{}

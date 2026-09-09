@@ -369,3 +369,130 @@ func (o *Ollama) Chat(ctx context.Context, messages []Message, tools []ToolDef) 
 	}
 	return r, nil
 }
+
+// Stream implements Streamer: POST /api/chat with stream:true (tools
+// included, same shape as Chat) and yields content deltas plus the
+// assembled tool calls. Tool calls arrive on the final message(s) and
+// replace any earlier set; the terminal event carries the assembled
+// calls and the done_reason truncation signal. Add-only fast path —
+// Chat (retry/backoff) is untouched, and there is no retry here: any
+// failure is one error on errs so the caller falls back to Chat.
+func (o *Ollama) Stream(ctx context.Context, messages []Message, defs []ToolDef) (<-chan StreamEvent, <-chan error) {
+	events := make(chan StreamEvent, 16)
+	errs := make(chan error, 1)
+	go func() {
+		defer close(events)
+		defer close(errs)
+		msgs := make([]map[string]string, 0, len(messages))
+		for _, m := range messages {
+			msgs = append(msgs, map[string]string{"role": m.Role, "content": m.Content})
+		}
+		payload := map[string]any{
+			"model": o.Model, "messages": msgs, "stream": true,
+		}
+		if len(defs) > 0 {
+			ots := make([]ollamaTool, 0, len(defs))
+			for _, t := range defs {
+				ots = append(ots, ollamaTool{Type: "function", Function: map[string]any{
+					"name": t.Name, "description": t.Description, "parameters": t.Schema,
+				}})
+			}
+			payload["tools"] = ots
+		}
+		body, _ := json.Marshal(payload)
+		req, err := http.NewRequestWithContext(ctx, "POST", o.Host+"/api/chat", bytes.NewReader(body))
+		if err != nil {
+			errs <- fmt.Errorf("ollama: build stream request: %w — is Ollama running at %s? Start it with `ollama serve`", err, o.Host)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if key := os.Getenv("OLLAMA_API_KEY"); key != "" {
+			req.Header.Set("Authorization", "Bearer "+key)
+		}
+		resp, err := o.http.Do(req)
+		if err != nil {
+			errs <- fmt.Errorf("ollama: POST %s/api/chat: %w — is Ollama running? Start it with `ollama serve`", o.Host, err)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+			errs <- fmt.Errorf("ollama: status %d for model %q: %s — try `ollama pull %s`", resp.StatusCode, o.Model, strings.TrimSpace(string(raw)), o.Model)
+			return
+		}
+		emit := func(ev StreamEvent) bool {
+			select {
+			case events <- ev:
+				return true
+			case <-ctx.Done():
+				errs <- ctx.Err()
+				return false
+			}
+		}
+		var calls []ToolCall
+		dec := json.NewDecoder(resp.Body)
+		for {
+			var line struct {
+				Message struct {
+					Content   string `json:"content"`
+					ToolCalls []struct {
+						ID       string `json:"id"`
+						Function struct {
+							Name      string         `json:"name"`
+							Arguments map[string]any `json:"arguments"`
+						} `json:"function"`
+					} `json:"tool_calls"`
+				} `json:"message"`
+				Error      string `json:"error"`
+				Done       bool   `json:"done"`
+				DoneReason string `json:"done_reason"`
+			}
+			if err := dec.Decode(&line); err != nil {
+				if err == io.EOF {
+					// Closed without done (proxies do this): still
+					// deliver what assembled, like the SSE path.
+					if len(calls) > 0 {
+						emit(StreamEvent{Calls: calls})
+					}
+					return
+				}
+				errs <- fmt.Errorf("ollama: decode stream: %w — the model returned malformed JSON; retry the request", err)
+				return
+			}
+			if line.Error != "" {
+				errs <- fmt.Errorf("ollama: stream error for model %q: %s — retry the request", o.Model, line.Error)
+				return
+			}
+			if line.Message.Content != "" {
+				if !emit(StreamEvent{Text: line.Message.Content}) {
+					return
+				}
+			}
+			if len(line.Message.ToolCalls) > 0 {
+				// Same parse as Chat: missing ids get call_N, missing
+				// args become {}.
+				calls = calls[:0]
+				for i, tc := range line.Message.ToolCalls {
+					id := tc.ID
+					if id == "" {
+						id = fmt.Sprintf("call_%d", i)
+					}
+					args := tc.Function.Arguments
+					if args == nil {
+						args = map[string]any{}
+					}
+					calls = append(calls, ToolCall{ID: id, Name: tc.Function.Name, Args: args})
+				}
+			}
+			if line.Done {
+				ev := StreamEvent{Truncated: line.DoneReason == "length"}
+				if len(calls) > 0 {
+					ev.Calls = calls
+				}
+				emit(ev)
+				return
+			}
+		}
+	}()
+	return events, errs
+}

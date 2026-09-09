@@ -8,18 +8,27 @@ import (
 )
 
 var (
-	reScrubPEM        = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----`)
-	reScrubAnthropic  = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]{20,}`)
-	reScrubOpenAI     = regexp.MustCompile(`sk-[A-Za-z0-9_-]{20,}`)
-	reScrubXAI        = regexp.MustCompile(`xai-[A-Za-z0-9_-]{20,}`)
-	reScrubAWS        = regexp.MustCompile(`(?:AKIA|ASIA)[0-9A-Z]{16}`)
-	reScrubGitHub     = regexp.MustCompile(`(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}`)
-	reScrubGitLab     = regexp.MustCompile(`glpat-[A-Za-z0-9_-]{20,}`)
-	reScrubSlack      = regexp.MustCompile(`(?:xox[abps]|xapp)-[A-Za-z0-9-]+`)
-	reScrubGoogle     = regexp.MustCompile(`AIza[0-9A-Za-z_-]{35}`)
-	reScrubBearer     = regexp.MustCompile(`Bearer\s+[A-Za-z0-9_.~+/=-]+`)
-	reScrubJWT        = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
-	reScrubQueryParam = regexp.MustCompile(`(?i)([?&](?:key|token|secret|password|access_token|refresh_token|id_token|client_secret|api_key|apikey|auth|authorization|session|sig|signature|code)=)[^&#\s]*`)
+	reScrubPEM             = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----`)
+	reScrubAnthropic       = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]{20,}`)
+	reScrubOpenRouter      = regexp.MustCompile(`sk-or-[A-Za-z0-9_-]{8,}`)
+	reScrubOpenAI          = regexp.MustCompile(`sk-[A-Za-z0-9_-]{20,}`)
+	reScrubXAI             = regexp.MustCompile(`xai-[A-Za-z0-9_-]{20,}`)
+	reScrubAWS             = regexp.MustCompile(`(?:AKIA|ASIA)[0-9A-Z]{16}`)
+	reScrubAWSSecretAssign = regexp.MustCompile(`(?i)(aws_secret_access_key["']?\s*[:=]\s*["']?)[A-Za-z0-9/+=]{40}`)
+	reScrubAWSSecret       = regexp.MustCompile(`[A-Za-z0-9/+=]{40}`)
+	reScrubGitHub          = regexp.MustCompile(`(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}`)
+	reScrubGitLab          = regexp.MustCompile(`glpat-[A-Za-z0-9_-]{20,}`)
+	reScrubSlack           = regexp.MustCompile(`(?:xox[abps]|xapp)-[A-Za-z0-9-]+`)
+	reScrubReplicate       = regexp.MustCompile(`rk_live_[A-Za-z0-9_-]{8,}`)
+	reScrubNPM             = regexp.MustCompile(`npm_[A-Za-z0-9_]{8,}`)
+	reScrubNpmAuth         = regexp.MustCompile(`(?i)(_authtoken\s*[:=]\s*["']?)[A-Za-z0-9_.\-/+=]{8,}`)
+	reScrubPyPI            = regexp.MustCompile(`pypi-[A-Za-z0-9_.\-]{8,}`)
+	reScrubGoogle          = regexp.MustCompile(`AIza[0-9A-Za-z_-]{35}`)
+	reScrubBearer          = regexp.MustCompile(`Bearer\s+[A-Za-z0-9_.~+/=-]+`)
+	reScrubJWT             = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
+	reScrubOpenCodeAssign  = regexp.MustCompile(`(?i)(opencode_api_key["']?\s*[:=]\s*["']?)[A-Za-z0-9_.\-/+=]{8,}`)
+	reScrubAPIKeyAssign    = regexp.MustCompile(`(?i)(["']?(?:api[_-]?key|api_secret|authorization)["']?\s*[:=]\s*["']?)[A-Za-z0-9_.\-/+=]{8,}`)
+	reScrubQueryParam      = regexp.MustCompile(`(?i)([?&](?:key|token|secret|password|access_token|refresh_token|id_token|client_secret|api_key|apikey|auth|authorization|session|sig|signature|code)=)[^&#\s]*`)
 )
 
 func Scrub(s string) (string, int) {
@@ -32,15 +41,27 @@ func Scrub(s string) (string, int) {
 	}
 	replace(reScrubPEM, "<<REDACTED:pem>>")
 	replace(reScrubAnthropic, "<<REDACTED:anthropic>>")
+	replace(reScrubOpenRouter, "<<REDACTED:openrouter>>")
 	replace(reScrubOpenAI, "<<REDACTED:openai>>")
 	replace(reScrubXAI, "<<REDACTED:xai>>")
+	hasAWS := reScrubAWS.MatchString(s)
 	replace(reScrubAWS, "<<REDACTED:aws>>")
+	replace(reScrubAWSSecretAssign, `$1<<REDACTED:aws-secret>>`)
+	if hasAWS {
+		replace(reScrubAWSSecret, "<<REDACTED:aws-secret>>")
+	}
 	replace(reScrubGitHub, "<<REDACTED:github>>")
 	replace(reScrubGitLab, "<<REDACTED:gitlab>>")
 	replace(reScrubSlack, "<<REDACTED:slack>>")
+	replace(reScrubReplicate, "<<REDACTED:replicate>>")
+	replace(reScrubNPM, "<<REDACTED:npm>>")
+	replace(reScrubNpmAuth, `$1<<REDACTED:npm>>`)
+	replace(reScrubPyPI, "<<REDACTED:pypi>>")
 	replace(reScrubGoogle, "<<REDACTED:google>>")
 	replace(reScrubBearer, "Bearer <<REDACTED:bearer>>")
 	replace(reScrubJWT, "<<REDACTED:jwt>>")
+	replace(reScrubOpenCodeAssign, `$1<<REDACTED:opencode>>`)
+	replace(reScrubAPIKeyAssign, `$1<<REDACTED:apikey>>`)
 	replace(reScrubQueryParam, `$1<<REDACTED:query>>`)
 	if home := os.Getenv("HOME"); home != "" {
 		if c := strings.Count(s, home); c > 0 {
@@ -61,10 +82,13 @@ func IsHighRiskPath(p string) bool {
 	if base == ".env" || strings.HasPrefix(base, ".env.") {
 		return true
 	}
-	if strings.HasSuffix(low, ".aws/credentials") {
+	if strings.HasSuffix(low, ".aws/credentials") || strings.HasSuffix(low, ".aws/config") {
 		return true
 	}
-	if base == "credentials.json" || base == ".netrc" {
+	if base == "credentials.json" || base == ".netrc" || base == ".npmrc" || base == ".pypirc" || base == ".git-credentials" {
+		return true
+	}
+	if strings.HasPrefix(base, "id_rsa") {
 		return true
 	}
 	if strings.Contains(low, ".ssh/") && strings.HasPrefix(base, "id_") {

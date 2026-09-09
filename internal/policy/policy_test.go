@@ -450,3 +450,252 @@ func TestHardlinkCreationDenied(t *testing.T) {
 		}
 	}
 }
+
+// FIX P0-6 (policy long-flag bypass): hasFlag is prefix-aware for
+// --flag=value plus combined shorts; interpreter checks cover long forms.
+func TestLongFlagBypassDenied(t *testing.T) {
+	p := &Policy{}
+	for _, cmd := range []string{
+		"node --eval 'console.log(1)'",
+		"node --eval=console.log(1)",
+		"python --command 'print(1)'",
+		"python3 --command='print(1)'",
+		"bash --command=x",
+		"bash --command='rm -rf /'",
+		"perl --module Foo",
+		"perl --module=Foo",
+	} {
+		if got := p.Check("shell_command", shellArgs(cmd)); got != Deny {
+			t.Errorf("long-flag %q: got %v, want Deny", cmd, got)
+		}
+	}
+}
+
+// P1-G per-host net approval: allow_net hostnames pass web_fetch without
+// the session-wide opt-in; everything else still needs it.
+func TestPolicyAllowNetMatch(t *testing.T) {
+	f := &File{AllowNet: []string{"Example.COM", "docs.example.org."}}
+	for _, h := range []string{"example.com", "EXAMPLE.com", "example.com.", "docs.example.org"} {
+		if !f.NetAllowed(h) {
+			t.Errorf("allowlisted %q must pass", h)
+		}
+	}
+	for _, h := range []string{"other.com", "sub.example.com", "", "example.com.evil.com"} {
+		if f.NetAllowed(h) {
+			t.Errorf("unlisted %q must not pass", h)
+		}
+	}
+	if (*File)(nil).NetAllowed("example.com") {
+		t.Error("nil file must allow nothing")
+	}
+	if (&File{}).NetAllowed("example.com") {
+		t.Error("empty list must allow nothing")
+	}
+}
+
+func TestPolicyAllowNetLoadsFromYAML(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "policies.yaml")
+	os.WriteFile(path, []byte("allow_net:\n  - example.com\n"), 0o644)
+	f, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.NetAllowed("example.com") {
+		t.Error("yaml allow_net entry must pass")
+	}
+	if f.NetAllowed("other.com") {
+		t.Error("unlisted host must not pass")
+	}
+}
+
+func TestWorkToolTiers(t *testing.T) {
+	// spawn/discard create/remove worktrees: hardcoded Ask even with no
+	// file (same class as git_worktree_add/remove); --yes still allows.
+	p := &Policy{}
+	if got := p.Check("spawn_work", nil); got != Ask {
+		t.Errorf("spawn_work default: got %v, want Ask", got)
+	}
+	if got := p.Check("discard_work", nil); got != Ask {
+		t.Errorf("discard_work default: got %v, want Ask", got)
+	}
+	yes := &Policy{AlwaysAllow: true}
+	if got := yes.Check("spawn_work", nil); got != Allow {
+		t.Errorf("spawn_work --yes: got %v, want Allow", got)
+	}
+	// web_search and apply_work are yaml-listed: Ask when listed,
+	// Allow when the file is missing (read-only tools run free).
+	yaml := &Policy{File: &File{Ask: []string{"web_search", "apply_work"}}}
+	if got := yaml.Check("web_search", nil); got != Ask {
+		t.Errorf("web_search listed: got %v, want Ask", got)
+	}
+	if got := yaml.Check("apply_work", nil); got != Ask {
+		t.Errorf("apply_work listed: got %v, want Ask", got)
+	}
+	if got := p.Check("web_search", nil); got != Allow {
+		t.Errorf("web_search unlisted: got %v, want Allow", got)
+	}
+}
+
+// P7-A path-scoped deny (deny_paths): ordered globs evaluated BEFORE
+// tier lookup; a match denies with deny-tier supremacy (beats
+// AlwaysAllow/--yes). Pure string on the Clean-ed value as given.
+func TestDenyPathsTable(t *testing.T) {
+	cases := []struct {
+		name string
+		file *File
+		tool string
+		args map[string]any
+		want Decision
+	}{
+		{"exact file denied", &File{DenyPaths: []string{"secrets/token.txt"}},
+			"read_file", map[string]any{"path": "secrets/token.txt"}, Deny},
+		{"exact file write denied", &File{DenyPaths: []string{"secrets/token.txt"}},
+			"write_file", map[string]any{"path": "secrets/token.txt"}, Deny},
+		{"exact file edit denied", &File{DenyPaths: []string{"secrets/token.txt"}},
+			"edit_file", map[string]any{"path": "secrets/token.txt"}, Deny},
+		{"sibling file passes", &File{DenyPaths: []string{"secrets/token.txt"}},
+			"read_file", map[string]any{"path": "secrets/other.txt"}, Allow},
+		{"doublestar dir deep", &File{DenyPaths: []string{"**/secrets/**"}},
+			"read_file", map[string]any{"path": "a/b/secrets/c.txt"}, Deny},
+		{"doublestar dir top", &File{DenyPaths: []string{"**/secrets/**"}},
+			"read_file", map[string]any{"path": "secrets/token.txt"}, Deny},
+		{"doublestar dir bare", &File{DenyPaths: []string{"**/secrets/**"}},
+			"grep", map[string]any{"pattern": "needle", "dir": "secrets"}, Deny},
+		{"doublestar miss", &File{DenyPaths: []string{"**/secrets/**"}},
+			"read_file", map[string]any{"path": "src/app.go"}, Allow},
+		{"single star one segment", &File{DenyPaths: []string{"*.key"}},
+			"read_file", map[string]any{"path": "id.key"}, Deny},
+		{"single star no crossing", &File{DenyPaths: []string{"*.key"}},
+			"read_file", map[string]any{"path": "sub/id.key"}, Allow},
+		{"absolute pattern", &File{DenyPaths: []string{"/etc/tilde/*"}},
+			"read_file", map[string]any{"path": "/etc/tilde/x"}, Deny},
+		{"absolute pattern no cross-form", &File{DenyPaths: []string{"/etc/tilde/*"}},
+			"read_file", map[string]any{"path": "etc/tilde/x"}, Allow},
+		{"dirty path cleaned", &File{DenyPaths: []string{"b"}},
+			"read_file", map[string]any{"path": "a/../b"}, Deny},
+		{"dirty pattern cleaned", &File{DenyPaths: []string{"a/../b"}},
+			"read_file", map[string]any{"path": "b"}, Deny},
+		{"grep scopes on dir", &File{DenyPaths: []string{"secrets/**"}},
+			"grep", map[string]any{"pattern": "needle", "dir": "secrets"}, Deny},
+		{"grep content never path-matched", &File{DenyPaths: []string{"secrets/**"}},
+			"grep", map[string]any{"pattern": "secrets/token.txt", "dir": "."}, Allow},
+		{"glob literal pattern denied", &File{DenyPaths: []string{"secrets/*"}},
+			"glob", map[string]any{"pattern": "secrets/*.go"}, Deny},
+		{"glob broad pattern still lists", &File{DenyPaths: []string{"**/secrets/**"}},
+			"glob", map[string]any{"pattern": "**/*.go"}, Allow},
+	}
+	for _, c := range cases {
+		if got := (&Policy{File: c.file}).Check(c.tool, c.args); got != c.want {
+			t.Errorf("%s: Check(%q, %v) = %v, want %v", c.name, c.tool, c.args, got, c.want)
+		}
+	}
+}
+
+// Non-path tools ignore the list entirely — including shell_command,
+// which stays argv-judged (cwd scoping is containment's job, not
+// policy's), and unknown tools carrying a path-looking arg.
+func TestDenyPathsNonPathToolsUnaffected(t *testing.T) {
+	p := &Policy{File: &File{DenyPaths: []string{"**/secrets/**"}}}
+	if got := p.Check("shell_command", shellArgs("cat secrets/token.txt")); got != Ask {
+		t.Errorf("shell stays argv-judged: got %v, want Ask", got)
+	}
+	if got := p.Check("mcp_call", map[string]any{"server": "fs", "tool": "read"}); got != Ask {
+		t.Errorf("mcp_call tier unchanged: got %v, want Ask", got)
+	}
+	if got := p.Check("symbol_search", map[string]any{"path": "secrets/token.txt"}); got != Allow {
+		t.Errorf("unlisted tool with path arg: got %v, want Allow", got)
+	}
+	if got := p.Check("read_file", nil); got != Allow {
+		t.Errorf("missing path arg judges nothing: got %v, want Allow", got)
+	}
+}
+
+// Path deny beats AlwaysAllow/--yes — even on read_file, which is
+// default-Allow tier. Same supremacy as the deny tier.
+func TestDenyPathsBeatAlwaysAllow(t *testing.T) {
+	p := &Policy{AlwaysAllow: true, File: &File{DenyPaths: []string{"**/secrets/**"}}}
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+	}{
+		{"read_file", map[string]any{"path": "secrets/token.txt"}},
+		{"write_file", map[string]any{"path": "secrets/token.txt"}},
+		{"grep", map[string]any{"pattern": "x", "dir": "secrets"}},
+	} {
+		if got := p.Check(tc.tool, tc.args); got != Deny {
+			t.Errorf("path deny must beat --yes for %q: got %v", tc.tool, got)
+		}
+	}
+	if got := p.Check("write_file", map[string]any{"path": "src/app.go"}); got != Allow {
+		t.Errorf("unmatched path with --yes: got %v, want Allow", got)
+	}
+}
+
+// Empty list (or nil file) = the list is off; tiers behave as before.
+func TestDenyPathsEmptyOff(t *testing.T) {
+	for _, f := range []*File{nil, {}, {DenyPaths: nil}, {DenyPaths: []string{}}} {
+		p := &Policy{File: f}
+		if got := p.Check("read_file", map[string]any{"path": "secrets/token.txt"}); got != Allow {
+			t.Errorf("file %+v: got %v, want Allow", f, got)
+		}
+	}
+}
+
+// Malformed globs fail LOUD at Load (startup refusal naming the
+// pattern) and fail CLOSED in Check for Files built without Load.
+func TestDenyPathsInvalidFailsLoud(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "policies.yaml")
+	os.WriteFile(path, []byte("deny_paths:\n  - '[unclosed'\n"), 0o644)
+	if _, err := Load(path); err == nil {
+		t.Fatal("Load must reject unparseable deny_paths")
+	} else if !strings.Contains(err.Error(), "[unclosed") {
+		t.Fatalf("Load error must name the pattern, got: %v", err)
+	}
+	if err := (&File{DenyPaths: []string{"ok/**", ""}}).Validate(); err == nil {
+		t.Fatal("Validate must reject empty entries")
+	}
+	p := &Policy{File: &File{DenyPaths: []string{"[unclosed"}}}
+	if got := p.Check("read_file", map[string]any{"path": "anything.txt"}); got != Deny {
+		t.Fatalf("broken pattern must fail closed: got %v", got)
+	}
+	if reason := p.File.PathDenyReason("read_file", map[string]any{"path": "anything.txt"}); !strings.Contains(reason, "[unclosed") {
+		t.Fatalf("reason must name the pattern, got: %q", reason)
+	}
+}
+
+// Deny reasons name the winning pattern and the fix.
+func TestDenyPathsReasonNamesPattern(t *testing.T) {
+	f := &File{DenyPaths: []string{"src/**", "**/secrets/**"}}
+	reason := f.PathDenyReason("read_file", map[string]any{"path": "a/secrets/x"})
+	if !strings.Contains(reason, "**/secrets/**") {
+		t.Fatalf("reason must name the winning pattern, got: %q", reason)
+	}
+	if !strings.Contains(reason, "deny_paths") {
+		t.Fatalf("reason must name the fix, got: %q", reason)
+	}
+	if got := f.PathDenyReason("read_file", map[string]any{"path": "src/app.go"}); !strings.Contains(got, `"src/**"`) {
+		t.Fatalf("first match wins, got: %q", got)
+	}
+	if got := f.PathDenyReason("read_file", map[string]any{"path": "other/app.go"}); got != "" {
+		t.Fatalf("no match = no reason, got: %q", got)
+	}
+	if got := (*File)(nil).PathDenyReason("read_file", map[string]any{"path": "x"}); got != "" {
+		t.Fatalf("nil file = no reason, got: %q", got)
+	}
+}
+
+func TestValidateDenyPaths(t *testing.T) {
+	valid := []*File{nil, {}, {DenyPaths: []string{"**/secrets/**", "*.key", "/abs/*", "a/../b", "?"}}}
+	for _, f := range valid {
+		if err := f.Validate(); err != nil {
+			t.Errorf("file %+v: unexpected Validate error: %v", f, err)
+		}
+	}
+	for _, pat := range []string{"[unclosed", "a[b"} {
+		if err := (&File{DenyPaths: []string{pat}}).Validate(); err == nil {
+			t.Errorf("pattern %q: expected Validate error", pat)
+		} else if !strings.Contains(err.Error(), pat) {
+			t.Errorf("pattern %q: error must name it, got: %v", pat, err)
+		}
+	}
+}

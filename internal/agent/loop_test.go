@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -664,6 +665,109 @@ func TestWriteBreaksBatch(t *testing.T) {
 	}
 }
 
+// streamProv is a Provider with an optional scripted Stream path:
+// events stream, then streamErr (nil = clean close). chatCalls counts
+// non-streaming fallback invocations.
+type streamProv struct {
+	events      []provider.StreamEvent
+	streamErr   error
+	chatResp    provider.Response
+	chatCalls   int
+	streamCalls int
+	// once serves the scripted events only on the first Stream call;
+	// later turns stream empty (a real backend never repeats a turn).
+	once bool
+}
+
+func (f *streamProv) Name() string { return "stream-fake" }
+func (f *streamProv) Chat(_ context.Context, _ []provider.Message, _ []provider.ToolDef) (provider.Response, error) {
+	f.chatCalls++
+	return f.chatResp, nil
+}
+func (f *streamProv) Stream(_ context.Context, _ []provider.Message, _ []provider.ToolDef) (<-chan provider.StreamEvent, <-chan error) {
+	f.streamCalls++
+	events := make(chan provider.StreamEvent, len(f.events))
+	errs := make(chan error, 1)
+	if !f.once || f.streamCalls == 1 {
+		for _, e := range f.events {
+			events <- e
+		}
+	}
+	close(events)
+	if f.streamErr != nil {
+		errs <- f.streamErr
+	}
+	close(errs)
+	return events, errs
+}
+
+func TestStreamSuccessConcatenatesNoFallback(t *testing.T) {
+	root := t.TempDir()
+	prov := &streamProv{
+		events:   []provider.StreamEvent{{Text: "hel"}, {Text: "lo"}},
+		chatResp: provider.Response{Content: "chat-path-must-not-run"},
+	}
+	loop := &Loop{
+		Prov: prov,
+		Reg:  testRegistry(root),
+		Cfg:  Config{MaxIters: 5, DoomRepeats: 5, Root: root, Mode: mode.Build, Pol: &policy.Policy{AlwaysAllow: true}},
+	}
+	var assistants []string
+	text, err := loop.Run(context.Background(), "goal", func(e Event) {
+		if e.Kind == "assistant" {
+			assistants = append(assistants, e.Text)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "hello" {
+		t.Fatalf("final text = %q, want %q", text, "hello")
+	}
+	if len(assistants) != 1 || assistants[0] != "hello" {
+		t.Fatalf("one concatenated assistant event expected, got %q", assistants)
+	}
+	if prov.chatCalls != 0 {
+		t.Fatalf("Chat must not run when the stream succeeds, calls=%d", prov.chatCalls)
+	}
+}
+
+func TestStreamErrorFallsBackToChat(t *testing.T) {
+	// Mid-stream abort after a partial chunk: the partial text is
+	// discarded and the ordinary Chat path serves the turn.
+	root := t.TempDir()
+	prov := &streamProv{
+		events:    []provider.StreamEvent{{Text: "partial"}},
+		streamErr: errors.New("connection reset by peer"),
+		chatResp:  provider.Response{Content: "recovered"},
+	}
+	loop := &Loop{
+		Prov: prov,
+		Reg:  testRegistry(root),
+		Cfg:  Config{MaxIters: 5, DoomRepeats: 5, Root: root, Mode: mode.Build, Pol: &policy.Policy{AlwaysAllow: true}},
+	}
+	var assistants []string
+	text, err := loop.Run(context.Background(), "goal", func(e Event) {
+		if e.Kind == "assistant" {
+			assistants = append(assistants, e.Text)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "recovered" {
+		t.Fatalf("fallback text = %q, want %q", text, "recovered")
+	}
+	if prov.chatCalls != 1 {
+		t.Fatalf("Chat must run exactly once on stream error, calls=%d", prov.chatCalls)
+	}
+	for _, a := range assistants {
+		if strings.Contains(a, "partial") {
+			t.Fatalf("partial stream text must not surface, got %q", assistants)
+		}
+	}
+}
+
 func TestThinkingEmittedAheadOfReply(t *testing.T) {
 	root := t.TempDir()
 	loop := &Loop{
@@ -696,4 +800,202 @@ func TestThinkingEmittedAheadOfReply(t *testing.T) {
 			t.Fatalf("thinking leaked into context: %q", m.Content)
 		}
 	}
+}
+
+func TestStreamedToolCallsReachDispatch(t *testing.T) {
+	// Regression: a turn mixing prose with native calls must dispatch
+	// the calls — a text-only fast path drops them and the model reads
+	// as "stopped using tools".
+	root := t.TempDir()
+	prov := &streamProv{
+		events: []provider.StreamEvent{
+			{Text: "creating now"},
+			{Calls: []provider.ToolCall{{ID: "s1", Name: "write_file", Args: map[string]any{"path": "s.txt", "content": "streamed"}}}},
+		},
+		chatResp: provider.Response{Content: "done"},
+		once:     true,
+	}
+	loop := &Loop{
+		Prov: prov,
+		Reg:  testRegistry(root),
+		Cfg:  Config{MaxIters: 5, DoomRepeats: 5, Root: root, Mode: mode.Build, Pol: &policy.Policy{AlwaysAllow: true}},
+	}
+	var toolCalls []string
+	_, err := loop.Run(context.Background(), "goal", func(e Event) {
+		if e.Kind == "tool_call" {
+			toolCalls = append(toolCalls, e.Text)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(toolCalls) != 1 {
+		t.Fatalf("streamed call must dispatch once, got %q", toolCalls)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "s.txt"))
+	if err != nil {
+		t.Fatal("streamed write did not land")
+	}
+	if string(data) != "streamed" {
+		t.Fatalf("file = %q", data)
+	}
+	if prov.chatCalls != 1 {
+		t.Fatalf("post-write turns fall back to Chat once, calls=%d", prov.chatCalls)
+	}
+}
+
+func TestRulesBlockReachesProvider(t *testing.T) {
+	// Project ground truth must reach the model context when RulesOK,
+	// and stay out when it is not (untrusted checkout).
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte("NEVER deploy on fridays.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var got []provider.Message
+	capProv := &captureProv{resp: provider.Response{Content: "ok"}, got: &got}
+	loop := &Loop{
+		Prov: capProv,
+		Reg:  testRegistry(root),
+		Cfg:  Config{MaxIters: 2, DoomRepeats: 2, Root: root, Mode: mode.Build, Pol: &policy.Policy{AlwaysAllow: true}, RulesOK: true},
+	}
+	if _, err := loop.Run(context.Background(), "goal", func(Event) {}); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, m := range got {
+		if strings.Contains(m.Content, "NEVER deploy on fridays.") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("rules body must reach provider messages when RulesOK")
+	}
+
+	var got2 []provider.Message
+	loop2 := &Loop{
+		Prov: &captureProv{resp: provider.Response{Content: "ok"}, got: &got2},
+		Reg:  testRegistry(root),
+		Cfg:  Config{MaxIters: 2, DoomRepeats: 2, Root: root, Mode: mode.Build, Pol: &policy.Policy{AlwaysAllow: true}},
+	}
+	if _, err := loop2.Run(context.Background(), "goal", func(Event) {}); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range got2 {
+		if strings.Contains(m.Content, "NEVER deploy on fridays.") {
+			t.Fatal("rules body must NOT reach provider messages when RulesOK is false")
+		}
+	}
+}
+
+type captureProv struct {
+	resp provider.Response
+	got  *[]provider.Message
+}
+
+func (c *captureProv) Name() string { return "capture" }
+func (c *captureProv) Chat(_ context.Context, msgs []provider.Message, _ []provider.ToolDef) (provider.Response, error) {
+	*c.got = append([]provider.Message(nil), msgs...)
+	return c.resp, nil
+}
+
+type auditStubSink struct {
+	mu     sync.Mutex
+	events []auditEvent
+}
+
+type auditEvent struct {
+	tool, decision, hash, detail string
+}
+
+func (s *auditStubSink) AppendEvent(tool, decision, argsHash, detail string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, auditEvent{tool, decision, argsHash, detail})
+}
+
+func (s *auditStubSink) decisions() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []string
+	for _, e := range s.events {
+		out = append(out, e.decision)
+	}
+	return out
+}
+
+// oneCallProv serves a single tool call, then prose.
+type oneCallProv struct {
+	call provider.ToolCall
+	n    int
+}
+
+func (f *oneCallProv) Name() string { return "onecall" }
+func (f *oneCallProv) Chat(_ context.Context, _ []provider.Message, _ []provider.ToolDef) (provider.Response, error) {
+	f.n++
+	if f.n == 1 {
+		return provider.Response{Content: "trying", ToolCalls: []provider.ToolCall{f.call}}, nil
+	}
+	return provider.Response{Content: "done"}, nil
+}
+
+func TestLoopLevelDenyAuditedWithPattern(t *testing.T) {
+	// A path-scoped deny must name its pattern to the model AND leave
+	// an audit trace even though Dispatch never runs.
+	root := t.TempDir()
+	sink := &auditStubSink{}
+	reg := testRegistry(root)
+	reg.Audit = sink
+	loop := &Loop{
+		Prov: &oneCallProv{call: provider.ToolCall{ID: "1", Name: "read_file", Args: map[string]any{"path": "secrets/id.key"}}},
+		Reg:  reg,
+		Cfg: Config{MaxIters: 4, DoomRepeats: 4, Root: root, Mode: mode.Build,
+			Pol: &policy.Policy{AlwaysAllow: true, File: &policy.File{DenyPaths: []string{"**/secrets/**"}}}},
+	}
+	var results []string
+	_, _ = loop.Run(context.Background(), "goal", func(e Event) {
+		if e.Kind == "tool_result" {
+			results = append(results, e.Text)
+		}
+	})
+	named := false
+	for _, r := range results {
+		if strings.Contains(r, "**/secrets/**") {
+			named = true
+		}
+		if strings.Contains(r, "TOPSECRET") {
+			t.Fatalf("denied content leaked: %q", r)
+		}
+	}
+	if !named {
+		t.Fatalf("model text must name the winning pattern, got %q", results)
+	}
+	found := false
+	for _, e := range sink.events {
+		if e.tool == "read_file" && e.decision == "deny" && strings.Contains(e.detail, "**/secrets/**") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("loop-level deny must audit with pattern detail, got %+v", sink.events)
+	}
+}
+
+func TestLoopPlanGateDenyAudited(t *testing.T) {
+	root := t.TempDir()
+	sink := &auditStubSink{}
+	reg := testRegistry(root)
+	reg.Audit = sink
+	loop := &Loop{
+		Prov: &oneCallProv{call: provider.ToolCall{ID: "1", Name: "write_file", Args: map[string]any{"path": "x.txt", "content": "hi"}}},
+		Reg:  reg,
+		Cfg: Config{MaxIters: 4, DoomRepeats: 4, Root: root, Mode: mode.Plan,
+			Pol: &policy.Policy{AlwaysAllow: true}},
+	}
+	_, _ = loop.Run(context.Background(), "goal", func(Event) {})
+	for _, d := range sink.decisions() {
+		if d == "deny" {
+			return
+		}
+	}
+	t.Fatalf("plan-gate block must audit a deny, got %+v", sink.events)
 }

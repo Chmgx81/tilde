@@ -373,6 +373,41 @@ func remoteSHA(ctx context.Context) (string, error) {
 	return out.SHA, nil
 }
 
+// latestLocalTag returns the highest release version among local tags,
+// or "" when none parses as a version.
+func latestLocalTag(git func(args ...string) (string, error)) string {
+	out, err := git("tag", "--list")
+	if err != nil {
+		return ""
+	}
+	var best string
+	for _, line := range strings.Split(out, "\n") {
+		t := strings.TrimSpace(line)
+		if _, _, _, ok := parseVersion(t); !ok {
+			continue
+		}
+		if best == "" || compareVersion(t, best) > 0 {
+			best = t
+		}
+	}
+	return best
+}
+
+// verifyTag refuses unsigned/unverifiable release tags before anything
+// is pulled or built: a failed `git verify-tag --raw` (missing gnupg,
+// unsigned tag) fails closed with the fix named. Empty tag means no
+// version tags exist — nothing to verify.
+func verifyTag(git func(args ...string) (string, error), tag string) error {
+	if tag == "" {
+		return nil
+	}
+	out, err := git("verify-tag", "--raw", tag)
+	if err != nil {
+		return fmt.Errorf("refusing update: tag %s failed signature verification (%s: %v) — fix: sign release tags (`git tag -s`) and install gnupg so `git verify-tag --raw %s` passes; nothing was pulled", tag, strings.TrimSpace(out), err, tag)
+	}
+	return nil
+}
+
 // Run pulls, rebuilds, and reinstalls tilde from its install source.
 // Fail-closed throughout: a dirty tree refuses (never stashes or
 // resets user work), a failed build or smoke test never touches the
@@ -409,6 +444,11 @@ func Run() error {
 	fmt.Printf("tilde: pulling %s in %s\n", repoURL, dir)
 	if out, err := git("fetch", "--tags", "--prune"); err != nil {
 		return fmt.Errorf("fetch failed: %s — resolve it with git in %s, then retry", out, dir)
+	}
+	if tag := latestLocalTag(git); tag != "" {
+		if err := verifyTag(git, tag); err != nil {
+			return err
+		}
 	}
 	if out, err := git("pull", "--ff-only"); err != nil {
 		return fmt.Errorf("pull failed: %s — resolve it with git in %s, then retry", out, dir)

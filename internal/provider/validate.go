@@ -65,10 +65,17 @@ func Validate(providerID, key, base string) (ok bool, networkErr bool, err error
 	case resp.StatusCode >= 200 && resp.StatusCode < 300:
 		return true, false, nil
 	case resp.StatusCode == 401 || resp.StatusCode == 403:
-		return false, false, errors.New("key rejected")
+		return false, false, errors.New("key rejected (auth failed — check the key)")
+	case resp.StatusCode == 429:
+		return false, true, errors.New("throttled (429) — retry later, key unverified, nothing stored")
+	case resp.StatusCode == 404:
+		return false, true, errors.New("unverified (404) — check-url/base path, key unverified, nothing stored")
+	case resp.StatusCode >= 500:
+		return false, true, errors.New("unverified (server error) — retry later, key unverified, nothing stored")
 	default:
-		// 404 (proxy path wrong), 429 (key valid but throttled), 5xx —
-		// none of these prove the key bad; accept the risk explicitly.
-		return true, false, nil
+		// Fail closed: any other non-2xx proves nothing about the
+		// key, so never store. Auth stays key-rejected; everything
+		// else names retry/check-url instead of auth.
+		return false, false, errors.New("unverified — retry/check-url, not auth: check the endpoint URL and retry, nothing stored")
 	}
 }

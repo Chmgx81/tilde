@@ -91,7 +91,9 @@ func (t *CallTool) Exec(ctx context.Context, args map[string]any) (string, error
 	if t.Mgr == nil {
 		return "", fmt.Errorf("no MCP servers live")
 	}
-	out, err := t.Mgr.Call(ctx, server, tool, argv)
+	// The agent loop's policy tier already approved this exact call
+	// (mcp_call is Ask-gated at dispatch), so it arrives approved.
+	out, err := t.Mgr.CallApproved(ctx, server, tool, argv, true)
 	if err != nil {
 		return "", err
 	}

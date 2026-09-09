@@ -16,6 +16,7 @@ import (
 type atRow struct {
 	path     string
 	rendered string // with matched chars bolded
+	idx      []int  // matched rune indices (reused for the selected-row render)
 }
 
 // walkFiles lists repo files for @-reference. .git is never surfaced;
@@ -186,6 +187,46 @@ func highlight(path string, idx []int) string {
 	return b.String()
 }
 
+// highlightSelected bolds matched chars on the accentSelect background —
+// the selected @-row keeps its match spans instead of falling back to a
+// plain truncMiddle path. Each run carries the background itself: wrapping
+// an already-styled string in a Background Render would let the inner
+// resets clear the fill mid-row, so the fill is composed per run here.
+func highlightSelected(path string, idx []int) string {
+	hit := map[int]bool{}
+	for _, i := range idx {
+		hit[i] = true
+	}
+	bold := lipgloss.NewStyle().Bold(true).Background(accentSelect)
+	mut := lipgloss.NewStyle().Foreground(fgMuted).Background(accentSelect)
+	var b strings.Builder
+	var run strings.Builder
+	runHit := false
+	flush := func() {
+		if run.Len() == 0 {
+			return
+		}
+		if runHit {
+			b.WriteString(bold.Render(run.String()))
+		} else {
+			b.WriteString(mut.Render(run.String()))
+		}
+		run.Reset()
+	}
+	ri := -1 // rune index: fuzzyScore counts runes, range yields bytes
+	for _, r := range path {
+		ri++
+		h := hit[ri]
+		if run.Len() > 0 && h != runHit {
+			flush()
+		}
+		runHit = h
+		run.WriteRune(r)
+	}
+	flush()
+	return b.String()
+}
+
 // atMemo caches the last (files-identity, query) → rows result so
 // repeated refreshes (cursor blinks, redraws) with an unchanged query
 // don't re-run fuzzyScore over the whole file list. The key is an FNV
@@ -229,7 +270,7 @@ func matchFiles(files []string, query string) []atRow {
 	}
 	out := make([]atRow, 0, len(ss))
 	for _, s := range ss {
-		out = append(out, atRow{path: s.path, rendered: highlight(s.path, s.idx)})
+		out = append(out, atRow{path: s.path, rendered: highlight(s.path, s.idx), idx: s.idx})
 	}
 	atMemoKey, atMemoHave, atMemoRows = h.Sum64(), true, out
 	return out

@@ -76,6 +76,9 @@ type TaskManager struct {
 	tasks map[string]*Task
 	// LogDir overrides the default per-process temp dir (tests).
 	LogDir string
+	// MaxTasks caps concurrently running background tasks (default 16).
+	// Zero means default. Start refuses past the cap with a recovery note.
+	MaxTasks int
 	// dir is the lazily-created private log dir for this manager.
 	// Per-process (os.MkdirTemp) so a pre-created /tmp/tilde-tasks
 	// symlink farm on a multi-user host cannot redirect our logs:
@@ -83,12 +86,26 @@ type TaskManager struct {
 	dir string
 }
 
+// defaultMaxTasks caps concurrently running background tasks per manager.
+const defaultMaxTasks = 16
+
+// maxTasks reports the running-task cap (MaxTasks override or default).
+// MaxTasks is write-once at construction, so no lock is needed to read it.
+func (m *TaskManager) maxTasks() int {
+	if m != nil && m.MaxTasks > 0 {
+		return m.MaxTasks
+	}
+	return defaultMaxTasks
+}
+
 func (m *TaskManager) logDir() string {
+	// Whole body under mu: the LogDir fast path must not race a
+	// concurrent write, and the lazy dir must be created exactly once.
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.LogDir != "" {
 		return m.LogDir
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.dir != "" {
 		return m.dir
 	}
@@ -112,6 +129,11 @@ func (m *TaskManager) Start(command string, bgCtx context.Context, bgCancel cont
 		m.tasks = map[string]*Task{}
 	}
 	m.pruneLocked() // finished tasks never accumulate across starts
+	if n := len(m.tasks); n >= m.maxTasks() {
+		max := m.maxTasks()
+		m.mu.Unlock()
+		return nil, fmt.Errorf("task limit reached (%d running tasks, max %d): poll one with shell_poll {\"action\": \"status\", \"task_id\": \"...\"} or stop one with shell_poll {\"action\": \"kill\", \"task_id\": \"...\"} before starting another", n, max)
+	}
 	m.next++
 	id := fmt.Sprintf("task_%d", m.next)
 	m.mu.Unlock()

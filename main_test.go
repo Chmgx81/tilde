@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -57,8 +58,40 @@ func TestHeadlessExitCode(t *testing.T) {
 	if got := headlessExitCode(fmt.Errorf("openai: status 429 for model %q", "x"), "", false); got != 3 {
 		t.Fatalf("provider error = 3, got %d", got)
 	}
+	if got := headlessExitCode(fmt.Errorf("anthropic: status 403 for model %q", "x"), "", false); got != 3 {
+		t.Fatalf("provider error = 3, got %d", got)
+	}
+	if got := headlessExitCode(fmt.Errorf("gemini: status 429 for model %q", "x"), "", false); got != 3 {
+		t.Fatalf("provider error = 3, got %d", got)
+	}
+	if got := headlessExitCode(fmt.Errorf("openrouter: status 429 for model %q", "x"), "", false); got != 3 {
+		t.Fatalf("provider error = 3, got %d", got)
+	}
+	if got := headlessExitCode(fmt.Errorf("opencode: status 429 for model %q", "x"), "", false); got != 3 {
+		t.Fatalf("provider error = 3, got %d", got)
+	}
 	if got := headlessExitCode(fmt.Errorf("context canceled"), "", false); got != 1 {
 		t.Fatalf("uncategorized = 1, got %d", got)
+	}
+}
+
+func TestRunExportCmdMissingSession(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	err := runExportCmd("nosuchsession", "")
+	if err == nil {
+		t.Fatal("missing session must fail loud, got nil")
+	}
+	if !strings.Contains(err.Error(), "no session") {
+		t.Fatalf("error should name the missing session, got: %v", err)
+	}
+}
+
+func TestRunExportCmdBadID(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if err := runExportCmd("../evil", ""); err == nil {
+		t.Fatal("traversal id must fail loud, got nil")
+	} else if !strings.Contains(err.Error(), "bad session id") {
+		t.Fatalf("error should name the bad id, got: %v", err)
 	}
 }
 

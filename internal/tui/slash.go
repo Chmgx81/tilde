@@ -473,7 +473,7 @@ func (m *Model) listCatalog() {
 		if len(entries) == 0 {
 			continue
 		}
-		m.append("○ " + d.ID + " — " + d.Name)
+		m.append("· " + d.ID + " — " + d.Name)
 		for _, cm := range entries {
 			mark := "  "
 			if cur == d.ID+"/"+cm.ID {
@@ -536,6 +536,7 @@ func (m *Model) setModelOnCurrent(model string) tea.Cmd {
 		return nil
 	}
 	m.model = cur.Name()
+	m.refreshCost()
 	m.maybeAutosizeBudget(strings.SplitN(m.model, "/", 2)[0], model)
 	m.append("● model switched to " + m.model)
 	if m.loop.Log != nil {
@@ -572,6 +573,7 @@ func (m *Model) switchProvider(providerID, model, _ string) tea.Cmd {
 	}
 	m.loop.SetProvider(p)
 	m.model = p.Name()
+	m.refreshCost()
 	m.maybeAutosizeBudget(providerID, model)
 	m.append("● provider switched to " + m.model + " (" + src.String() + " credential)")
 	if m.loop.Log != nil {
@@ -616,6 +618,13 @@ func (m *Model) handleModeCmd(s string) tea.Cmd {
 		return nil
 	}
 	// Toast registers the transition as an event, then collapses back
-	// into the status bar — it never lingers as chrome.
-	return m.setToast(fmt.Sprintf("⏵ Mode: %s → %s", before, m.curMode))
+	// into the status bar — it never lingers as chrome. A demotion into
+	// Plan additionally re-posts the §2.9 read-only banner beside the
+	// toast (never replacing it): entering read-only always deserves the
+	// reassurance, while plain Plan turns stay banner-free.
+	cmd := m.setToast(fmt.Sprintf("⏵ Mode: %s → %s", before, m.curMode))
+	if before != mode.Plan && m.curMode == mode.Plan {
+		m.appendPlanBanner()
+	}
+	return cmd
 }

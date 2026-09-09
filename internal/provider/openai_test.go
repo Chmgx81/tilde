@@ -109,6 +109,22 @@ func TestOpenAI404PointsToCatalog(t *testing.T) {
 	}
 }
 
+func TestOpenAI403MentionsBilling(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403)
+		_, _ = w.Write([]byte(`{"error":{"message":"quota exceeded"}}`))
+	}))
+	defer srv.Close()
+	p := NewOpenAI("test-model", srv.URL, "test-key")
+	_, err := p.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "billing") {
+		t.Fatalf("403 remedy must mention billing, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "console") {
+		t.Fatalf("403 remedy must point at the provider console, got: %v", err)
+	}
+}
+
 func TestOpenAIMalformedArgsError(t *testing.T) {
 	// Per-call degrade (behavior change, intended): a malformed call no
 	// longer aborts the whole turn — it degrades to an empty-args call

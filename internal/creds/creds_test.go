@@ -3,6 +3,7 @@ package creds
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -35,12 +36,12 @@ func TestFileMode0600(t *testing.T) {
 	if err := s.Set("openai", "k"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
-	fi, err := os.Stat(s.Path())
+	fi, err := os.Stat(s.encPath())
 	if err != nil {
-		t.Fatalf("Stat: %v", err)
+		t.Fatalf("Stat %s: %v", s.encPath(), err)
 	}
 	if fi.Mode().Perm() != 0o600 {
-		t.Fatalf("credentials file mode = %o, want 600", fi.Mode().Perm())
+		t.Fatalf("credential file %s mode = %o, want 600", s.encPath(), fi.Mode().Perm())
 	}
 }
 
@@ -72,11 +73,76 @@ func TestCorruptFileErrors(t *testing.T) {
 	if err := s.Set("openai", "k"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
+	// Corrupt the envelope primary: must surface an error, not silent empty.
+	if err := os.WriteFile(s.encPath(), []byte("{not json"), 0o600); err != nil {
+		t.Fatalf("corrupt: %v", err)
+	}
+	if _, err := s.Get("openai"); err == nil {
+		t.Fatal("corrupt envelope must surface an error, not silent empty")
+	}
+	// Corrupt legacy with no envelope present: must also surface an error.
+	os.Remove(s.encPath())
 	if err := os.WriteFile(s.Path(), []byte("{not json"), 0o600); err != nil {
 		t.Fatalf("corrupt: %v", err)
 	}
 	if _, err := s.Get("openai"); err == nil {
 		t.Fatal("corrupt file must surface an error, not silent empty")
+	}
+}
+
+func TestEncRoundTrip(t *testing.T) {
+	s := tmpStore(t)
+	if err := s.Set("openai", "sk-test-enc-1"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if _, err := os.Stat(s.encPath()); err != nil {
+		t.Fatalf("envelope file missing: %v", err)
+	}
+	k, err := s.Get("openai")
+	if err != nil || k != "sk-test-enc-1" {
+		t.Fatalf("Get via enc = %q, %v", k, err)
+	}
+}
+
+func TestLegacyFallbackRead(t *testing.T) {
+	s := tmpStore(t)
+	dir := filepath.Dir(s.Path())
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(s.Path(), []byte(`{"openai":"sk-legacy-1"}`), 0o600); err != nil {
+		t.Fatalf("write legacy: %v", err)
+	}
+	k, err := s.Get("openai")
+	if err != nil || k != "sk-legacy-1" {
+		t.Fatalf("legacy fallback Get = %q, %v", k, err)
+	}
+}
+
+func TestWrongKeyRefuses(t *testing.T) {
+	s := tmpStore(t)
+	if err := s.Set("openai", "sk-test-1"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	// Tamper with the sealed payload so GCM auth fails (simulates a
+	// file sealed under a different machine key).
+	data, err := os.ReadFile(s.encPath())
+	if err != nil {
+		t.Fatalf("read enc: %v", err)
+	}
+	if len(data) > 0 {
+		data[len(data)-2] ^= 0xff
+	}
+	if err := os.WriteFile(s.encPath(), data, 0o600); err != nil {
+		t.Fatalf("tamper enc: %v", err)
+	}
+	_, err = s.Get("openai")
+	if err == nil {
+		t.Fatal("tampered/wrong-key envelope must be refused, not silently read")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "delete") || !strings.Contains(msg, "/login") {
+		t.Fatalf("wrong-key error must name the fix (delete + /login), got: %v", err)
 	}
 }
 

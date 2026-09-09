@@ -5,6 +5,8 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,6 +28,16 @@ type Tool interface {
 	Exec(ctx context.Context, args map[string]any) (string, error)
 }
 
+// AuditSink receives one audit record per dispatched tool call.
+//
+// It is a local interface — NOT *audit.AuditLog — because audit imports
+// tools (for Scrub), so importing audit here would be an import cycle.
+// The owner wires a real sink in main.go via an adapter; nil means
+// auditing is off with zero behavior change.
+type AuditSink interface {
+	AppendEvent(tool, decision, argsHash, detail string)
+}
+
 // Registry dispatches model tool calls to handlers.
 type Registry struct {
 	tools map[string]Tool
@@ -36,6 +48,9 @@ type Registry struct {
 	Undo *UndoManager
 	// Hooks, if non-nil, run pre/post tool scripts (v1: project+user).
 	Hooks *hooks.Config
+	// Audit, if non-nil, receives one redacted event per dispatch
+	// (P2-A audit trail). Nil disables auditing entirely.
+	Audit AuditSink
 }
 
 // NewRegistry builds an empty registry.
@@ -59,6 +74,49 @@ func (r *Registry) Names() []string {
 	return out
 }
 
+// auditDecisionForAllow maps a Gate allow reason to its audit decision.
+// A reason naming an ask approval records "ask-approved"; otherwise "allow".
+// The owner extends this mapping when it wires the ask flow in main.go.
+func auditDecisionForAllow(reason string) string {
+	if strings.Contains(strings.ToLower(reason), "ask") {
+		return "ask-approved"
+	}
+	return "allow"
+}
+
+// audit records one redacted audit event. Nil-safe: a nil registry or a nil
+// Audit sink is a no-op, so fencing/repair/exec behavior is untouched when
+// auditing is off. Raw args never reach the sink: only the sha256 hex of
+// the scrubbed args JSON plus a scrubbed, single-line, length-capped detail.
+func (r *Registry) audit(tool, decision string, args map[string]any, detail string) {
+	if r == nil || r.Audit == nil {
+		return
+	}
+	raw, err := json.Marshal(args)
+	if err != nil {
+		raw = []byte("{}")
+	}
+	scrubbed, _ := Scrub(string(raw))
+	sum := sha256.Sum256([]byte(scrubbed))
+	if i := strings.IndexByte(detail, '\n'); i >= 0 {
+		detail = detail[:i]
+	}
+	if len(detail) > 240 {
+		detail = detail[:240]
+	}
+	detail, _ = Scrub(detail)
+	r.Audit.AppendEvent(tool, decision, hex.EncodeToString(sum[:]), detail)
+}
+
+// AuditDecision records a policy outcome decided outside Dispatch —
+// the loop's own mode-gate and policy short-circuits return before
+// Dispatch runs, so without this those denials would leave no audit
+// trace. Same redaction as audit. Decisions: "deny" (policy/mode
+// gate), "ask-denied" (user declined the confirm).
+func (r *Registry) AuditDecision(tool, decision string, args map[string]any, detail string) {
+	r.audit(tool, decision, args, detail)
+}
+
 // Dispatch runs a named tool. Never returns silence: unknown tools,
 // gate denials, and exec errors all come back as model-readable strings.
 // Malformed inputs pass through the repair layer first (Phase 3).
@@ -75,9 +133,16 @@ func (r *Registry) Dispatch(ctx context.Context, name string, args map[string]an
 		args = fixed
 		receipt = "[input repaired: " + strings.Join(notes, "; ") + "]\n"
 	}
+	// decision is the audit policy outcome, known once the gate speaks.
+	// Unknown tools return above with no policy decision and no execution,
+	// so they leave no audit trace.
+	decision := "allow"
 	if r.Gate != nil {
 		if allow, reason := r.Gate(name, args); !allow {
+			r.audit(name, "deny", args, "blocked by gate: "+reason)
 			return receipt + fmt.Sprintf("tool %q blocked: %s. Do not retry this call; propose an alternative or ask the user.", name, reason)
+		} else {
+			decision = auditDecisionForAllow(reason)
 		}
 	}
 	// Undo snapshot AFTER the gate (denied calls leave no trace) and
@@ -92,6 +157,7 @@ func (r *Registry) Dispatch(ctx context.Context, name string, args map[string]an
 			argsJSON = string(b)
 		}
 		if err := r.Hooks.RunBefore(ctx, name, argsJSON); err != nil {
+			r.audit(name, "deny", args, "blocked by hook: "+err.Error())
 			return receipt + fmt.Sprintf("tool %q blocked: %s. Do not retry this call; fix the underlying issue or propose an alternative.", name, err)
 		}
 	}
@@ -104,6 +170,7 @@ func (r *Registry) Dispatch(ctx context.Context, name string, args map[string]an
 		if snapshotted {
 			r.Undo.DiscardLast()
 		}
+		r.audit(name, decision, args, "error: "+err.Error())
 		return receipt + fmt.Sprintf("tool %q failed: %v. Fix the arguments from this message and retry, or try a different tool.", name, err)
 	}
 	if r.Hooks != nil {
@@ -120,11 +187,13 @@ func (r *Registry) Dispatch(ctx context.Context, name string, args map[string]an
 		r.Undo.FinalizeLast()
 	}
 	if out == "" {
+		r.audit(name, decision, args, "ok: empty output")
 		return receipt + fmt.Sprintf("tool %q returned no output. This means nothing matched / the file was empty — not an error. Do not retry the identical call; broaden the search or read a different path.", name)
 	}
 	if scrubbed, _ := Scrub(out); scrubbed != out {
 		out = scrubbed
 	}
+	r.audit(name, decision, args, "ok")
 	return receipt + out
 }
 

@@ -16,12 +16,18 @@ func TestTodoWriteAddListDone(t *testing.T) {
 	if err != nil || !strings.Contains(out, "1:") {
 		t.Fatalf("list: out=%q err=%v", out, err)
 	}
+	if !strings.Contains(out, "□") {
+		t.Fatalf("unchecked mark must be □ per spec §1.2: %q", out)
+	}
 	if _, err := tw.Exec(context.Background(), map[string]any{"op": "done", "id": float64(1)}); err != nil {
 		t.Fatalf("done: %v", err)
 	}
 	out, _ = tw.Exec(context.Background(), map[string]any{"op": "list"})
-	if !strings.Contains(out, "[x]") {
+	if !strings.Contains(out, "☑") {
 		t.Fatalf("done mark missing: %q", out)
+	}
+	if strings.Contains(out, "[x]") || strings.Contains(out, "[ ]") {
+		t.Fatalf("ascii todo marks must not survive: %q", out)
 	}
 }
 

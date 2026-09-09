@@ -58,12 +58,22 @@ func TestMCPHelper(t *testing.T) {
 
 func testManager(t *testing.T) *Manager {
 	t.Helper()
+	return testManagerWith(t, ServerConfig{ApprovalDefault: "auto"})
+}
+
+func testManagerWith(t *testing.T, cfg ServerConfig) *Manager {
+	t.Helper()
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
+	if cfg.Command == "" {
+		cfg.Command = exe
+		cfg.Args = []string{"-test.run", "TestMCPHelper"}
+		cfg.Env = map[string]string{"TILDE_TEST_MCP_SERVER": "1"}
+	}
 	mgr := NewManager(map[string]ServerConfig{
-		"fake": {Command: exe, Args: []string{"-test.run", "TestMCPHelper"}, Env: map[string]string{"TILDE_TEST_MCP_SERVER": "1"}},
+		"fake": cfg,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -73,6 +83,8 @@ func testManager(t *testing.T) *Manager {
 	t.Cleanup(mgr.Close)
 	return mgr
 }
+
+func boolPtr(b bool) *bool { return &b }
 
 func TestConnectAndList(t *testing.T) {
 	mgr := testManager(t)
@@ -190,5 +202,120 @@ func TestGatewayStaysLazy(t *testing.T) {
 	lt := &ListTool{}
 	if _, err := lt.Exec(context.Background(), map[string]any{}); err == nil {
 		t.Fatal("nil manager must error honestly")
+	}
+}
+
+func TestMergeProjectCannotOverrideUserCommand(t *testing.T) {
+	user := FileConfig{Servers: map[string]ServerConfig{
+		"s": {Command: "safe", Args: []string{"a"}, Env: map[string]string{"K": "V"},
+			Type: "local", HeadersFile: "u.h", Approval: map[string]string{"t": "prompt"}},
+	}}
+	project := FileConfig{Servers: map[string]ServerConfig{
+		"s": {Command: "evil", Args: []string{"x"}, Env: map[string]string{"K": "E"},
+			Type: "remote", URL: "http://evil.example/", HeadersFile: "p.h",
+			Approval: map[string]string{"t": "auto"}},
+		"new": {Command: "added"},
+	}}
+	merged := Merge(user, project)
+	s := merged["s"]
+	if s.Command != "safe" || len(s.Args) != 1 || s.Args[0] != "a" || s.Env["K"] != "V" {
+		t.Fatalf("project rewired user command: %+v", s)
+	}
+	if s.Type != "local" || s.URL != "" || s.HeadersFile != "u.h" {
+		t.Fatalf("project changed user transport/headers: %+v", s)
+	}
+	if s.Approval["t"] != "prompt" {
+		t.Fatalf("project loosened user approval: %+v", s.Approval)
+	}
+	if merged["new"].Command != "added" {
+		t.Fatalf("brand-new project server must be added: %+v", merged["new"])
+	}
+}
+
+func TestMergeProjectCanDisable(t *testing.T) {
+	user := FileConfig{Servers: map[string]ServerConfig{
+		"s": {Command: "x"},
+	}}
+	project := FileConfig{Servers: map[string]ServerConfig{
+		"s": {Enabled: boolPtr(false)},
+	}}
+	if merged := Merge(user, project); merged["s"].IsEnabled() {
+		t.Fatal("project enabled=false must disable a user server")
+	}
+	// ...but a project enabled=true must not re-enable a user-disabled server.
+	userOff := FileConfig{Servers: map[string]ServerConfig{
+		"s": {Command: "x", Enabled: boolPtr(false)},
+	}}
+	projectOn := FileConfig{Servers: map[string]ServerConfig{
+		"s": {Enabled: boolPtr(true)},
+	}}
+	if merged := Merge(userOff, projectOn); merged["s"].IsEnabled() {
+		t.Fatal("project must not re-enable a user-disabled server")
+	}
+}
+
+func TestMergeProjectApprovalTightenOnly(t *testing.T) {
+	user := FileConfig{Servers: map[string]ServerConfig{
+		"s": {Command: "x", Approval: map[string]string{"a": "auto"}, ApprovalDefault: "auto"},
+	}}
+	project := FileConfig{Servers: map[string]ServerConfig{
+		"s": {Approval: map[string]string{"a": "prompt", "b": "auto"}, ApprovalDefault: "prompt"},
+	}}
+	merged := Merge(user, project)["s"]
+	if merged.Approval["a"] != "prompt" {
+		t.Fatalf("project must tighten auto->prompt: %+v", merged.Approval)
+	}
+	if _, ok := merged.Approval["b"]; ok {
+		t.Fatalf("project must not inject auto entries: %+v", merged.Approval)
+	}
+	if merged.ApprovalDefault != "prompt" {
+		t.Fatalf("project must tighten default toward prompt: %q", merged.ApprovalDefault)
+	}
+	// User's own map must not be mutated by the tighten.
+	if user.Servers["s"].Approval["a"] != "auto" {
+		t.Fatal("merge mutated the user config approval map")
+	}
+}
+
+func TestApprovalPromptBlocks(t *testing.T) {
+	mgr := testManagerWith(t, ServerConfig{}) // default: everything prompt
+	if _, err := mgr.Call(context.Background(), "fake", "shout", map[string]any{"text": "hi"}); err == nil ||
+		!strings.Contains(err.Error(), "needs user approval") {
+		t.Fatalf("prompt-gated call must block naming approval, got %v", err)
+	}
+	// The approved path (policy tier already asked) goes through.
+	out, err := mgr.CallApproved(context.Background(), "fake", "shout", map[string]any{"text": "hi"}, true)
+	if err != nil || out != "HI" {
+		t.Fatalf("approved call must run, got %q, %v", out, err)
+	}
+	// Explicit auto never asks.
+	mgrAuto := testManagerWith(t, ServerConfig{Approval: map[string]string{"shout": "auto"}})
+	if out, err := mgrAuto.Call(context.Background(), "fake", "shout", map[string]any{"text": "hi"}); err != nil || out != "HI" {
+		t.Fatalf("auto call must run, got %q, %v", out, err)
+	}
+}
+
+func TestRemoteURLSSRFBlocked(t *testing.T) {
+	m := NewManager(nil)
+	ctx := context.Background()
+	for _, raw := range []string{
+		"http://127.0.0.1:8080/rpc",
+		"http://10.0.0.1/rpc",
+		"http://169.254.169.254/latest/meta-data/",
+		"http://192.168.1.1/rpc",
+		"http://100.64.0.1/rpc",
+		"http://[::1]/rpc",
+		"http://localhost:3000/rpc",
+	} {
+		err := m.startOne(ctx, "evil", ServerConfig{Type: "remote", URL: raw})
+		if err == nil || (!strings.Contains(err.Error(), "private/loopback") && !strings.Contains(err.Error(), "local host")) {
+			t.Fatalf("SSRF url %q must be rejected, got %v", raw, err)
+		}
+	}
+	// A public literal passes the gate (no DNS involved) and falls through
+	// to the unchanged behavior for remote servers without a command.
+	if err := m.startOne(ctx, "pub", ServerConfig{Type: "remote", URL: "https://8.8.8.8/rpc"}); err == nil ||
+		!strings.Contains(err.Error(), "missing command") {
+		t.Fatalf("public remote url must keep existing behavior, got %v", err)
 	}
 }

@@ -5,6 +5,17 @@
 # (rm -rf, sudo, curl, git force-push…) deny in code via shellDeny and
 # always win, even when shell_command itself is only ask-tier.
 # The bwrap sandbox stays the hard backstop behind all of this.
+# `allow_net` (optional) lists hostnames web_fetch may retrieve without
+# the session-wide TILDE_ALLOW_NET=1 opt-in, e.g.
+# allow_net:
+#   - example.com
+# Exact hostname match; SSRF guards still refuse private/loopback targets.
+# `deny_paths` (optional) denies file-tool paths by glob BEFORE tiers —
+# a match denies even with --yes. Single * stays in one segment.
+# Applies to read/write/edit `path`, grep `dir`, glob `pattern`.
+# deny_paths:
+#   - "**/secrets/**"
+#   - "*.key"
 deny: []
 ask:
   - write_file
@@ -16,6 +27,11 @@ ask:
   - todo_write
   - ask_user
   - web_fetch
+  - web_search
+  - web_shot
+  - apply_work
+  - memory
+  - remember
 allow:
   - read_file
   - grep
@@ -26,3 +42,5 @@ allow:
   - load_skill
   - mcp_list
   - spawn_explore
+  - symbol_search
+  - diagnose

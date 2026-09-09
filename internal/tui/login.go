@@ -71,7 +71,7 @@ type loginValidatedMsg struct {
 func (m *Model) startKeyEntry(providerID string) {
 	ti := textinput.New()
 	ti.EchoMode = textinput.EchoPassword
-	ti.EchoCharacter = '●'
+	ti.EchoCharacter = '•'
 	ti.Placeholder = "paste the API key, Enter to verify & store"
 	ti.Focus()
 	ti.Width = max(m.vp.Width-6, 24)

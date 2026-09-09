@@ -38,7 +38,7 @@ var (
 	fgMuted      = lipgloss.Color("#8B95A6")
 	fgDim        = lipgloss.Color("#565F71")
 	amber        = lipgloss.Color("#E5A00D")
-	accentSelect = lipgloss.Color("#A855D9")
+	accentSelect = lipgloss.Color("#7E22CE")
 	success      = lipgloss.Color("#4CAF50")
 	danger       = lipgloss.Color("#F44747")
 )
@@ -80,6 +80,9 @@ type Model struct {
 	escArmedAt         time.Time // first Esc of a double-Esc interrupt (zero = disarmed)
 	root               string
 	model              string
+	costIn             float64 // cached per-1M USD in-price for m.model (see cost.go)
+	costOut            float64 // cached per-1M USD out-price for m.model
+	costOK             bool    // false = unknown price → cost readout hidden, never fabricated
 	budget             int
 	ctx                string // "41% (13.1k/32k)"
 	ctxHot             bool   // true past 80% — status text turns amber, never a popup
@@ -89,6 +92,9 @@ type Model struct {
 	turnDidWork        bool        // any tool_call dispatched this turn — gates the ✓ Done receipt
 	turnBaseCompletion int         // provider completion tokens at turn start (per-turn tok/s math)
 	groupBuf           []groupItem // consecutive read-only pairs awaiting grouped render
+	todoPending        bool        // a todo_write call landed; its result earns the §2.9 block
+	lastTodoDigest     string      // digest of the last rendered Update-Todos block (revision, not duplication)
+	subPending         []subSpawn  // dispatched spawn_explore/spawn_work awaiting results (§2.19)
 	quietSince         time.Time   // last transcript append (or turn start); drives the live reasoning verbs
 	verbOrder          []int       // per-turn shuffle of reasonVerbs; empty means natural order
 	termW              int         // last terminal width (WindowSizeMsg)
@@ -161,7 +167,11 @@ type Model struct {
 	toastAt      time.Time
 	pendingShell string // shell-escape command awaiting confirm
 	splashN      int    // transcript line count of the fresh-session splash block
-	updateNote   string // cached update-available line ("" = none); re-appended on splash refits
+	// planBannerShown records the once-per-session §2.9 banner at session
+	// start (interactive sessions open in Plan). Demotion banners bypass
+	// it — each Build→Plan drop earns its own, while Plan turns never do.
+	planBannerShown bool
+	updateNote      string // cached update-available line ("" = none); re-appended on splash refits
 	// lastAssistant is the latest assistant prose verbatim (raw markdown,
 	// not the Glamour rendering) — the Ctrl+Y copy source.
 	lastAssistant string
@@ -230,10 +240,20 @@ func New(loop *agent.Loop, m mode.Mode, root, modelName string, budget int) Mode
 	mdl := Model{loop: loop, ta: ta, vp: vp, curMode: m,
 		root: root, model: modelName, budget: budget, stick: true,
 		pasteEcho: map[int][]pasteSeg{}}
+	mdl.refreshCost()
 	mdl.refreshPlaceholder()
-	mdl.lines = splashLines(root, modelName, budget, 78)
+	// Fresh sessions open on splash plus, in Plan (the always-cautious
+	// default), the one §2.9 read-only banner — once per session, never
+	// once per Plan turn.
+	mdl.lines = mdl.freshLines(78)
+	mdl.planBannerShown = mdl.curMode == mode.Plan
 	mdl.splashN = len(mdl.lines)
 	mdl.vp.SetContent(strings.Join(mdl.lines, "\n"))
+	// A fresh session starts pinned to the tail: the splash+ banner can
+	// exceed the placeholder viewport height, and SetContent leaves the
+	// offset at zero — without this the session would boot "scrolled up,"
+	// breaking Up-recall and the hint bar until the user pressed End.
+	mdl.vp.GotoBottom()
 	return mdl
 }
 
@@ -282,12 +302,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncComposer()
 		m.stick = true // resizes re-anchor to the tail
 		if m.splashN > 0 && len(m.lines) == m.splashN {
-			m.lines = splashLines(m.root, m.model, m.budget, m.vp.Width)
+			m.lines = m.freshLines(m.vp.Width)
 			if m.updateNote != "" {
 				m.lines = append(m.lines, lipgloss.NewStyle().Foreground(fgDim).Render(m.updateNote))
 			}
 			m.splashN = len(m.lines)
 			m.vp.SetContent(strings.Join(m.lines, "\n"))
+			m.vp.GotoBottom() // resizes re-anchor to the tail (see stick above)
 		}
 		return m, nil
 	case toastTickMsg:
@@ -505,13 +526,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if !msg.NoDone {
 			m.append(lipgloss.NewStyle().Foreground(success).Render("✓ Done"))
 		}
-		// Post-turn performance receipt, on success only: a successful
-		// agent turn closes with its wall time and — when the provider
-		// reported output tokens — the generation rate. Shell escapes
-		// never set turnStart, so they stay receipt-free (nothing was
-		// generated). Unknown token counts omit the rate rather than
-		// inventing one.
-		if msg.Err == nil && hadTurn {
+		// Post-turn performance receipt, on success only and at or above
+		// the live-verb floor: a successful agent turn closes with its
+		// wall time and — when the provider reported output tokens — the
+		// generation rate. Below reasonFloor the line is skipped entirely
+		// (spec §2.20: a ~1s line on every turn is noise, not signal).
+		// Shell escapes never set turnStart, so they stay receipt-free
+		// (nothing was generated). Unknown token counts omit the rate
+		// rather than inventing one.
+		if msg.Err == nil && hadTurn && turnElapsed >= reasonFloor {
 			dc := 0
 			if m.loop != nil {
 				dc = m.loop.TotCompletion - m.turnBaseCompletion
@@ -1208,6 +1231,19 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 		// Any dispatched call marks the turn as real work, arming the
 		// closing ✓ Done receipt (a pure chat reply leaves it disarmed).
 		m.turnDidWork = true
+		if verb, _ := splitVerb(e.Text); verb == "todo_write" {
+			// A todo_write call arms the §2.9 block for its result: the
+			// structured list renders from live manager state, never
+			// from parsing the result text (see todoSnapshot).
+			m.todoPending = true
+		}
+		if verb, _ := splitVerb(e.Text); isSubagentSpawn(verb) {
+			// Subagent spawns never join the read-only group: flush any
+			// buffered pairs first so the ⋮ row landmarks a clean break.
+			m.flushGroup()
+			m.pushSubagentRun(verb, e.Text)
+			return nil
+		}
 		if verb, _ := splitVerb(e.Text); agent.ParallelSafe(verb) {
 			m.groupBuf = append(m.groupBuf, groupItem{call: e.Text})
 			return nil
@@ -1217,12 +1253,24 @@ func (m *Model) renderEvent(e agent.Event) tea.Cmd {
 		return nil
 	}
 	if e.Kind == "tool_result" {
+		// A pending spawn owns the next result: it arrives strictly
+		// back to back with its call, so FIFO pop is exact — and a
+		// spawn result must never be swallowed into a read-only group.
+		if len(m.subPending) > 0 {
+			m.flushGroup()
+			m.completeSubagentRun(e.Text)
+			return nil
+		}
 		if n := len(m.groupBuf); n > 0 && m.groupBuf[n-1].result == "" {
 			m.groupBuf[n-1].result = e.Text
 			return nil
 		}
 		m.flushGroup()
 		m.append(renderToolResult(e.Text))
+		// A todo_write result keeps its raw rendering (audit trail) and
+		// then earns the structured §2.9 block from live manager state —
+		// skipped when the state hasn't changed since the last block.
+		m.maybeAppendTodoBlock()
 		return nil
 	}
 	m.flushGroup()
@@ -1575,6 +1623,13 @@ func (m *Model) statusBar() string {
 		}
 		return m.model + " · ctx " + ctx
 	}
+	// Session cost meter (cost.go): idle only, appended after ctx — the
+	// Working indicator mid-turn is never reflowed. "" when the price is
+	// unknown (hidden, never fabricated).
+	cost := ""
+	if m.turnStart.IsZero() {
+		cost = m.costSuffix()
+	}
 	left := func() string {
 		s := m.curMode.String() + " · " + root
 		if branch != "" {
@@ -1583,7 +1638,7 @@ func (m *Model) statusBar() string {
 		return s
 	}
 	if w := m.vp.Width; w > 0 {
-		for runeLen(left()+"  "+right()) > w {
+		for runeLen(left()+"  "+right()+cost) > w {
 			if i := strings.Index(ctx, " ("); i >= 0 {
 				ctx = ctx[:i]
 				continue
@@ -1619,14 +1674,15 @@ func (m *Model) statusBar() string {
 			lineRight = mutSt.Render(right())
 		}
 	} else if m.ctxHot {
-		// Only the percentage text ambers — never the model name.
+		// Only the percentage text ambers — never the model name, never
+		// the cost readout (it stays muted).
 		if i := strings.Index(right(), "ctx "); i >= 0 {
-			lineRight = mutSt.Render(right()[:i]) + lipgloss.NewStyle().Foreground(amber).Render(right()[i:])
+			lineRight = mutSt.Render(right()[:i]) + lipgloss.NewStyle().Foreground(amber).Render(right()[i:]) + mutSt.Render(cost)
 		} else {
-			lineRight = mutSt.Render(right())
+			lineRight = mutSt.Render(right()) + mutSt.Render(cost)
 		}
 	} else {
-		lineRight = mutSt.Render(right())
+		lineRight = mutSt.Render(right() + cost)
 	}
 	// Dock right: pad between, hard-cut when nothing fits.
 	gap := 2
@@ -1847,14 +1903,22 @@ func shellDropdown(width int) string {
 }
 
 // atDropdown renders @-matches: matched chars bold fg on muted paths.
-// Rows trim to the composer width — a dropdown row never wraps.
+// Rows trim to the composer width — a dropdown row never wraps. The
+// selected row keeps the bold match spans: the accentSelect background
+// is composed per highlight run (see highlightSelected) instead of the
+// plain truncMiddle path, which would drop the spans.
 func atDropdown(items []atRow, cursor, width int) string {
 	var b strings.Builder
 	for i, r := range items {
 		prefix := "  "
 		if i == cursor {
 			prefix = "→ "
-			b.WriteString(lipgloss.NewStyle().Background(accentSelect).Render(prefix + truncMiddle(r.path, width-2)))
+			w := width - 2
+			if w < 1 {
+				w = 1
+			}
+			sel := lipgloss.NewStyle().Background(accentSelect)
+			b.WriteString(sel.Render(prefix) + truncANSI(highlightSelected(r.path, r.idx), w))
 			b.WriteString("\n")
 			continue
 		}
