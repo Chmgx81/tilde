@@ -226,7 +226,11 @@ be bypassed by it:
 
 - **Plan mode is enforced at the tool-registry layer.** Even a confused
   model calling `write_file` in Plan mode gets a hard deny — this isn't a
-  prompt-level instruction, it's a code-level gate.
+  prompt-level instruction, it's a code-level gate. Since 2026-09-10 the
+  model doesn't even see the mutating tools in Plan mode: they are
+  withheld from the tool list (writer-child whitelists excepted), so Plan
+  turns plan instead of collecting denials. The gate stays as the backstop,
+  and every 2nd denial injects a plan reminder into context.
 - **Sandboxing is OS-level, always on, on Linux.** bwrap wraps every shell
   call: filesystem access limited to the project dir, network egress denied
   by default. This holds even if `policies.yaml` is missing or misconfigured

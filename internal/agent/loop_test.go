@@ -20,13 +20,15 @@ import (
 
 // fakeProv replays a scripted response sequence.
 type fakeProv struct {
-	script []provider.Response
-	n      int
-	err    error
+	script   []provider.Response
+	n        int
+	err      error
+	lastDefs []provider.ToolDef // defs from the most recent Chat call
 }
 
 func (f *fakeProv) Name() string { return "fake" }
-func (f *fakeProv) Chat(_ context.Context, _ []provider.Message, _ []provider.ToolDef) (provider.Response, error) {
+func (f *fakeProv) Chat(_ context.Context, _ []provider.Message, defs []provider.ToolDef) (provider.Response, error) {
+	f.lastDefs = defs
 	if f.err != nil {
 		return provider.Response{}, f.err
 	}
@@ -1011,5 +1013,118 @@ func TestSystemPromptForbidsChatDumps(t *testing.T) {
 				t.Errorf("mode %v prompt must contain %q", m, want)
 			}
 		}
+	}
+}
+
+func defNames(defs []provider.ToolDef) map[string]bool {
+	out := map[string]bool{}
+	for _, d := range defs {
+		out[d.Name] = true
+	}
+	return out
+}
+
+func TestPlanModeWithholdsMutatingTools(t *testing.T) {
+	root := t.TempDir()
+	prov := &fakeProv{script: []provider.Response{{Content: "planned"}}}
+	loop := &Loop{
+		Prov: prov,
+		Reg:  testRegistry(root),
+		Cfg:  Config{MaxIters: 2, DoomRepeats: 5, Root: root, Mode: mode.Plan, Pol: &policy.Policy{}},
+	}
+	if _, err := loop.Run(context.Background(), "goal", func(Event) {}); err != nil {
+		t.Fatal(err)
+	}
+	defs := defNames(prov.lastDefs)
+	for _, hidden := range []string{"write_file", "edit_file", "shell_command"} {
+		if defs[hidden] {
+			t.Errorf("Plan mode must withhold %q from the tool list", hidden)
+		}
+	}
+	for _, shown := range []string{"read_file", "grep", "glob", "git_status", "git_diff"} {
+		if !defs[shown] {
+			t.Errorf("Plan mode must keep read-only tool %q", shown)
+		}
+	}
+}
+
+func TestPlanModeWriterChildKeepsWhitelistedTools(t *testing.T) {
+	root := t.TempDir()
+	prov := &fakeProv{script: []provider.Response{{Content: "planned"}}}
+	loop := &Loop{
+		Prov: prov,
+		Reg:  testRegistry(root),
+		Cfg: Config{MaxIters: 2, DoomRepeats: 5, Root: root, Mode: mode.Plan,
+			Pol: &policy.Policy{}, PlanAllow: []string{"write_file", "edit_file"}},
+	}
+	if _, err := loop.Run(context.Background(), "goal", func(Event) {}); err != nil {
+		t.Fatal(err)
+	}
+	defs := defNames(prov.lastDefs)
+	for _, kept := range []string{"write_file", "edit_file"} {
+		if !defs[kept] {
+			t.Errorf("PlanAllow must keep %q visible to writer children", kept)
+		}
+	}
+	if defs["shell_command"] {
+		t.Error("PlanAllow must not leak non-whitelisted mutating tools")
+	}
+}
+
+func TestBuildModeListsAllTools(t *testing.T) {
+	root := t.TempDir()
+	prov := &fakeProv{script: []provider.Response{{Content: "done"}}}
+	loop := &Loop{
+		Prov: prov,
+		Reg:  testRegistry(root),
+		Cfg:  Config{MaxIters: 2, DoomRepeats: 5, Root: root, Mode: mode.Build, Pol: &policy.Policy{AlwaysAllow: true}},
+	}
+	if _, err := loop.Run(context.Background(), "goal", func(Event) {}); err != nil {
+		t.Fatal(err)
+	}
+	defs := defNames(prov.lastDefs)
+	for _, want := range []string{"write_file", "edit_file", "shell_command", "read_file"} {
+		if !defs[want] {
+			t.Errorf("Build mode must list %q", want)
+		}
+	}
+}
+
+func TestPlanPromptDemandsNumberedPlan(t *testing.T) {
+	p := systemPrompt([]string{"read_file"}, mode.Plan)
+	for _, want := range []string{"NOT available", "numbered", "supersedes"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("Plan prompt must contain %q", want)
+		}
+	}
+}
+
+func TestGateDenialsInjectPlanReminder(t *testing.T) {
+	root := t.TempDir()
+	call := provider.ToolCall{ID: "1", Name: "write_file", Args: map[string]any{"path": "x.txt", "content": "hi"}}
+	prov := &fakeProv{script: []provider.Response{
+		{Content: "trying", ToolCalls: []provider.ToolCall{call}},
+		{Content: "trying again", ToolCalls: []provider.ToolCall{call}},
+		{Content: "fine, planning"},
+	}}
+	loop := &Loop{
+		Prov: prov,
+		Reg:  testRegistry(root),
+		Cfg:  Config{MaxIters: 5, DoomRepeats: 10, Root: root, Mode: mode.Plan, Pol: &policy.Policy{}},
+	}
+	if _, err := loop.Run(context.Background(), "goal", func(Event) {}); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, m := range loop.MsgsSnapshot() {
+		if strings.Contains(m.Content, "numbered implementation plan instead") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("repeated gate denials must inject a plan reminder into context")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "x.txt")); !os.IsNotExist(statErr) {
+		t.Fatal("BREAKOUT: denied writes created the file")
 	}
 }

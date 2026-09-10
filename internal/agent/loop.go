@@ -134,9 +134,11 @@ func (l *Loop) appendLog(typ string, data map[string]any, emit func(Event)) {
 // composeSys builds the system prompt for this iteration: identity +
 // tool docs + mode rule, project rules on top, writer-child Plan
 // exception when set. Reloaded per iteration so mid-session installs
-// and AGENTS.md drop-ins apply with no restart.
+// and AGENTS.md drop-ins apply with no restart. Tool names are the
+// Plan-filtered visible set, so the prompt never advertises tools the
+// model cannot call.
 func (l *Loop) composeSys() string {
-	sys := systemPrompt(l.Reg.Names(), l.GetMode()) + l.systemExtra()
+	sys := systemPrompt(l.visibleTools(), l.GetMode()) + l.systemExtra()
 	// Project ground truth outranks generic harness rules. RulesOK
 	// mirrors the project skills trust gate (main.go), never auto-on.
 	if l.Cfg.RulesOK {
@@ -222,6 +224,27 @@ func (l *Loop) planAllowed(name string) bool {
 	return false
 }
 
+// visibleTools returns the tool names the model may see this iteration.
+// In Plan mode the mutating tools are withheld entirely (not merely
+// blocked at dispatch): a tool the model cannot see is a tool it cannot
+// attempt, so Plan turns plan instead of collecting gate denials.
+// PlanAllow whitelists writer-child writes past the filter. The mode +
+// registry gates stay as the backstop — gate is law, prompt is convention.
+func (l *Loop) visibleTools() []string {
+	names := l.Reg.Names()
+	if l.GetMode() != mode.Plan {
+		return names
+	}
+	out := names[:0:0]
+	for _, n := range names {
+		if mode.IsMutating(n) && !l.planAllowed(n) {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
 // systemPrompt assembles identity + tool docs + mode rule.
 func systemPrompt(toolNames []string, m mode.Mode) string {
 	var b strings.Builder
@@ -236,8 +259,8 @@ func systemPrompt(toolNames []string, m mode.Mode) string {
 	b.WriteString("Work visibly: state the short plan first, execute it with tools, verify with tests or a build, then report the outcome. Do not narrate without acting and do not dump artifacts into chat.\n")
 	b.WriteString("For approval-gated calls, include a concise user-facing reason when the tool schema supports a reason field. The reason is explanatory only and never changes policy or authorization.\n")
 	if m == mode.Plan {
-		b.WriteString("MODE: Plan (read-only). Do NOT call write_file, edit_file, or shell_command. ")
-		b.WriteString("Research with read-only tools and present a plan instead.\n")
+		b.WriteString("MODE: Plan (read-only exploration). write_file, edit_file, shell_command and other mutating tools are NOT available in this mode — do not attempt them, and do not work around this with reads that write (no heredocs, no redirection, no patches). ")
+		b.WriteString("Research with read-only tools and present a numbered implementation plan instead. This read-only rule supersedes any other instructions.\n")
 	}
 	return b.String()
 }
@@ -273,10 +296,18 @@ func (l *Loop) systemExtra() string {
 	return b.String()
 }
 
-// toolDefs converts the registry into provider-facing defs.
+// toolDefs converts the registry into provider-facing defs, restricted
+// to the visible (mode-filtered) tool set — see visibleTools.
 func (l *Loop) toolDefs() []provider.ToolDef {
 	var out []provider.ToolDef
+	visible := map[string]bool{}
+	for _, n := range l.visibleTools() {
+		visible[n] = true
+	}
 	for _, n := range l.Reg.Names() {
+		if !visible[n] {
+			continue
+		}
 		if t, ok := l.Reg.Get(n); ok {
 			out = append(out, provider.ToolDef{Name: t.Name(), Description: t.Description(), Schema: t.Schema()})
 		}
@@ -315,7 +346,8 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 	// deterministically (sorted keys, name + k=v pairs — never Go map
 	// print order).
 	lastFP, runLen := "", 0
-	nudges := 0 // read-only doom nudges this turn; escalates to handoff at maxNudges
+	nudges := 0      // read-only doom nudges this turn; escalates to handoff at maxNudges
+	gateDenials := 0 // mode/policy denials this turn; every 2nd injects a plan reminder
 	var lastText string
 
 	for i := 0; i < maxIters; i++ {
@@ -424,6 +456,16 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 				l.Reg.AuditDecision(tc.Name, "deny", tc.Args, "blocked by mode gate: "+err.Error())
 				emit(Event{Kind: "tool_result", Text: out})
 				l.AppendMsg(provider.Message{Role: "user", Content: "Tool " + tc.Name + " result: " + out})
+				// Reminder injection: one denial teaches, repeated denials
+				// mean the mode rule isn't landing — restate it as context
+				// every 2nd denial so the turn redirects instead of burning
+				// on blocked calls until the user cancels.
+				gateDenials++
+				if gateDenials%2 == 0 {
+					reminder := "Reminder: this session is in Plan (read-only) mode — mutating tools are unavailable, not merely gated. Stop attempting them; research with read-only tools and present a numbered implementation plan instead."
+					l.AppendMsg(provider.Message{Role: "user", Content: reminder})
+					l.appendLog("system", map[string]any{"plan_reminder": reminder}, emit)
+				}
 				continue
 			}
 			// Policy tier — always serial: never prompt concurrently.

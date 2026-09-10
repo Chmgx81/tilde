@@ -78,6 +78,10 @@ P1+P2 user-visible changes (binary still reports `v0.9.1` until release):
   pasted in full into chat.
 - The pre-response `thinking` row animates in place (spinner + elapsed)
   instead of sitting frozen during slow model waits.
+- Plan mode withholds mutating tools from the model's tool list (not just
+  gate-blocked), demands a numbered plan in the prompt, and injects a plan
+  reminder every 2nd gate denial — Plan turns plan instead of collecting
+  denials until the user cancels.
 - docs website (Astro + Starlight) with the doc set as `/docs/*` pages.
 - Secret scrubbing covers password/secret-style assignments, GitHub
   OAuth/server tokens, all `xox*` Slack prefixes, and `OLLAMA_*`/`GEMINI_*`
