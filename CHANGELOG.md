@@ -12,6 +12,7 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   source checkout is already current; CI now smoke-tests both version flag forms.
 - `tilde run-due`: scheduled headless runs from `.tilde/schedule.yaml`
   (interval or daily HH:MM, state file, failed jobs retry next tick).
+- `tilde schedule [--json]`: list scheduled jobs with due state + next run.
 - `tilde audit`: read the governance trail with since/tool/decision filters.
 - `tilde plugin install|upgrade|enable|disable|remove|rollback|verify|list`: hash-pinned local plugins (v1 manifest); `install --dry-run` previews.
 - `diagnose`: gofmt/parse-error/TODO diagnostics over Go code, read-only.
@@ -42,6 +43,14 @@ P1+P2 user-visible changes (binary still reports `v0.9.1` until release):
 
 - `web_search`: keyless web search (ask-tier, Plan-OK). Needs
   `TILDE_ALLOW_NET=1` or a listed host, like `web_fetch`.
+- `save_plan`: Plan mode persists the numbered plan to
+  `.tilde/plans/<slug>.md` (re-saving revises); approval stays the
+  Tab-to-Build handoff, Build reads it back with `read_file`.
+- `/critic`: score-gated self-review of the working-tree diff
+  (deterministic offline rubric, threshold 80).
+- `/apply [path]` / `/discard [path]`: apply (keep worktree) or discard
+  (remove worktree) the pending `spawn_work` session via the registry
+  `apply_work`/`discard_work` tools; no session fails loud.
 - `allow_net` in `policies.yaml`: per-host fetch/search approval without
   the session-wide opt-in. SSRF guards still apply.
 - `web_fetch` returns readable text or markdown (`format:` arg).

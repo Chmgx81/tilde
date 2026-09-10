@@ -1,8 +1,5 @@
----
-title: "tilde (~) — Master Build Plan"
-description: "> Product scope, architectural decisions, and implementation status."
-editUrl: false
----
+# tilde (~) — Master Build Plan
+
 > Product scope, architectural decisions, and implementation status.
 
 One file that answers: what are we building, why does it look the way it
@@ -10,7 +7,7 @@ does, and what order do we build it in. Everything else (TUI spec, policies,
 detailed tool code) hangs off this document. If a decision here conflicts
 with an older note, this file wins.
 
-For a quick orientation, see the [documentation index](/docs/readme/). Treat `DONE` as a
+For a quick orientation, see the [documentation index](README.md). Treat `DONE` as a
 claim that must remain backed by code and tests; use `TODO` and deferred notes
 to distinguish planned work from shipped behavior.
 
@@ -229,7 +226,11 @@ be bypassed by it:
 
 - **Plan mode is enforced at the tool-registry layer.** Even a confused
   model calling `write_file` in Plan mode gets a hard deny — this isn't a
-  prompt-level instruction, it's a code-level gate.
+  prompt-level instruction, it's a code-level gate. Since 2026-09-10 the
+  model doesn't even see the mutating tools in Plan mode: they are
+  withheld from the tool list (writer-child whitelists excepted), so Plan
+  turns plan instead of collecting denials. The gate stays as the backstop,
+  and every 2nd denial injects a plan reminder into context.
 - **Sandboxing is OS-level, always on, on Linux.** bwrap wraps every shell
   call: filesystem access limited to the project dir, network egress denied
   by default. This holds even if `policies.yaml` is missing or misconfigured
@@ -244,6 +245,16 @@ as deny), `web_fetch` (which additionally needs `TILDE_ALLOW_NET=1`,
 http(s) only, 30s timeout, 5MB cap), `web_search`, `web_shot`, worktree
 ops, work sessions (`spawn/apply/discard_work`), and `memory`/`remember` —
 the full list lives in `policies.yaml` under `ask:`.
+
+**Plan files.** In Plan mode the model persists numbered plans via the
+`save_plan` tool to `.tilde/plans/<slug>.md` (title + content; overwrite
+allowed so revisions update the same file). Approval stays the existing
+Tab-to-Build handoff — no new approval surface. Build reads the plan back
+with `read_file`.
+
+**Verify fan-out.** For risky changes the model re-checks via parallel
+read-only explore subagents before closing: one reviews the working-tree
+diff, one checks test coverage.
 
 ---
 
@@ -659,7 +670,7 @@ As of v0.9+:
 | symbol_search tool | DONE — stdlib definition index (go/py/ts/js/rs) + reference fallback, read-only, counts as seen |
 | memory tool | DONE — project `.tilde/memory.md` save/recall/forget, recall Plan-safe, save/forget Plan-blocked + ask-tier |
 | Audit wiring | DONE — registry `AuditSink` records one hashed-args event per dispatch into `~/.tilde/audit/audit.jsonl`; eval trials intentionally unaudited |
-| Scheduler (no daemon) | DONE — `.tilde/schedule.yaml` + state file, `tilde run-due` reexecs headless per due job; OS owns waking, failed jobs retry next tick |
+| Scheduler (no daemon) | DONE — `.tilde/schedule.yaml` + state file, `tilde run-due` reexecs headless per due job + `tilde schedule [--json]` lists jobs with due/next-run; OS owns waking, failed jobs retry next tick |
 | Audit export | DONE — `tilde audit [--since] [--tool] [--decision] [--json]`, corrupt-line tolerant |
 | Plugin manifest v1 | DONE — `tilde-plugin.yaml` strict validation, `tilde plugin install/verify/list`, sha256 lockfile, drift refuses |
 | diagnose tool | DONE — stdlib gofmt/parse/TODO diagnostics, read-only, batches with grep |
@@ -667,6 +678,11 @@ As of v0.9+:
 | Browser screenshots | DONE — `web_shot` via headless Firefox viewport PNG (ask, Plan-OK, SSRF-gated); PNGs are human-review artifacts, no vision pipeline yet |
 | IDE stdio bridge | DONE — `tilde ide-bridge` line-JSON (initialize/health/session.create/chat/history), approvals deny-by-default, sessions per-process |
 | Sandbox image | DONE — `sandbox.Containerfile` (fedora-minimal, agent uid, no secrets) + `docs/sandbox-image.md` with digest-pin workflow |
+| Plan files (`save_plan`) | DONE — Plan persists numbered plans to `.tilde/plans/<slug>.md` (overwrite revises); Plan-visible + allow-tier, Tab-to-Build approval unchanged, Build reads back via `read_file` |
+| Critic self-review (`/critic`) | DONE — deterministic offline rubric over the working-tree diff (0-100, threshold 80, bounded findings); fail-loud empty-diff message |
+| Worktree TUI (`/apply`/`/discard`) | DONE — pending-session apply (keep) / discard (remove) via registry tools, fail-loud with none, bounded transcript |
+| TUI golden snapshots | DONE — `golden_test.go` pins help/palette/critic header + finding shapes (whitespace-tolerant) |
+| Verify fan-out (risky changes) | DONE — Build prompt directs parallel read-only explore subagents (diff review + coverage check) before closing |
 | models CLI | DONE — `tilde models [provider]` renders catalog windows + prices, unknown provider fails loud |
 | P3 eval tasks | DONE — symbol/diagnose/memory/web-unavailable trajectory tasks with filesystem evidence |
 | Project rules | DONE — AGENTS.md/CLAUDE.md/.tilde/RULES.md auto-load under the project-skills trust gate, 8KB cap, per-iteration reload |

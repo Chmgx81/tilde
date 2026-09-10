@@ -197,6 +197,37 @@ func Due(now time.Time, jobs []Job, state State) []Job {
 	return out
 }
 
+// NextRun returns when job next becomes due at or after now: now when
+// already due, last+every otherwise (earliest of that and the next daily
+// at strictly after both now and last when at is set). ok is false for
+// disabled jobs, which never run.
+func NextRun(now time.Time, j Job, state State) (next time.Time, ok bool) {
+	if !j.Enabled {
+		return time.Time{}, false
+	}
+	if len(Due(now, []Job{j}, state)) > 0 {
+		return now, true
+	}
+	last := state[j.ID]
+	next = last.Add(j.Every)
+	if j.At == "" {
+		return next, true
+	}
+	h, m := parseAt(j.At)
+	anchor := now
+	if last.After(anchor) {
+		anchor = last
+	}
+	day := time.Date(anchor.Year(), anchor.Month(), anchor.Day(), h, m, 0, 0, anchor.Location())
+	if !day.After(anchor) {
+		day = day.Add(24 * time.Hour)
+	}
+	if day.Before(next) {
+		next = day
+	}
+	return next, true
+}
+
 // passedAtSince reports whether today's at (daily local, in now's
 // location) is at or before now and strictly after last.
 func passedAtSince(now time.Time, at string, last time.Time) bool {

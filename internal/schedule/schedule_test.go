@@ -167,6 +167,57 @@ func TestLoadMissingIsEmpty(t *testing.T) {
 	}
 }
 
+func TestNextRunDueNow(t *testing.T) {
+	now := time.Now()
+	jobs := []Job{{ID: "a", Prompt: "p", Every: time.Hour, Enabled: true}}
+	next, ok := NextRun(now, jobs[0], State{})
+	if !ok || !next.Equal(now) {
+		t.Fatalf("never-run enabled job: next must be now, got %v %v", next, ok)
+	}
+}
+
+func TestNextRunInterval(t *testing.T) {
+	now := time.Now()
+	last := now.Add(-time.Hour)
+	jobs := []Job{{ID: "a", Prompt: "p", Every: 24 * time.Hour, Enabled: true}}
+	next, ok := NextRun(now, jobs[0], State{"a": last})
+	if !ok || !next.Equal(last.Add(24*time.Hour)) {
+		t.Fatalf("interval: next must be last+every, got %v %v", next, ok)
+	}
+}
+
+func TestNextRunAtEarlierToday(t *testing.T) {
+	loc := time.Now().Location()
+	now := time.Date(2026, 9, 9, 8, 30, 0, 0, loc)
+	last := time.Date(2026, 9, 9, 8, 0, 0, 0, loc)
+	j := Job{ID: "a", Prompt: "p", Every: 24 * time.Hour, At: "09:00", Enabled: true}
+	next, ok := NextRun(now, j, State{"a": last})
+	want := time.Date(2026, 9, 9, 9, 0, 0, 0, loc)
+	if !ok || !next.Equal(want) {
+		t.Fatalf("at today 09:00 must win over last+every, got %v %v", next, ok)
+	}
+}
+
+func TestNextRunAtTomorrowAfterRun(t *testing.T) {
+	loc := time.Now().Location()
+	now := time.Date(2026, 9, 9, 10, 0, 0, 0, loc)
+	ranToday := time.Date(2026, 9, 9, 9, 5, 0, 0, loc)
+	j := Job{ID: "a", Prompt: "p", Every: 24 * time.Hour, At: "09:00", Enabled: true}
+	next, ok := NextRun(now, j, State{"a": ranToday})
+	want := time.Date(2026, 9, 10, 9, 0, 0, 0, loc)
+	if !ok || !next.Equal(want) {
+		t.Fatalf("ran after today's at: next must be tomorrow 09:00, got %v %v", next, ok)
+	}
+}
+
+func TestNextRunDisabled(t *testing.T) {
+	now := time.Now()
+	j := Job{ID: "a", Prompt: "p", Every: time.Hour, Enabled: false}
+	if _, ok := NextRun(now, j, State{}); ok {
+		t.Fatal("disabled job must report ok=false")
+	}
+}
+
 func TestAcquireLockExcludesOverlapAndReleases(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".tilde", "run-due.lock")
 	release, err := AcquireLock(path)

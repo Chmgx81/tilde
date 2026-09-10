@@ -344,6 +344,9 @@ Inline dropdown directly beneath the composer, replacing nothing above it.
     /copy [n]             Copy the transcript (or one line) to the clipboard
     /sandbox              Show current policy tier and overrides
     /diff                 Show working-tree diff for review
+    /critic               Score-gated self-review of the working-tree diff
+    /apply [path]         Apply the pending work session (keep worktree)
+    /discard [path]       Discard the pending work session (remove worktree)
     /undo [n]             Revert the last n mutating steps
     /sessions             List and resume a past session
     /login [provider]     Configure cloud-provider auth (§2.24)
@@ -502,7 +505,7 @@ anything else, so its consistency matters more than its cleverness.
 - New tools keep their raw names (outside the six-verb vocabulary above).
   Most are ask-tier and Plan-allowed — except the mutating writers, which
   are ask-tier *and* Plan-blocked like any other mutation:
-  `spawn_work` / `discard_work` (isolated worktree sessions),
+  `spawn_work` / `apply_work` / `discard_work` (isolated worktree sessions; `/apply [path]` + `/discard [path]` dispatch with the pending path, fail loud with none),
   `memory` save/forget and `remember` index (op-aware gating).
   `● todo_write` (serial checklist: `add|done|list|clear`); `● ask_user` (routes to the host AskUser callback — nil/unwired or denied reads as denied, propose a safe default); `● web_fetch` (http(s) GET only, 30s timeout, 5MB hard cap, needs `TILDE_ALLOW_NET=1` — denied otherwise without retry; allowed in Plan since it mutates no repo state).
 - Result (`⎿`) is optional and only appears when there's something worth
@@ -787,7 +790,7 @@ timeline vocabulary it's explaining.
   full-width space fill is stripped at the render boundary), so copies
   contain only visible characters.
 
-  Slash commands: /mode /compact /clear /copy /sandbox /diff /undo /sessions /export /model /login /logout /skills /plugins /marketplace /quit /help
+   Slash commands: /mode /compact /clear /copy /sandbox /diff /critic /undo /sessions /export /model /login /logout /skills /plugins /marketplace /quit /help
 
                                                            press esc to close
 ```
