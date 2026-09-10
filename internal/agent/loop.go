@@ -224,6 +224,20 @@ func (l *Loop) planAllowed(name string) bool {
 	return false
 }
 
+// denyReminder returns a redirect reminder every 2nd denial (""
+// otherwise): one denial teaches, repeated denials mean the rule isn't
+// landing. Text is mode-appropriate — Plan redirects to presenting the
+// plan, Build/Auto redirect to changing the approach.
+func (l *Loop) denyReminder(denials int) string {
+	if denials%2 != 0 {
+		return ""
+	}
+	if l.GetMode() == mode.Plan {
+		return "Reminder: this session is in Plan (read-only) mode — mutating tools are unavailable, not merely gated. Stop attempting them; research with read-only tools and present a numbered implementation plan instead."
+	}
+	return "Reminder: that call was denied by a deny-tier rule — it will never succeed on retry. Change the approach or propose an alternative instead of re-issuing denied calls."
+}
+
 // visibleTools returns the tool names the model may see this iteration.
 // In Plan mode the mutating tools are withheld entirely (not merely
 // blocked at dispatch): a tool the model cannot see is a tool it cannot
@@ -261,6 +275,12 @@ func systemPrompt(toolNames []string, m mode.Mode) string {
 	if m == mode.Plan {
 		b.WriteString("MODE: Plan (read-only exploration). write_file, edit_file, shell_command and other mutating tools are NOT available in this mode — do not attempt them, and do not work around this with reads that write (no heredocs, no redirection, no patches). ")
 		b.WriteString("Research with read-only tools and present a numbered implementation plan instead. This read-only rule supersedes any other instructions.\n")
+	}
+	if m == mode.Build {
+		b.WriteString("MODE: Build (supervised implementation). Mutating tools are available but ask-tier calls pause for user approval — batch independent calls together, make each one count, and keep momentum after approvals instead of re-asking by re-issuing. Pair every status update with tool calls: never a text-only turn while work remains. Deny-tier blocks are final: change the approach, don't retry them.\n")
+	}
+	if m == mode.Auto {
+		b.WriteString("MODE: Auto (bounded automation). Ask-tier calls are auto-approved — act decisively within the task scope without waiting. Deny-tier blocks still apply in full and are final, including the in-code destructive-shell deny (rm -rf, sudo-family, pipe-to-shell, force-push shapes): never attempt them twice. Verify with tests or a build before calling anything done. Stay inside the task; do not expand scope to neighboring work.\n")
 	}
 	return b.String()
 }
@@ -346,8 +366,8 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 	// deterministically (sorted keys, name + k=v pairs — never Go map
 	// print order).
 	lastFP, runLen := "", 0
-	nudges := 0      // read-only doom nudges this turn; escalates to handoff at maxNudges
-	gateDenials := 0 // mode/policy denials this turn; every 2nd injects a plan reminder
+	nudges := 0  // read-only doom nudges this turn; escalates to handoff at maxNudges
+	denials := 0 // mode/policy denials this turn; every 2nd injects a redirect reminder
 	var lastText string
 
 	for i := 0; i < maxIters; i++ {
@@ -456,15 +476,10 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 				l.Reg.AuditDecision(tc.Name, "deny", tc.Args, "blocked by mode gate: "+err.Error())
 				emit(Event{Kind: "tool_result", Text: out})
 				l.AppendMsg(provider.Message{Role: "user", Content: "Tool " + tc.Name + " result: " + out})
-				// Reminder injection: one denial teaches, repeated denials
-				// mean the mode rule isn't landing — restate it as context
-				// every 2nd denial so the turn redirects instead of burning
-				// on blocked calls until the user cancels.
-				gateDenials++
-				if gateDenials%2 == 0 {
-					reminder := "Reminder: this session is in Plan (read-only) mode — mutating tools are unavailable, not merely gated. Stop attempting them; research with read-only tools and present a numbered implementation plan instead."
+				denials++
+				if reminder := l.denyReminder(denials); reminder != "" {
 					l.AppendMsg(provider.Message{Role: "user", Content: reminder})
-					l.appendLog("system", map[string]any{"plan_reminder": reminder}, emit)
+					l.appendLog("system", map[string]any{"deny_reminder": reminder}, emit)
 				}
 				continue
 			}
@@ -499,6 +514,11 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 				out := denied
 				emit(Event{Kind: "tool_result", Text: out})
 				l.AppendMsg(provider.Message{Role: "user", Content: out})
+				denials++
+				if reminder := l.denyReminder(denials); reminder != "" {
+					l.AppendMsg(provider.Message{Role: "user", Content: reminder})
+					l.appendLog("system", map[string]any{"deny_reminder": reminder}, emit)
+				}
 				continue
 			case policy.Ask:
 				ok := false

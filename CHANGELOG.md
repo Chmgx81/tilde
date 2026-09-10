@@ -82,6 +82,9 @@ P1+P2 user-visible changes (binary still reports `v0.9.1` until release):
   gate-blocked), demands a numbered plan in the prompt, and injects a plan
   reminder every 2nd gate denial — Plan turns plan instead of collecting
   denials until the user cancels.
+- Build and Auto modes get their own prompt blocks (approval-aware batching
+  and momentum; bounded auto-approved automation with destructive shapes
+  still denied), and repeated policy denials inject a redirect reminder.
 - docs website (Astro + Starlight) with the doc set as `/docs/*` pages.
 - Secret scrubbing covers password/secret-style assignments, GitHub
   OAuth/server tokens, all `xox*` Slack prefixes, and `OLLAMA_*`/`GEMINI_*`

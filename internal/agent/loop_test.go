@@ -1128,3 +1128,45 @@ func TestGateDenialsInjectPlanReminder(t *testing.T) {
 		t.Fatal("BREAKOUT: denied writes created the file")
 	}
 }
+
+func TestBuildAutoPromptsShapeBehavior(t *testing.T) {
+	build := systemPrompt([]string{"write_file"}, mode.Build)
+	for _, want := range []string{"ask-tier calls pause", "never a text-only turn", "Deny-tier blocks are final"} {
+		if !strings.Contains(build, want) {
+			t.Errorf("Build prompt must contain %q", want)
+		}
+	}
+	auto := systemPrompt([]string{"write_file"}, mode.Auto)
+	for _, want := range []string{"auto-approved", "destructive-shell deny", "Verify with tests", "do not expand scope"} {
+		if !strings.Contains(auto, want) {
+			t.Errorf("Auto prompt must contain %q", want)
+		}
+	}
+}
+
+func TestPolicyDenialsInjectRedirectReminder(t *testing.T) {
+	root := t.TempDir()
+	call := provider.ToolCall{ID: "1", Name: "shell_command", Args: map[string]any{"command": "sudo apt install x"}}
+	prov := &fakeProv{script: []provider.Response{
+		{Content: "trying", ToolCalls: []provider.ToolCall{call}},
+		{Content: "trying again", ToolCalls: []provider.ToolCall{call}},
+		{Content: "adjusting"},
+	}}
+	loop := &Loop{
+		Prov: prov,
+		Reg:  testRegistry(root),
+		Cfg:  Config{MaxIters: 5, DoomRepeats: 10, Root: root, Mode: mode.Build, Pol: &policy.Policy{}},
+	}
+	if _, err := loop.Run(context.Background(), "goal", func(Event) {}); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, m := range loop.MsgsSnapshot() {
+		if strings.Contains(m.Content, "denied by a deny-tier rule") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("repeated policy denials must inject a redirect reminder into context")
+	}
+}
