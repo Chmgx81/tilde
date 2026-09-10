@@ -1,504 +1,899 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>tilde (~) — Security-first terminal coding agent</title>
-  <meta name="description" content="A local-first coding harness for real production codebases. Sandboxed shell, explicit approvals, resumable sessions. Not a toy demo.">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            surface: { 0: '#09090b', 1: '#111113', 2: '#18181b', 3: '#1f1f23' },
-            accent: '#6d5cff',
-            accentDim: '#5a4ad4',
-            success: '#22c55e',
-            danger: '#ef4444',
-            amber: '#f59e0b',
-          },
-          fontFamily: {
-            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-            mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
-            serif: ['"Iowan Old Style"', '"Palatino Linotype"', 'Georgia', 'serif'],
-          },
-        }
-      }
-    }
-  </script>
+  <meta name="description" content="A local-first coding harness for real production codebases. Sandboxed shell, explicit approvals, resumable sessions.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    body { background: #09090b; color: #e4e4e7; }
-    .fade-in { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
-    .fade-in.visible { opacity: 1; transform: translateY(0); }
-    .code-block { background: #111113; border: 1px solid #27272a; border-radius: 8px; padding: 16px 20px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7; overflow-x: auto; }
-    .workflow-card { background: #111113; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; }
-    .workflow-bar { background: #18181b; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #27272a; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #71717a; }
-    .workflow-step { display: grid; grid-template-columns: 1.2rem 1fr; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #1f1f23; align-items: start; }
-    .workflow-step:last-child { border-bottom: none; }
-    .step-check { width: 1.2rem; height: 1.2rem; border-radius: 50%; border: 1.5px solid #3f3f46; display: grid; place-items: center; font-size: 10px; color: #71717a; margin-top: 2px; }
-    .step-check.done { background: #22c55e; border-color: #22c55e; color: #fff; }
-    .step-check.active { border-color: #6d5cff; }
-    .step-check.active::after { content: ''; width: 6px; height: 6px; background: #6d5cff; border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
+    /* ── Neo design tokens, adapted for tilde dark ── */
+    :root {
+      --font-system: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+      --font-serif: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+      --paper: #09090b;
+      --white: #111113;
+      --ink: #f0f0eb;
+      --muted: #a1a1aa;
+      --faint: #71717a;
+      --line: #27272a;
+      --line-dark: #1f1f23;
+      --accent: #6d5cff;
+      --accent-soft: rgba(109,92,255,0.08);
+      --success: #22c55e;
+      --danger: #ef4444;
+      --amber: #f59e0b;
+      --space-1: 0.5rem;
+      --space-2: 1rem;
+      --space-3: 1.5rem;
+      --space-4: 2.5rem;
+      --space-5: 4rem;
+      --space-6: 6.5rem;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-system);
+      font-size: 1rem;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection { color: var(--paper); background: var(--accent); }
+
+    h1, h2 {
+      font-family: var(--font-serif);
+      font-weight: 400;
+      letter-spacing: -0.045em;
+      text-wrap: balance;
+      color: var(--ink);
+    }
+
+    h3 {
+      font-family: var(--font-system);
+      font-weight: 650;
+      letter-spacing: -0.025em;
+      color: var(--ink);
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Eyebrow / label ── */
+    .label {
+      color: var(--accent);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    /* ── Actions ── */
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 1.45rem;
+      margin-top: 2rem;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 2.9rem;
+      padding: 0.75rem 1.15rem;
+      font-size: 0.9rem;
+      font-weight: 650;
+      border: 1px solid var(--ink);
+      border-radius: 0.38rem;
+      transition: background 150ms ease, transform 150ms ease;
+    }
+
+    .button-primary {
+      color: var(--paper);
+      background: var(--ink);
+    }
+
+    .button-primary:hover {
+      background: #d4d4d8;
+      transform: translateY(-1px);
+    }
+
+    .text-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.9rem;
+      font-weight: 650;
+      color: var(--ink);
+      border-bottom: 1px solid var(--line);
+      transition: color 150ms, border-color 150ms;
+    }
+
+    .text-link:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* ── Install bar ── */
+    .install-bar {
+      display: flex;
+      align-items: center;
+      width: min(100%, 43rem);
+      min-height: 3.25rem;
+      margin: 1.5rem auto 0;
+      padding-left: 1rem;
+      overflow: hidden;
+      color: var(--muted);
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 0.45rem;
+    }
+
+    .install-bar code {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      font-family: var(--font-mono);
+      font-size: 0.73rem;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .install-bar button {
+      flex: 0 0 3.25rem;
+      width: 3.25rem;
+      height: 3.25rem;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      border-left: 1px solid var(--line);
+      cursor: pointer;
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+    }
+
+    .install-bar button:hover { color: var(--ink); background: rgba(255,255,255,0.03); }
+    .install-bar button.copied { color: var(--success); }
+
+    /* ── Card ── */
+    .card {
+      overflow: hidden;
+      background: var(--white);
+      border: 1px solid var(--line-dark);
+      border-radius: 0.65rem;
+    }
+
+    /* ── Workflow card (Neo pattern) ── */
+    .workflow-top, .plan-meta, .proof-row, .agent-row-inner {
+      display: flex;
+      align-items: center;
+    }
+
+    .workflow-top {
+      justify-content: space-between;
+      min-height: 3.15rem;
+      padding: 0 1.25rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .mode-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .status-dot {
+      display: block;
+      width: 0.4rem;
+      height: 0.4rem;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+
+    .status-dot.pulse { animation: pulse 2.2s ease-in-out infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
-    .cursor-blink::after { content: '▊'; color: #6d5cff; animation: blink 1s step-end infinite; margin-left: 1px; }
-    .provider-card { background: #111113; border: 1px solid #27272a; border-radius: 8px; padding: 16px; display: flex; align-items: center; gap: 12px; transition: border-color 0.15s; }
-    .provider-card:hover { border-color: #3f3f46; }
-    .copy-btn { position: absolute; top: 8px; right: 8px; background: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #71717a; cursor: pointer; transition: all 0.15s; }
-    .copy-btn:hover { color: #e4e4e7; border-color: #3f3f46; }
-    .section-divider { border-top: 1px solid #1f1f23; }
-    .compare-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 0; border-bottom: 1px solid #1f1f23; font-size: 13px; }
-    .compare-row > div { padding: 12px 16px; }
-    .compare-header { color: #71717a; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .compare-cell { color: #a1a1aa; }
-    .compare-cell.highlight { color: #e4e4e7; font-weight: 500; }
+
+    .request-line {
+      display: flex;
+      gap: 0.7rem;
+      padding: 1.5rem 1.75rem;
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .request-line > span { color: var(--accent); font-weight: 800; }
+
+    .plan { padding: 1.7rem 1.75rem 1.3rem; }
+
+    .plan-meta {
+      justify-content: space-between;
+      color: var(--faint);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .plan ol { list-style: none; }
+
+    .plan li {
+      display: grid;
+      grid-template-columns: 1.25rem 1fr;
+      gap: 0.65rem;
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--line-dark);
+      align-items: start;
+    }
+
+    .plan li:last-child { border-bottom: none; }
+
+    .check {
+      display: grid;
+      width: 1.05rem;
+      height: 1.05rem;
+      place-items: center;
+      color: var(--accent);
+      font-size: 0.7rem;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      margin-top: 2px;
+    }
+
+    .check.done { color: #fff; background: var(--accent); border-color: var(--accent); }
+    .check.active { border-color: var(--accent); }
+    .check.active::after { content: ''; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
+
+    .plan strong, .plan small { display: block; }
+    .plan strong { color: var(--ink); font-size: 0.86rem; font-weight: 600; }
+    .plan small { margin-top: 0.15rem; color: var(--faint); font-family: var(--font-mono); font-size: 0.68rem; }
+
+    .agent-inline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 0.75rem;
+      padding: 0.65rem 0.8rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      background: var(--accent-soft);
+      border-left: 2px solid var(--accent);
+    }
+
+    .proof-row {
+      gap: 0.7rem;
+      padding: 0.9rem 1.75rem;
+      color: var(--muted);
+      background: rgba(109,92,255,0.04);
+      border-top: 1px solid var(--line);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+    }
+
+    .proof-row > span { color: var(--success); }
+    .proof-row code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .proof-row small { margin-left: auto; color: var(--faint); }
+
+    /* ── Sections ── */
+    .section { padding: var(--space-6) max(1.5rem, calc((100vw - 70rem) / 2)); }
+    .section-white { background: var(--white); border-block: 1px solid var(--line); }
+    .section-dark { background: #0f0f12; border-block: 1px solid var(--line); }
+
+    .section-inner { width: min(100% - 3rem, 70rem); margin: 0 auto; }
+
+    /* ── Speed grid (3-col, Neo pattern) ── */
+    .speed-heading {
+      display: grid;
+      grid-template-columns: 0.55fr 1.35fr 1fr;
+      gap: var(--space-4);
+      align-items: start;
+      margin-bottom: var(--space-5);
+    }
+
+    .speed-heading h2 {
+      max-width: 13ch;
+      font-size: clamp(2.5rem, 4.5vw, 4rem);
+      line-height: 1;
+    }
+
+    .speed-heading > p:last-child { color: var(--muted); }
+
+    .speed-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-block: 1px solid var(--line);
+    }
+
+    .speed-grid article { padding: var(--space-4) var(--space-4) var(--space-4) 0; }
+
+    .speed-grid article + article {
+      padding-left: var(--space-4);
+      border-left: 1px solid var(--line);
+    }
+
+    .speed-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .speed-meta span {
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+    }
+
+    .speed-meta small {
+      padding: 0.22rem 0.45rem;
+      color: var(--faint);
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+    }
+
+    .speed-grid h3 { margin: var(--space-4) 0 var(--space-1); font-size: 1.05rem; }
+    .speed-grid p { color: var(--muted); font-size: 0.9rem; }
+
+    /* ── Provider grid (Neo pattern) ── */
+    .models-heading {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: var(--space-4);
+      align-items: end;
+      margin-bottom: var(--space-4);
+    }
+
+    .models-heading h2 {
+      margin-top: 0.45rem;
+      font-size: clamp(2.7rem, 5vw, 4.6rem);
+      line-height: 1;
+    }
+
+    .models-heading > p { max-width: 30rem; color: var(--muted); }
+
+    .provider-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid var(--line);
+      border-radius: 0.65rem;
+    }
+
+    .provider-grid article {
+      display: flex;
+      gap: 0.9rem;
+      align-items: center;
+      padding: 1.35rem;
+    }
+
+    .provider-grid article + article { border-left: 1px solid var(--line); }
+
+    .provider-icon {
+      flex: 0 0 2rem;
+      width: 2rem;
+      height: 2rem;
+      display: grid;
+      place-items: center;
+      background: var(--accent-soft);
+      border: 1px solid rgba(109,92,255,0.15);
+      border-radius: 0.4rem;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .provider-grid strong, .provider-grid small { display: block; }
+    .provider-grid strong { color: var(--ink); font-size: 0.9rem; font-weight: 650; }
+    .provider-grid small { margin-top: 0.15rem; color: var(--faint); font-size: 0.68rem; }
+
+    /* ── Principles (3-col, Neo pattern) ── */
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      width: min(100% - 3rem, 70rem);
+      margin: 0 auto var(--space-6);
+      border-block: 1px solid var(--line);
+    }
+
+    .principles article { padding: var(--space-4) var(--space-4) var(--space-4) 0; }
+
+    .principles article + article {
+      padding-left: var(--space-4);
+      border-left: 1px solid var(--line);
+    }
+
+    .principles article > span {
+      color: var(--faint);
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+    }
+
+    .principles h3 { margin: var(--space-4) 0 var(--space-1); font-size: 1.05rem; }
+    .principles p { color: var(--muted); font-size: 0.9rem; }
+
+    /* ── Orchestration (dark section, Neo pattern) ── */
+    .orchestration {
+      display: grid;
+      grid-template-columns: 0.85fr 1.15fr;
+      gap: var(--space-6);
+      align-items: center;
+    }
+
+    .orchestration h2 {
+      margin: var(--space-2) 0 var(--space-3);
+      font-size: clamp(2.8rem, 5vw, 4.7rem);
+      line-height: 1;
+    }
+
+    .orchestration > div > p:not(.label) { color: var(--muted); margin-bottom: var(--space-3); }
+
+    .orchestration .text-link { color: var(--ink); border-bottom-color: var(--faint); }
+
+    .agents-card { padding: 0.8rem 1.5rem 0; background: var(--white); border-radius: 0.55rem; }
+
+    .coordinator-row, .agent-row-inner {
+      display: grid;
+      grid-template-columns: 3.25rem 1fr auto;
+      gap: 1rem;
+      align-items: center;
+      padding: 1.15rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .coordinator-row span, .agent-row-inner span {
+      color: var(--faint);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+    }
+
+    .coordinator-row strong, .agent-row-inner strong {
+      color: var(--ink);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    .coordinator-row small, .agent-row-inner small {
+      color: var(--faint);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+
+    .agent-row-inner { margin-left: 1.5rem; }
+    .agent-row-inner small.working::before {
+      content: '';
+      display: inline-block;
+      width: 0.38rem;
+      height: 0.38rem;
+      margin-right: 0.4rem;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2.2s ease-in-out infinite;
+    }
+
+    /* ── Foundation (Neo pattern) ── */
+    .foundation {
+      display: grid;
+      grid-template-columns: 0.8fr 1.2fr;
+      gap: var(--space-6);
+      width: min(100% - 3rem, 70rem);
+      margin-inline: auto;
+    }
+
+    .foundation h2 {
+      margin-top: 0.8rem;
+      font-size: clamp(2.7rem, 5vw, 4.6rem);
+      line-height: 1;
+    }
+
+    .foundation dl { border-top: 1px solid var(--line); }
+
+    .foundation dl > div {
+      display: grid;
+      grid-template-columns: 0.7fr 1.3fr;
+      gap: 2rem;
+      padding: 1.35rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .foundation dt { color: var(--ink); font-weight: 650; }
+    .foundation dd { color: var(--muted); }
+
+    /* ── Final CTA (Neo pattern) ── */
+    .final {
+      padding: var(--space-6) 1.5rem;
+      text-align: center;
+      background: var(--white);
+      border-top: 1px solid var(--line);
+    }
+
+    .final h2 {
+      margin: 0.8rem 0 1rem;
+      font-size: clamp(3rem, 6.5vw, 5.7rem);
+      line-height: 1;
+    }
+
+    .final > p:not(.label) { color: var(--muted); }
+
+    .final code {
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 0.88em;
+    }
+
+    .final .actions { justify-content: center; }
+
+    /* ── Hero (centered, Neo pattern) ── */
+    .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: min(100% - 3rem, 70rem);
+      margin: 0 auto;
+      padding: var(--space-5) 0 var(--space-6);
+      text-align: center;
+    }
+
+    .hero h1 {
+      max-width: 16ch;
+      margin: 0 auto 1.25rem;
+      font-size: clamp(3.4rem, 6vw, 5.5rem);
+      line-height: 1;
+    }
+
+    .hero .label { margin-bottom: 1rem; }
+
+    .hero .lede {
+      max-width: 36rem;
+      margin-inline: auto;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.35vw, 1.12rem);
+      line-height: 1.5;
+    }
+
+    .hero .actions { justify-content: center; }
+
+    .hero-workflow {
+      width: 100%;
+      margin-top: var(--space-5);
+      text-align: left;
+    }
+
+    .hero-workflow .card { box-shadow: 0 2rem 5rem rgba(0,0,0,0.3); }
+    .hero-workflow .request-line { padding: 1.15rem 1.5rem; }
+    .hero-workflow .plan { padding: 1.35rem 1.5rem 0.9rem; }
+    .hero-workflow .plan li { padding: 0.65rem 0; }
+
+    /* ── Intro (centered, Neo pattern) ── */
+    .intro {
+      width: min(100% - 3rem, 57rem);
+      margin-inline: auto;
+      padding: var(--space-6) 0;
+      text-align: center;
+    }
+
+    .intro h2 {
+      margin: var(--space-2) 0 var(--space-3);
+      font-size: clamp(2.7rem, 5.5vw, 5rem);
+      line-height: 1;
+    }
+
+    .intro > p:last-child {
+      max-width: 43rem;
+      margin-inline: auto;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 64rem) {
+      .speed-heading, .models-heading, .orchestration, .foundation { grid-template-columns: 1fr; }
+      .speed-heading, .models-heading { gap: 1rem; }
+      .speed-heading > p:last-child { max-width: 36rem; }
+    }
+
+    @media (max-width: 50rem) {
+      .principles { grid-template-columns: 1fr; }
+      .speed-grid { grid-template-columns: 1fr; }
+      .provider-grid { grid-template-columns: repeat(2, 1fr); }
+      .provider-grid article:nth-child(3) { border-left: 0; }
+      .provider-grid article:nth-child(n + 3) { border-top: 1px solid var(--line); }
+      .principles article, .speed-grid article { padding: 2rem 0; border-left: 0; }
+      .principles article + article, .speed-grid article + article { border-top: 1px solid var(--line); }
+    }
+
+    @media (max-width: 38rem) {
+      .hero h1 { font-size: clamp(2.9rem, 13vw, 4rem); }
+      .actions { flex-direction: column; align-items: stretch; }
+      .hero .actions, .final .actions { align-items: center; }
+      .actions .button { width: 100%; }
+      .foundation dl > div { grid-template-columns: 1fr; gap: 0.35rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+    }
   </style>
 </head>
-<body class="antialiased">
-
-  <!-- NAV -->
-  <nav class="fixed top-0 w-full z-50 border-b border-white/5" style="background: rgba(9,9,11,0.85); backdrop-filter: blur(16px);">
-    <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-      <a href="#" class="flex items-center gap-2 text-white font-semibold text-[15px]">
-        <span class="text-accent text-lg font-mono">~</span> tilde
-      </a>
-      <div class="flex items-center gap-6 text-sm text-zinc-400">
-        <a href="#features" class="hover:text-white transition-colors">Features</a>
-        <a href="#security" class="hover:text-white transition-colors">Security</a>
-        <a href="#compare" class="hover:text-white transition-colors">Compare</a>
-        <a href="#install" class="hover:text-white transition-colors">Install</a>
-        <a href="https://github.com/Chmgx81/tilde" class="hover:text-white transition-colors">GitHub</a>
-      </div>
-    </div>
-  </nav>
+<body>
 
   <!-- HERO -->
-  <section class="relative min-h-screen flex items-center pt-14 overflow-hidden">
-    <div class="w-full max-w-6xl mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center py-20">
-      <!-- Copy -->
-      <div>
-        <p class="text-accent text-xs font-semibold tracking-[0.15em] uppercase mb-5">Fast · Sandbox-first · Open source</p>
-        <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.08] mb-6">
-          <span class="text-white">Built for real</span><br>
-          <span class="text-white">engineering.</span>
-        </h1>
-        <p class="text-lg text-zinc-400 max-w-lg leading-relaxed mb-8">
-          tilde turns complex repository work into a visible workflow. Every tool call, every approval, every failure — rendered in the transcript. No black boxes.
-        </p>
-        <div class="flex flex-col sm:flex-row items-start gap-4 mb-6">
-          <a href="#install" class="bg-white text-black font-semibold px-6 py-3 rounded-lg hover:bg-zinc-200 transition-colors text-[14px]">
-            Install tilde
-          </a>
-          <a href="https://github.com/Chmgx81/tilde" class="border border-white/10 hover:border-white/20 text-zinc-300 hover:text-white font-medium px-6 py-3 rounded-lg transition-colors text-[14px]">
-            View source ↗
-          </a>
-        </div>
-        <div class="relative bg-surface-1 border border-white/10 rounded-lg overflow-hidden">
-          <code class="block px-4 py-3 font-mono text-[13px] text-zinc-400" id="install-cmd">curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh</code>
-          <button onclick="navigator.clipboard.writeText(document.getElementById('install-cmd').textContent);this.textContent='copied';setTimeout(()=>this.textContent='copy',1500)" class="copy-btn">copy</button>
-        </div>
-      </div>
-      <!-- Workflow Demo -->
-      <div class="workflow-card" style="box-shadow: 0 4rem 6rem rgba(0,0,0,0.4);">
-        <div class="workflow-bar">
+  <section class="hero">
+    <p class="label">Fast · Sandbox-first · Open source</p>
+    <h1>Built for real engineering.</h1>
+    <p class="lede">
+      tilde turns complex repository work into a visible workflow. Delegate focused tasks
+      and keep tools, tests, reviews, and delivery moving in one terminal.
+    </p>
+    <div class="actions">
+      <a class="button button-primary" href="#install">Install tilde</a>
+      <a class="text-link" href="https://github.com/Chmgx81/tilde">View on GitHub <span aria-hidden="true">↗</span></a>
+    </div>
+    <div class="install-bar" role="group" aria-label="Install command">
+      <code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh</code>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('install-cmd').textContent);this.textContent='✓';this.classList.add('copied');setTimeout(()=>{this.textContent='copy';this.classList.remove('copied')},1800)" aria-label="Copy install command">copy</button>
+    </div>
+
+    <!-- Workflow demo -->
+    <div class="hero-workflow">
+      <div class="card" role="group" aria-label="Example tilde workflow">
+        <div class="workflow-top">
           <span>~/payments-api · main</span>
-          <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span> build</span>
+          <span class="mode-badge"><i class="status-dot pulse"></i> build</span>
         </div>
-        <div class="px-4 py-3 border-b border-white/5">
-          <div class="text-zinc-200 font-mono text-[13px]"><span class="text-zinc-500">›</span> fix the double-charge bug in checkout</div>
+        <div class="request-line">
+          <span aria-hidden="true">›</span>
+          <p>Fix the double-charge bug in checkout</p>
         </div>
-        <div class="workflow-step">
-          <div class="step-check done">✓</div>
-          <div>
-            <div class="text-zinc-200 text-[13px] font-medium">Trace request path</div>
-            <div class="text-zinc-500 text-[12px] font-mono mt-0.5">Read internal/checkout/handler.go</div>
+        <div class="plan">
+          <div class="plan-meta">
+            <span>Plan</span>
+            <span>2 of 9</span>
           </div>
-        </div>
-        <div class="workflow-step">
-          <div class="step-check done">✓</div>
-          <div>
-            <div class="text-zinc-200 text-[13px] font-medium">Find root cause</div>
-            <div class="text-zinc-500 text-[12px] font-mono mt-0.5">idempotency key per call, not per session</div>
-          </div>
-        </div>
-        <div class="workflow-step">
-          <div class="step-check active"></div>
-          <div>
-            <div class="text-zinc-200 text-[13px] font-medium">Apply fix</div>
-            <div class="text-zinc-500 text-[12px] font-mono mt-0.5">Edit checkout/handler.go · <span class="text-amber-400">needs approval</span></div>
-          </div>
-        </div>
-        <div class="workflow-step">
-          <div class="step-check"></div>
-          <div><div class="text-zinc-500 text-[13px]">Run tests</div></div>
-        </div>
-        <div class="workflow-step">
-          <div class="step-check"></div>
-          <div><div class="text-zinc-500 text-[13px]">Open pull request</div></div>
-        </div>
-        <div class="bg-surface-2 px-4 py-2.5 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-zinc-600">
-          <span>3 of 5 steps</span>
-          <span>tool: edit_file · awaiting [y/n]</span>
+          <ol>
+            <li class="done">
+              <span class="check" aria-hidden="true">✓</span>
+              <div><strong>Create the issue</strong><small>Created GitHub issue #210</small></div>
+            </li>
+            <li class="done">
+              <span class="check" aria-hidden="true">✓</span>
+              <div><strong>Create isolated branch</strong><small>Running git worktree add</small></div>
+            </li>
+            <li>
+              <span class="check active" aria-hidden="true"></span>
+              <div>
+                <strong>Trace and fix the bugs</strong>
+                <small>Reading checkout/handler.go</small>
+                <div class="agent-inline"><span>tool</span><span>creating a clean workspace for the fix</span></div>
+              </div>
+            </li>
+            <li><span class="check" aria-hidden="true"></span><div><strong>Review the diff</strong></div></li>
+            <li><span class="check" aria-hidden="true"></span><div><strong>Run focused tests</strong></div></li>
+            <li><span class="check" aria-hidden="true"></span><div><strong>Open the pull request</strong></div></li>
+            <li><span class="check" aria-hidden="true"></span><div><strong>Watch CI and code review</strong></div></li>
+            <li><span class="check" aria-hidden="true"></span><div><strong>Address feedback</strong></div></li>
+            <li><span class="check" aria-hidden="true"></span><div><strong>Merge the change</strong></div></li>
+          </ol>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- FEATURES -->
-  <section id="features" class="py-24 section-divider">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="grid md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-white/5">
-        <div class="py-10 md:px-8 first:md:pr-8 md:py-0 fade-in">
-          <div class="text-[11px] text-accent font-semibold tracking-[0.12em] uppercase mb-3">01 · Available now</div>
-          <h3 class="text-white font-semibold text-[15px] mb-2">Sandbox-first execution</h3>
-          <p class="text-zinc-500 text-[13px] leading-relaxed">Every shell call runs under bubblewrap on Linux — network denied, filesystem scoped. A compromised agent can't exfiltrate or destroy.</p>
-        </div>
-        <div class="py-10 md:px-8 md:py-0 fade-in">
-          <div class="text-[11px] text-accent font-semibold tracking-[0.12em] uppercase mb-3">02 · Available now</div>
-          <h3 class="text-white font-semibold text-[15px] mb-2">Explicit approvals</h3>
-          <p class="text-zinc-500 text-[13px] leading-relaxed">You see the exact command, the reason, and choose [y]es, [n]o, or [a]lways-this-session. Nothing runs without your say.</p>
-        </div>
-        <div class="py-10 md:px-8 first:md:pl-8 md:py-0 fade-in">
-          <div class="text-[11px] text-accent font-semibold tracking-[0.12em] uppercase mb-3">03 · Available now</div>
-          <h3 class="text-white font-semibold text-[15px] mb-2">Workflow-native</h3>
-          <p class="text-zinc-500 text-[13px] leading-relaxed">See the plan, active work, tool activity, tests, and delegated tasks without reading a wall of chat.</p>
-        </div>
-      </div>
+  <!-- SPEED -->
+  <section class="section section-white">
+    <div class="speed-heading">
+      <p class="label">Built for speed</p>
+      <h2>Less waiting. More useful work in motion.</h2>
+      <p>tilde coordinates visible workflows and focused subagents. Independent reads, searches, and inspection run concurrently while writes stay serial.</p>
+    </div>
+    <div class="speed-grid">
+      <article>
+        <div class="speed-meta"><span>01</span><small>Available now</small></div>
+        <h3>Sandbox-first execution</h3>
+        <p>Every shell call runs under bubblewrap — network denied, filesystem scoped. A compromised agent can't exfiltrate or destroy.</p>
+      </article>
+      <article>
+        <div class="speed-meta"><span>02</span><small>Available now</small></div>
+        <h3>Explicit approvals</h3>
+        <p>You see the exact command, the reason, and choose [y]es, [n]o, or [a]lways-this-session. Nothing runs without your say.</p>
+      </article>
+      <article>
+        <div class="speed-meta"><span>03</span><small>Available now</small></div>
+        <h3>Workflow-native</h3>
+        <p>See the plan, active work, tool activity, tests, and delegated tasks without reading a wall of chat.</p>
+      </article>
     </div>
   </section>
 
-  <!-- THREE MODES -->
-  <section class="py-24 bg-surface-1 section-divider">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="max-w-2xl mb-16">
-        <p class="text-accent text-xs font-semibold tracking-[0.12em] uppercase mb-3">Operating model</p>
-        <h2 class="text-3xl md:text-5xl font-extrabold text-white tracking-tight leading-[1.1] mb-4">You choose how much it does.</h2>
-        <p class="text-zinc-400 text-base leading-relaxed">Three modes, one agent loop. Switch with a single command.</p>
+  <!-- MODELS -->
+  <section class="section">
+    <div class="models-heading">
+      <div>
+        <p class="label">Providers and models</p>
+        <h2>Use the best model for the job.</h2>
       </div>
-      <div class="grid md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-white/5">
-        <div class="p-8 md:py-0 fade-in">
-          <div class="font-mono text-zinc-500 text-[12px] mb-3">plan</div>
-          <div class="text-xl font-bold text-white mb-2">Review</div>
-          <p class="text-zinc-500 text-[13px] leading-relaxed">Inspect, read, grep, search. Proposes changes. Nothing written until you approve.</p>
-        </div>
-        <div class="p-8 md:py-0 relative fade-in">
-          <div class="absolute top-6 md:top-0 left-8 md:left-0 text-[10px] font-semibold text-accent bg-accent/10 border border-accent/20 rounded-full px-2.5 py-0.5">default</div>
-          <div class="font-mono text-accent text-[12px] mb-3 mt-5 md:mt-6">build</div>
-          <div class="text-xl font-bold text-white mb-2">Implement</div>
-          <p class="text-zinc-500 text-[13px] leading-relaxed">Execute approved work. Edits, writes, shell — all visible in the transcript.</p>
-        </div>
-        <div class="p-8 md:py-0 fade-in">
-          <div class="font-mono text-zinc-500 text-[12px] mb-3">auto</div>
-          <div class="text-xl font-bold text-white mb-2">Automate</div>
-          <p class="text-zinc-500 text-[13px] leading-relaxed">Bounded unattended runs. Narrower approval rules. For CI, eval, and batch tasks.</p>
-        </div>
-      </div>
+      <p>Connect Ollama, OpenAI, Anthropic, Gemini, or OpenRouter. Switch models for the active provider from the terminal without changing how tilde works.</p>
     </div>
+    <div class="provider-grid" aria-label="Supported model providers">
+      <article>
+        <div class="provider-icon">O</div>
+        <div><strong>Ollama</strong><small>Local models</small></div>
+      </article>
+      <article>
+        <div class="provider-icon">A</div>
+        <div><strong>Anthropic</strong><small>Claude models</small></div>
+      </article>
+      <article>
+        <div class="provider-icon">○</div>
+        <div><strong>OpenAI</strong><small>GPT models</small></div>
+      </article>
+      <article>
+        <div class="provider-icon">G</div>
+        <div><strong>Gemini</strong><small>Google models</small></div>
+      </article>
+      <article>
+        <div class="provider-icon">R</div>
+        <div><strong>OpenRouter</strong><small>Live catalogue</small></div>
+      </article>
+      <article>
+        <div class="provider-icon">+</div>
+        <div><strong>OpenCode</strong><small>Any provider</small></div>
+      </article>
+      <article>
+        <div class="provider-icon">⊟</div>
+        <div><strong>MCP</strong><small>Extension tools</small></div>
+      </article>
+      <article>
+        <div class="provider-icon">⊞</div>
+        <div><strong>Plugins</strong><small>Marketplace</small></div>
+      </article>
+    </div>
+    <p style="max-width:46rem; margin-top:var(--space-3); color:var(--faint); font-size:0.76rem; line-height:1.6;">Model availability and names come from provider APIs and can change. tilde passes your configured model ID to the active provider.</p>
   </section>
 
-  <!-- PROVIDERS -->
-  <section class="py-24 section-divider">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="grid lg:grid-cols-2 gap-12 items-start">
-        <div>
-          <p class="text-accent text-xs font-semibold tracking-[0.12em] uppercase mb-3">Providers and models</p>
-          <h2 class="text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-[1.1] mb-4">Use the best model for the job.</h2>
-          <p class="text-zinc-400 leading-relaxed max-w-md">Connect Ollama, OpenAI, Anthropic, Gemini, or OpenRouter. Switch models mid-session without changing how tilde works.</p>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div class="provider-card fade-in">
-            <div class="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 font-mono text-xs">O</div>
-            <div><div class="text-zinc-200 text-[13px] font-medium">Ollama</div><div class="text-zinc-600 text-[11px]">Local models</div></div>
-          </div>
-          <div class="provider-card fade-in">
-            <div class="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 font-mono text-xs">A</div>
-            <div><div class="text-zinc-200 text-[13px] font-medium">Anthropic</div><div class="text-zinc-600 text-[11px]">Claude models</div></div>
-          </div>
-          <div class="provider-card fade-in">
-            <div class="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 font-mono text-xs">○</div>
-            <div><div class="text-zinc-200 text-[13px] font-medium">OpenAI</div><div class="text-zinc-600 text-[11px]">GPT models</div></div>
-          </div>
-          <div class="provider-card fade-in">
-            <div class="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 font-mono text-xs">G</div>
-            <div><div class="text-zinc-200 text-[13px] font-medium">Gemini</div><div class="text-zinc-600 text-[11px]">Google models</div></div>
-          </div>
-          <div class="provider-card fade-in">
-            <div class="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 font-mono text-xs">R</div>
-            <div><div class="text-zinc-200 text-[13px] font-medium">OpenRouter</div><div class="text-zinc-600 text-[11px]">Live catalogue</div></div>
-          </div>
-          <div class="provider-card fade-in">
-            <div class="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 font-mono text-xs">+</div>
-            <div><div class="text-zinc-200 text-[13px] font-medium">OpenCode</div><div class="text-zinc-600 text-[11px]">Any provider</div></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECURITY -->
-  <section id="security" class="py-24 bg-surface-1 section-divider">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="grid lg:grid-cols-2 gap-16 items-start">
-        <div>
-          <p class="text-accent text-xs font-semibold tracking-[0.12em] uppercase mb-3">Security</p>
-          <h2 class="text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-[1.1] mb-4">Security isn't a feature.<br>It's the architecture.</h2>
-          <p class="text-zinc-400 leading-relaxed mb-8">tilde assumes every tool call is adversarial until proven otherwise. Policy denies by default. Sandbox restricts execution. Output is scrubbed.</p>
-          <ul class="space-y-3 text-[13px] text-zinc-400">
-            <li class="flex items-start gap-2.5"><span class="text-green-400 mt-0.5 text-sm">✓</span> Bubblewrap sandbox — network egress denied by default</li>
-            <li class="flex items-start gap-2.5"><span class="text-green-400 mt-0.5 text-sm">✓</span> Slopsquatting detection — hallucinated package installs flagged</li>
-            <li class="flex items-start gap-2.5"><span class="text-green-400 mt-0.5 text-sm">✓</span> Trust boundary enforcement — nested MCP calls approval-gated</li>
-            <li class="flex items-start gap-2.5"><span class="text-green-400 mt-0.5 text-sm">✓</span> Output scrubbing — secrets never leak into transcripts</li>
-            <li class="flex items-start gap-2.5"><span class="text-green-400 mt-0.5 text-sm">✓</span> Atomic plugin installs — staged, verified, rollback-capable</li>
-            <li class="flex items-start gap-2.5"><span class="text-green-400 mt-0.5 text-sm">✓</span> Fail-closed defaults — misconfiguration blocks startup, not execution</li>
-          </ul>
-        </div>
-        <div class="code-block text-[12px]">
-<span class="text-zinc-600"># tilde's policy catches this:</span>
-<span class="text-red-400">✗ denied by policy:</span>
-<span class="text-zinc-400">unverified package name in</span>
-<span class="text-zinc-400">"pip install pyjwt-extras-fips"</span>
-
-<span class="text-zinc-600"># Shell injection — fails closed:</span>
-<span class="text-red-400">✗ denied by policy:</span>
-<span class="text-zinc-400">segment contains command</span>
-<span class="text-zinc-400">substitution ($(...))</span>
-
-<span class="text-zinc-600"># Destructive rm — requires approval:</span>
-<span class="text-amber-400">? approve:</span>
-<span class="text-zinc-400">shell_command rm -rf ./build</span>
-<span class="text-zinc-400">[y] approve  [n] deny  [a] always</span>
-
-<span class="text-zinc-600"># Extension can't widen permissions:</span>
-<span class="text-green-400">✓ plugin "auth-tools" loaded</span>
-<span class="text-zinc-500">  tools: read_file, edit_file</span>
-<span class="text-zinc-500">  denied: shell_command, write_file</span>
-        </div>
-      </div>
-    </div>
+  <!-- FROM ISSUE TO MERGE -->
+  <section class="intro">
+    <p class="label">From issue to merge</p>
+    <h2>Follow the work from issue to merge.</h2>
+    <p>tilde can inspect the issue, isolate the work, change the code, run tests, delegate review, open the pull request, and respond to feedback. The workflow stays visible from start to finish.</p>
   </section>
 
   <!-- PRINCIPLES -->
-  <section class="py-24 section-divider">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="max-w-2xl mb-16">
-        <p class="text-accent text-xs font-semibold tracking-[0.12em] uppercase mb-3">Principles</p>
-        <h2 class="text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-[1.1]">Built differently, on purpose.</h2>
+  <section class="principles" aria-label="tilde principles">
+    <article>
+      <span>01</span>
+      <h3>Works in the real repository</h3>
+      <p>Start with the code, git state, project instructions, and tools your team already uses.</p>
+    </article>
+    <article>
+      <span>02</span>
+      <h3>Proves the change</h3>
+      <p>Keep tests, builds, diff review, CI, and feedback inside the same visible workflow.</p>
+    </article>
+    <article>
+      <span>03</span>
+      <h3>Follows your rules</h3>
+      <p>Load project instructions, reusable skills, and optional tool confirmations for the way your team works.</p>
+    </article>
+  </section>
+
+  <!-- SECURITY -->
+  <section class="section section-white">
+    <div class="grid" style="display:grid; grid-template-columns: 0.85fr 1.15fr; gap: var(--space-6); align-items: start;">
+      <div>
+        <p class="label">Security</p>
+        <h2 style="margin-top:var(--space-2); font-size:clamp(2.4rem, 4vw, 3.5rem); line-height:1.1;">Security isn't a feature. It's the architecture.</h2>
+        <p style="color:var(--muted); margin-top:var(--space-3); line-height:1.6;">tilde assumes every tool call is adversarial until proven otherwise. Policy denies by default. Sandbox restricts execution. Output is scrubbed.</p>
+        <ul style="list-style:none; margin-top:var(--space-3);">
+          <li style="padding:0.5rem 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:0.9rem; display:flex; gap:0.6rem;"><span style="color:var(--success);">✓</span> Bubblewrap sandbox — network egress denied by default</li>
+          <li style="padding:0.5rem 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:0.9rem; display:flex; gap:0.6rem;"><span style="color:var(--success);">✓</span> Slopsquatting detection — hallucinated package installs flagged</li>
+          <li style="padding:0.5rem 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:0.9rem; display:flex; gap:0.6rem;"><span style="color:var(--success);">✓</span> Trust boundary enforcement — nested MCP calls approval-gated</li>
+          <li style="padding:0.5rem 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:0.9rem; display:flex; gap:0.6rem;"><span style="color:var(--success);">✓</span> Output scrubbing — secrets never leak into transcripts</li>
+          <li style="padding:0.5rem 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:0.9rem; display:flex; gap:0.6rem;"><span style="color:var(--success);">✓</span> Atomic plugin installs — staged, verified, rollback-capable</li>
+          <li style="padding:0.5rem 0; color:var(--muted); font-size:0.9rem; display:flex; gap:0.6rem;"><span style="color:var(--success);">✓</span> Fail-closed defaults — misconfiguration blocks startup, not execution</li>
+        </ul>
       </div>
-      <div class="grid md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-white/5">
-        <div class="py-8 md:px-8 md:py-0 fade-in">
-          <div class="text-zinc-600 font-mono text-[11px] mb-4">01</div>
-          <h3 class="text-white font-semibold text-[15px] mb-2">Works in the real repository</h3>
-          <p class="text-zinc-500 text-[13px] leading-relaxed">Start with the code, git state, project instructions, and tools your team already uses.</p>
-        </div>
-        <div class="py-8 md:px-8 md:py-0 fade-in">
-          <div class="text-zinc-600 font-mono text-[11px] mb-4">02</div>
-          <h3 class="text-white font-semibold text-[15px] mb-2">Proves the change</h3>
-          <p class="text-zinc-500 text-[13px] leading-relaxed">Keep tests, builds, diff review, CI, and feedback inside the same visible workflow.</p>
-        </div>
-        <div class="py-8 md:px-8 first:md:pl-8 md:py-0 fade-in">
-          <div class="text-zinc-600 font-mono text-[11px] mb-4">03</div>
-          <h3 class="text-white font-semibold text-[15px] mb-2">Follows your rules</h3>
-          <p class="text-zinc-500 text-[13px] leading-relaxed">Load project instructions, reusable skills, and optional tool confirmations for the way your team works.</p>
-        </div>
+      <div class="card" style="padding:1.5rem; font-family:var(--font-mono); font-size:0.78rem; line-height:1.8; color:var(--muted);">
+<span style="color:var(--faint);"># tilde's policy catches this:</span>
+<span style="color:var(--danger);">✗ denied by policy:</span>
+unverified package name in
+"pip install pyjwt-extras-fips"
+
+<span style="color:var(--faint);"># Shell injection — fails closed:</span>
+<span style="color:var(--danger);">✗ denied by policy:</span>
+segment contains command
+substitution ($(...))
+
+<span style="color:var(--faint);"># Destructive rm — requires approval:</span>
+<span style="color:var(--amber);">? approve:</span>
+shell_command rm -rf ./build
+[y] approve  [n] deny  [a] always
+
+<span style="color:var(--faint);"># Extension can't widen permissions:</span>
+<span style="color:var(--success);">✓ plugin "auth-tools" loaded</span>
+  tools: read_file, edit_file
+  denied: shell_command, write_file
       </div>
     </div>
   </section>
 
-  <!-- COMPARE -->
-  <section id="compare" class="py-24 bg-surface-1 section-divider">
-    <div class="max-w-5xl mx-auto px-6">
-      <div class="max-w-2xl mb-12">
-        <p class="text-accent text-xs font-semibold tracking-[0.12em] uppercase mb-3">Compare</p>
-        <h2 class="text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-[1.1] mb-4">How tilde stacks up.</h2>
-        <p class="text-zinc-400 text-[14px] leading-relaxed">Honest comparison. No cherry-picking.</p>
+  <!-- ORCHESTRATION (dark section) -->
+  <section class="section section-dark" style="background:#0f0f12;">
+    <div class="orchestration">
+      <div>
+        <p class="label">Focused delegation</p>
+        <h2>One coordinator. Focused workers.</h2>
+        <p>tilde can start fresh subagents on focused parts of a task and return their findings to one coordinator. You can see who owns each part while runtime limits keep the work bounded.</p>
+        <a class="text-link" href="https://github.com/Chmgx81/tilde/blob/main/docs/ARCHITECTURE.md">How the agent loop works <span aria-hidden="true">→</span></a>
       </div>
-      <div class="bg-surface-2 border border-white/5 rounded-xl overflow-hidden">
-        <div class="compare-row bg-surface-3">
-          <div class="compare-header">Feature</div>
-          <div class="compare-header text-center">tilde</div>
-          <div class="compare-header text-center">Claude Code</div>
-          <div class="compare-header text-center">Codex</div>
-          <div class="compare-header text-center">Kilo</div>
+      <div class="agents-card">
+        <div class="coordinator-row">
+          <span>Neo</span>
+          <strong>Harden webhook verification</strong>
+          <small style="color:var(--accent);">coordinator</small>
         </div>
-        <div class="compare-row">
-          <div class="compare-cell highlight">Local-first</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-zinc-500">partial</div>
-          <div class="text-center text-zinc-500">cloud</div>
-          <div class="text-center text-green-400">✓</div>
+        <div class="agent-row-inner">
+          <span>01</span>
+          <strong>Trace request path</strong>
+          <small style="color:var(--success);">complete</small>
         </div>
-        <div class="compare-row">
-          <div class="compare-cell highlight">Sandboxed shell</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-zinc-600">—</div>
+        <div class="agent-row-inner">
+          <span>02</span>
+          <strong>Check failure modes</strong>
+          <small class="working">working</small>
         </div>
-        <div class="compare-row">
-          <div class="compare-cell highlight">Explicit approvals</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
+        <div class="agent-row-inner">
+          <span>03</span>
+          <strong>Review test coverage</strong>
+          <small>queued</small>
         </div>
-        <div class="compare-row">
-          <div class="compare-cell highlight">Open source</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-        </div>
-        <div class="compare-row">
-          <div class="compare-cell highlight">No subscription required</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-red-400">✗</div>
-          <div class="text-center text-red-400">✗</div>
-          <div class="text-center text-green-400">✓</div>
-        </div>
-        <div class="compare-row">
-          <div class="compare-cell highlight">No telemetry</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-zinc-500">partial</div>
-          <div class="text-center text-zinc-500">partial</div>
-          <div class="text-center text-zinc-500">partial</div>
-        </div>
-        <div class="compare-row">
-          <div class="compare-cell highlight">Plugin system</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-        </div>
-        <div class="compare-row">
-          <div class="compare-cell highlight">Resumable sessions</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-        </div>
-        <div class="compare-row">
-          <div class="compare-cell highlight">Headless / CI mode</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-          <div class="text-center text-green-400">✓</div>
-        </div>
+        <p style="padding:1rem 0; color:var(--faint); font-size:0.7rem; text-align:right;">Depth, fan-out, runtime, and agent count stay capped.</p>
       </div>
     </div>
   </section>
 
-  <!-- ARCHITECTURE -->
-  <section class="py-24 section-divider">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="grid lg:grid-cols-2 gap-16 items-center">
-        <div>
-          <p class="text-accent text-xs font-semibold tracking-[0.12em] uppercase mb-3">Architecture</p>
-          <h2 class="text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-[1.1] mb-4">Layered by design.</h2>
-          <p class="text-zinc-400 leading-relaxed mb-8">Every component has an explicit boundary. No layer can bypass another.</p>
-          <dl class="space-y-4">
-            <div class="flex items-start gap-3">
-              <span class="text-accent font-mono text-[11px] mt-0.5">01</span>
-              <div><dt class="text-white text-[14px] font-medium">Policy gate</dt><dd class="text-zinc-500 text-[13px]">Deny by default. Every tool call passes through.</dd></div>
-            </div>
-            <div class="flex items-start gap-3">
-              <span class="text-accent font-mono text-[11px] mt-0.5">02</span>
-              <div><dt class="text-white text-[14px] font-medium">Sandbox boundary</dt><dd class="text-zinc-500 text-[13px]">bwrap / podman isolation. Network, filesystem, process scoped.</dd></div>
-            </div>
-            <div class="flex items-start gap-3">
-              <span class="text-accent font-mono text-[11px] mt-0.5">03</span>
-              <div><dt class="text-white text-[14px] font-medium">Tool execution</dt><dd class="text-zinc-500 text-[13px]">Bounded capabilities. Output scrubbed. Failures surfaced.</dd></div>
-            </div>
-            <div class="flex items-start gap-3">
-              <span class="text-accent font-mono text-[11px] mt-0.5">04</span>
-              <div><dt class="text-white text-[14px] font-medium">Append-only log</dt><dd class="text-zinc-500 text-[13px]">Everything recorded. Resumable sessions. Crash-safe.</dd></div>
-            </div>
-          </dl>
-        </div>
-        <div class="code-block font-mono text-[12px] leading-loose text-zinc-400">
-<span class="text-zinc-600">CLI / TUI</span>
-  <span class="text-zinc-600">└─</span> session + transcript
-      <span class="text-zinc-600">└─</span> agent loop + budgets
-          <span class="text-zinc-600">├─</span> <span class="text-accent">policy / approval</span>
-          <span class="text-zinc-600">├─</span> tool registry
-          <span class="text-zinc-600">│</span>   <span class="text-zinc-600">├─</span> built-in tools
-          <span class="text-zinc-600">│</span>   <span class="text-zinc-600">├─</span> MCP servers
-          <span class="text-zinc-600">│</span>   <span class="text-zinc-600">└─</span> plugins / hooks / skills
-          <span class="text-zinc-600">├─</span> provider adapters
-          <span class="text-zinc-600">└─</span> <span class="text-zinc-500">append-only session log</span>
-        </div>
+  <!-- FOUNDATION -->
+  <section class="section">
+    <div class="foundation">
+      <div>
+        <p class="label">The foundation</p>
+        <h2>One Go binary. No runtime or plugin stack.</h2>
       </div>
+      <dl>
+        <div><dt>Built-in tools</dt><dd>Read, search, edit, write, and run shell commands without adding plugins.</dd></div>
+        <div><dt>Local sessions</dt><dd>Resume or search past work from session files stored on your disk.</dd></div>
+        <div><dt>Open source</dt><dd>Read the code that runs commands and edits files in your repository.</dd></div>
+        <div><dt>No telemetry</dt><dd>tilde does not send product analytics from your machine.</dd></div>
+      </dl>
     </div>
   </section>
 
-  <!-- INSTALL -->
-  <section id="install" class="py-24 bg-surface-1 section-divider">
-    <div class="max-w-3xl mx-auto px-6 text-center">
-      <p class="text-accent text-xs font-semibold tracking-[0.12em] uppercase mb-3">Quick start</p>
-      <h2 class="text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-[1.1] mb-4">Try tilde in a real repository.</h2>
-      <p class="text-zinc-400 text-[15px] mb-10">Install the binary, connect a model, and run <code class="text-zinc-200 font-mono text-[13px]">tilde</code>.</p>
-
-      <div class="text-left mb-8">
-        <div class="relative bg-surface-2 border border-white/10 rounded-lg overflow-hidden">
-          <code class="block px-5 py-4 font-mono text-[13px] text-zinc-400"><span class="text-zinc-600">$</span> curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh</code>
-          <button onclick="navigator.clipboard.writeText('curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh');this.textContent='copied';setTimeout(()=>this.textContent='copy',1500)" class="copy-btn">copy</button>
-        </div>
-      </div>
-
-      <div class="grid sm:grid-cols-3 gap-6 text-left">
-        <div>
-          <div class="text-zinc-600 text-[11px] font-mono uppercase tracking-wider mb-1">linux</div>
-          <div class="text-zinc-300 text-[13px]">amd64, arm64</div>
-          <div class="text-zinc-600 text-[11px] mt-0.5">bubblewrap sandbox</div>
-        </div>
-        <div>
-          <div class="text-zinc-600 text-[11px] font-mono uppercase tracking-wider mb-1">macos</div>
-          <div class="text-zinc-300 text-[13px]">amd64, arm64</div>
-          <div class="text-zinc-600 text-[11px] mt-0.5">no sandbox (opt-in)</div>
-        </div>
-        <div>
-          <div class="text-zinc-600 text-[11px] font-mono uppercase tracking-wider mb-1">providers</div>
-          <div class="text-zinc-300 text-[13px]">ollama, openai, anthropic</div>
-          <div class="text-zinc-600 text-[11px] mt-0.5">openrouter, gemini</div>
-        </div>
-      </div>
-
-      <div class="mt-12 code-block text-left text-[12px]">
-<span class="text-zinc-600"># connect a model (or use local ollama)</span>
-<span class="text-zinc-400">$ export ANTHROPIC_API_KEY="sk-ant-..."</span>
-
-<span class="text-zinc-600"># start in your project</span>
-<span class="text-zinc-400">$ cd your-project</span>
-<span class="text-zinc-400">$ tilde</span>
-
-<span class="text-zinc-600"># or run headless</span>
-<span class="text-zinc-400">$ tilde --prompt "fix the failing tests" --output json</span>
-      </div>
+  <!-- FINAL CTA -->
+  <section class="final">
+    <p class="label">tilde Harness</p>
+    <h2>Try tilde in a real repository.</h2>
+    <p>Install the binary, connect a model provider, and run <code>tilde</code>.</p>
+    <div class="actions" style="justify-content:center; margin-top:2rem;">
+      <a class="button button-primary" href="#install">Install tilde</a>
+      <a class="text-link" href="https://github.com/Chmgx81/tilde/blob/main/docs/ARCHITECTURE.md">Read the docs <span aria-hidden="true">→</span></a>
     </div>
   </section>
 
-  <!-- FOOTER -->
-  <footer class="py-12 px-6 section-divider">
-    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-      <div class="text-zinc-600 text-[13px]">
-        <span class="text-zinc-500 font-mono">~</span> tilde · built for engineers who read the diff before approving it
-      </div>
-      <div class="flex items-center gap-6 text-[13px] text-zinc-500">
-        <a href="https://github.com/Chmgx81/tilde" class="hover:text-zinc-300 transition-colors">GitHub</a>
-        <a href="https://github.com/Chmgx81/tilde/blob/main/docs/ARCHITECTURE.md" class="hover:text-zinc-300 transition-colors">Docs</a>
-        <span class="font-mono text-zinc-600">v0.9.1</span>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-    }, { threshold: 0.1 });
-    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
-  </script>
 </body>
 </html>
