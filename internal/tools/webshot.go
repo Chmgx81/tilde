@@ -25,6 +25,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -42,6 +44,10 @@ type WebShot struct {
 	// Runner spawns the browser; injectable for hermetic tests.
 	// Default (nil) is exec.LookPath + exec.CommandContext output.
 	Runner func(ctx context.Context, binary string, args ...string) ([]byte, error)
+	// ResolveFinal resolves the redirect chain before the screenshot;
+	// injectable so hermetic tests can bypass the network. Default (nil)
+	// is resolveShotTarget (per-hop SSRF validation).
+	ResolveFinal func(ctx context.Context, raw string) (string, error)
 	// LookPath finds the browser binary; injectable for hermetic tests.
 	// Default (nil) is exec.LookPath.
 	LookPath func(string) (string, error)
@@ -68,9 +74,65 @@ const (
 	webShotMinWidth  = 640
 	webShotMaxWidth  = 3840
 	webShotDefHeight = 900
+	webShotMinHeight = 480
+	webShotMaxHeight = 2160
 	webShotDefSecs   = 45
 	webShotMaxSecs   = 120
 )
+
+// resolveShotTarget follows the URL's redirect chain and returns the
+// final URL, validating EVERY hop with the same SSRF rules as the
+// initial target. Firefox cannot hook redirects, so without this a
+// public start URL could redirect the unsandboxed browser to a
+// private/loopback host. Returns the input unchanged when there are no
+// redirects. Residual TOCTOU (DNS changing between this check and the
+// browser's fetch) is accepted and documented: screenshots remain
+// ask-tier, human-reviewed output.
+//
+// hostOK mirrors the tool's network gate for redirect targets: when set,
+// every hop must pass it in addition to the SSRF rules — matching
+// web_fetch, which refuses redirects to non-allow_net hosts. Nil hostOK
+// means "any public host" (session-wide network opt-in).
+func resolveShotTarget(ctx context.Context, raw string, hostOK func(host string) bool) (string, error) {
+	client := &http.Client{
+		Timeout: 20 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("refused %q: too many redirects", raw)
+			}
+			if err := validateFetchTarget(req.Context(), req.URL); err != nil {
+				return err
+			}
+			if hostOK != nil && !hostOK(req.URL.Hostname()) {
+				return fmt.Errorf("refused %q: redirect target %q is not in the approved hosts — add it via allow_net or TILDE_ALLOW_NET=1", raw, req.URL.Hostname())
+			}
+			return nil
+		},
+	}
+	// HEAD first (cheap); some servers reject it — fall back to a
+	// bounded GET that discards the body. The status is ignored: a 404
+	// page is still a legitimate screenshot subject; only the redirect
+	// *targets* are security-relevant, and those were validated per hop.
+	for _, method := range []string{"HEAD", "GET"} {
+		req, err := http.NewRequestWithContext(ctx, method, raw, nil)
+		if err != nil {
+			return "", err
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("refused %q: redirect chain check failed: %v", raw, err)
+		}
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+		final := resp.Request.URL.String()
+		status := resp.StatusCode
+		closeRespBody(resp)
+		if status == http.StatusMethodNotAllowed && method == "HEAD" {
+			continue
+		}
+		return final, nil
+	}
+	return "", fmt.Errorf("refused %q: redirect chain check failed", raw)
+}
 
 func (t *WebShot) Exec(ctx context.Context, args map[string]any) (string, error) {
 	raw, err := strArg(args, "url")
@@ -93,12 +155,35 @@ func (t *WebShot) Exec(ctx context.Context, args map[string]any) (string, error)
 	}
 	// Shared SSRF helpers from webfetch.go (same package): IP literal,
 	// DNS-resolution, and private/loopback/link-local rules. Firefox
-	// follows redirects on its own, so this pre-check covers only the
-	// initial target: a public start URL can still redirect the browser
-	// to a private/loopback host. Treat screenshots of untrusted pages
-	// as untrusted input — never screenshot URLs from untrusted content
-	// without user approval (ask-tier), and prefer web_fetch (which
-	// re-validates every redirect) when only the text is needed.
+	// follows redirects on its own, so resolve the redirect chain FIRST
+	// with per-hop validation and screenshot the final URL: a public
+	// start URL redirecting the browser to a private/loopback host
+	// (classic SSRF) is refused here instead.
+	resolve := t.ResolveFinal
+	if resolve == nil {
+		// Default: per-hop SSRF validation plus the tool's own host
+		// gate on every redirect target (nil = session-wide opt-in,
+		// any public host). A HostAllow-only session stays scoped:
+		// example.com → evil-public.com is refused, like web_fetch.
+		var hostOK func(host string) bool
+		if t.AllowNet == nil || !t.AllowNet() {
+			allow := t.HostAllow
+			hostOK = func(host string) bool { return allow != nil && allow(host) }
+		}
+		resolve = func(ctx context.Context, raw string) (string, error) {
+			return resolveShotTarget(ctx, raw, hostOK)
+		}
+	}
+	finalURL, err := resolve(ctx, raw)
+	if err != nil {
+		return "", err
+	}
+	if finalURL != raw {
+		u, err = url.Parse(finalURL)
+		if err != nil {
+			return "", fmt.Errorf("refused %q: redirect target unparseable: %v", raw, err)
+		}
+	}
 	if err := validateFetchTarget(ctx, u); err != nil {
 		return "", err
 	}
@@ -112,6 +197,10 @@ func (t *WebShot) Exec(ctx context.Context, args map[string]any) (string, error)
 	height := optInt(args, "height", webShotDefHeight)
 	if height <= 0 {
 		height = webShotDefHeight
+	} else if height < webShotMinHeight {
+		height = webShotMinHeight
+	} else if height > webShotMaxHeight {
+		height = webShotMaxHeight
 	}
 	if v, ok := args["full"]; ok && v != nil {
 		if _, ok := v.(bool); !ok {

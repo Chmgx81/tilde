@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -65,6 +66,31 @@ func main() {
 	apiBase := flag.String("api-base", "", "OpenAI-compatible base URL (default $OPENAI_BASE_URL or https://api.openai.com/v1)")
 	apiKey := flag.String("api-key", "", "API key (default $OPENAI_API_KEY)")
 	versionFlag := flag.Bool("version", false, "Print version and exit")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, `tilde — security-first terminal coding agent
+
+Usage:
+  tilde [flags]                    start the interactive TUI
+  tilde --prompt "goal" [flags]    run one headless goal and exit
+  tilde <command> [args]           management commands (each has its own --help)
+
+Commands:
+  plugin  install|upgrade|enable|disable|remove|rollback|verify|list
+  trust|untrust <dir>              record or clear project trust
+  ide-bridge                       stdio JSON bridge for IDE hosts (chat approvals deny)
+  audit   [--since T] [--tool N] [--decision D] [--json]
+                                   read the append-only audit log
+  run-due [--yes]                  run due scheduled jobs now
+  prune   [--sessions D|--audit D] [--yes]
+                                   delete old sessions / trim audit log (dry run by default)
+  fork <id> [--at RFC3339]         branch a session at a message
+  models                           list the provider model catalog
+  update                           pull, rebuild, and reinstall tilde
+
+Flags:
+`)
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	if *versionFlag {
@@ -948,7 +974,7 @@ func saveEvalReport(reports []eval.TaskReport) {
 		return
 	}
 	dir := filepath.Join(home, ".tilde", "evals")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return
 	}
 	data, _ := json.MarshalIndent(map[string]any{
@@ -956,7 +982,8 @@ func saveEvalReport(reports []eval.TaskReport) {
 		"reports": reports,
 	}, "", "  ")
 	path := filepath.Join(dir, fmt.Sprintf("eval-%d.json", time.Now().Unix()))
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	// 0600: reports embed model output, which may echo secrets.
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		fmt.Fprintf(os.Stderr, "tilde: warning: cannot save eval report: %v\n", err)
 		return
 	}
@@ -997,7 +1024,9 @@ func runHeadless(loop *agent.Loop, goal string, yes bool, format string) {
 		if asJSON {
 			emitJSON(map[string]any{"type": "approval", "tool": tool, "args": args})
 		} else {
-			fmt.Printf("approve %s? [y/n] ", policy.Describe(tool, args))
+			// stderr: stdout may be piped as data (assistant text /
+			// final answer); the interactive prompt is a diagnostic.
+			fmt.Fprintf(os.Stderr, "approve %s? [y/n] ", policy.Describe(tool, args))
 		}
 		// Bounded stdin: a headless run with no one at the keyboard must
 		// deny instead of hanging forever. /dev/null EOF reads return
@@ -1069,11 +1098,11 @@ func runHeadless(loop *agent.Loop, goal string, yes bool, format string) {
 		}
 	})
 	if err != nil {
-		code := headlessExitCode(err, text, false)
+		code := headlessExitCode(err, text, denyHit)
 		class := provider.Classify(err)
 		if asJSON {
 			emitJSON(map[string]any{"type": "result", "ok": false, "error": err.Error(), "class": class,
-				"tokens_in": loop.TotPrompt, "tokens_out": loop.TotCompletion})
+				"tokens_in": loop.TotPrompt.Load(), "tokens_out": loop.TotCompletion.Load()})
 		} else {
 			fmt.Fprintf(os.Stderr, "tilde [%s]: %s\n", class, err)
 		}
@@ -1081,7 +1110,7 @@ func runHeadless(loop *agent.Loop, goal string, yes bool, format string) {
 	}
 	if asJSON {
 		emitJSON(map[string]any{"type": "result", "ok": true, "text": text,
-			"tokens_in": loop.TotPrompt, "tokens_out": loop.TotCompletion})
+			"tokens_in": loop.TotPrompt.Load(), "tokens_out": loop.TotCompletion.Load()})
 		if denyHit {
 			os.Exit(5)
 		}
@@ -1122,7 +1151,9 @@ func offerResume(unclosed, root string) bool {
 
 // sessionMetaRoot reads a session file's meta root ("" when the file
 // is missing, corrupt, or never recorded one — all read as "not
-// mine"). Bounded: only the first 100 lines are scanned.
+// mine"). Bounded: only the first 100 lines are scanned. A scanner
+// error (e.g. an over-long line aborting the scan) is reported on
+// stderr rather than silently suppressing a legitimate resume offer.
 func sessionMetaRoot(id string) string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -1146,6 +1177,9 @@ func sessionMetaRoot(id string) string {
 		if r, _ := e.Data["root"].(string); r != "" {
 			return r
 		}
+	}
+	if err := sc.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "tilde: session %q unreadable past the scanned prefix (%v) — not offered for resume; inspect the file directly\n", id, err)
 	}
 	return ""
 }
@@ -1302,26 +1336,35 @@ func runDueCmd(args []string) error {
 	}
 	failed := 0
 	for _, j := range due {
-		fmt.Printf("tilde: run-due: job %q ...\n", j.ID)
+		fmt.Fprintf(os.Stderr, "tilde: run-due: job %q ...\n", j.ID)
 		cmdArgs := []string{"--prompt", j.Prompt, "--mode", "build"}
 		if yes {
 			cmdArgs = append(cmdArgs, "--yes")
 		}
-		cmd := exec.Command(self, cmdArgs...)
+		// Bound each child: the scheduler lock is held for the whole
+		// loop, so one hung job must not wedge every future tick into
+		// "already running". Progress goes to stderr — the child
+		// inherits this process's stdout, which may be piped as data.
+		jobCtx, jobCancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		cmd := exec.CommandContext(jobCtx, self, cmdArgs...)
 		cmd.Dir = root
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "tilde: run-due: job %q failed (%v) — not marked, retries next tick\n", j.ID, err)
+		runErr := cmd.Run()
+		jobCancel()
+		if runErr != nil {
+			fmt.Fprintf(os.Stderr, "tilde: run-due: job %q failed (%v) — not marked, retries next tick\n", j.ID, runErr)
 			failed++
 			continue
 		}
-		st = schedule.MarkRun(st, j.ID, now)
+		// Stamp completion time, not loop-start time: a long job must
+		// not become due again sooner than `every` after it finished.
+		st = schedule.MarkRun(st, j.ID, time.Now())
 		if err := schedule.SaveState(statePath, st); err != nil {
 			return err
 		}
-		fmt.Printf("tilde: run-due: job %q done\n", j.ID)
+		fmt.Fprintf(os.Stderr, "tilde: run-due: job %q done\n", j.ID)
 	}
 	if failed > 0 {
 		return fmt.Errorf("%d of %d jobs failed", failed, len(due))
@@ -1391,7 +1434,10 @@ func parseRetention(raw *string, flag string) (time.Duration, error) {
 	s := strings.TrimSpace(*raw)
 	if n, ok := strings.CutSuffix(s, "d"); ok {
 		var days float64
-		if _, err := fmt.Sscanf(n, "%g", &days); err != nil || days < 0 {
+		// %g accepts NaN/Inf and NaN < 0 is false, so without the
+		// finiteness check "NaNd" would validate and convert to a
+		// destructive duration (session wipe). Reject non-finite input.
+		if _, err := fmt.Sscanf(n, "%g", &days); err != nil || days < 0 || math.IsNaN(days) || math.IsInf(days, 0) {
 			return 0, fmt.Errorf("bad --%s %q: want a day count like 30d or a Go duration like 720h", flag, *raw)
 		}
 		return time.Duration(days * 24 * float64(time.Hour)), nil
@@ -1487,11 +1533,23 @@ func runPluginCmd(args []string) error {
 		return nil
 	case "install":
 		if len(args) < 3 || len(args) > 4 {
-			return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade]")
+			return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade|--dry-run]")
 		}
 		upgrade := len(args) > 3 && args[3] == "--upgrade"
-		if len(args) == 4 && !upgrade {
-			return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade]")
+		dry := len(args) > 3 && args[3] == "--dry-run"
+		if len(args) == 4 && !upgrade && !dry {
+			return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade|--dry-run]")
+		}
+		if dry {
+			name, version, files, err := plugin.DryRun(args[2])
+			if err != nil {
+				return err
+			}
+			fmt.Printf("tilde: plugin %q %s would install %d files (nothing written):\n", name, version, len(files))
+			for _, f := range files {
+				fmt.Printf("  %s\n", f)
+			}
+			return nil
 		}
 		if upgrade {
 			if _, err := plugin.Upgrade(args[2], home); err != nil {
@@ -1553,17 +1611,19 @@ func runPluginCmd(args []string) error {
 }
 
 func pluginUsageError() error {
-	return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade] | upgrade <dir> | enable|disable|remove|rollback <name> | verify <name> | list")
+	return fmt.Errorf("usage: tilde plugin install <dir> [--upgrade|--dry-run] | upgrade <dir> | enable|disable|remove|rollback <name> | verify <name> | list")
 }
 
 // headlessExitCode maps a loop outcome to the spec §4 table: 3 = provider
 // error exhausted, 4 = doom-loop / iteration-cap handoff, 5 = deny-tier
 // hit, 1 = uncategorized. Config/startup is 2, wired at the call sites.
 func headlessExitCode(err error, text string, denyHit bool) int {
+	// A deny-tier outcome is sticky: even when the run later errors
+	// (e.g. handoff), callers must still see exit 5, not a generic 1.
+	if denyHit {
+		return 5
+	}
 	if err == nil {
-		if denyHit {
-			return 5
-		}
 		return 0
 	}
 	msg := err.Error()

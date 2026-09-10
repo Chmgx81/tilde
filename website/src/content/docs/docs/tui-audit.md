@@ -114,6 +114,10 @@ that the character ceiling was reached when truncation is reported. A future
 pass should add a quiet count near the composer only when the input is near
 the limit.
 
+DONE 2026-09-10: the composer shows a live `○ N / 16,000 chars` count past
+80% of the cap (`composerView`), backed by the existing CharLimit +
+truncate-with-notice guards.
+
 ### Processing and thinking
 
 The UI avoids false activity: tool output is the progress signal while tools
@@ -137,16 +141,19 @@ including expansion of collapsed paste bodies.
 
 Help, sessions, skills, marketplace, login, and approval surfaces have clear
 escape paths and keyboard ownership. The marketplace uses one registry with
-tabs rather than separate concepts. The remaining gap is consistent empty
-state action copy across every picker; some states say what to do next while
-others only report that no rows match.
+tabs rather than separate concepts. Empty states are actionable everywhere:
+slash ("no command matches — type / to browse"), marketplace ("no matching
+items"), skills ("no skills match — backspace to clear the filter"), and @
+("○ no files match — esc to dismiss"). Verified 2026-09-10; no open gap.
 
 ### Color, contrast, and meaning
 
 State is never color-only: mode names, status words, symbols, and layout carry
-meaning. The palette now adapts to light/dark terminals. A future accessibility
-pass should add deterministic tests for ANSI/256-color profiles and explicit
-ASCII glyph fallback, not only `NO_COLOR` color removal.
+meaning. The palette now adapts to light/dark terminals. `NO_COLOR` selects
+the Ascii color profile, and `TestStateMarkersSurviveColorStripping` pins
+that @/help state markers stay readable with all ANSI styling removed.
+A future accessibility pass may still add 256-color profile snapshots;
+no open gap for the shipped vocabulary.
 
 ### Motion and transitions
 
@@ -184,8 +191,8 @@ specific implementation path.
 
 ## Next focused pass
 
-1. Add near-limit composer capacity feedback.
-2. Standardize actionable empty states across all pickers.
-3. Add color-profile and ASCII-glyph snapshot coverage.
-4. Add a PTY smoke test for resize, Ctrl+C/Esc cancellation, and terminal cleanup.
+1. ~~Add near-limit composer capacity feedback.~~ DONE 2026-09-10.
+2. ~~Standardize actionable empty states across all pickers.~~ DONE 2026-09-10.
+3. ~~Add color-profile and ASCII-glyph snapshot coverage.~~ DONE (Ascii-profile + marker-stripping test) 2026-09-10; 256-color snapshots optional.
+4. Add a PTY smoke test for resize, Ctrl+C/Esc cancellation, and terminal cleanup. (Still open.)
 5. Re-run the audit after browser/vision surfaces become implemented rather than only specified.

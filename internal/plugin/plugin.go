@@ -384,6 +384,19 @@ func LoadLockfile(installedDir string) (*Lockfile, error) {
 // Reinstall (--upgrade) to re-pin. An existing clean install of the same
 // version is a no-op success; a clean install of a different version is
 // refused so upgrades stay explicit via Reinstall.
+// DryRun validates a source plugin and reports what install would copy,
+// without writing anything. Preview for the destructive install path.
+func DryRun(srcDir string) (name, version string, files []string, err error) {
+	m, err := LoadManifest(srcDir)
+	if err != nil {
+		return "", "", nil, err
+	}
+	if err := m.Validate(srcDir); err != nil {
+		return "", "", nil, err
+	}
+	return m.Name, m.Version, m.Files(), nil
+}
+
 func Install(srcDir, pluginHome string) (string, error) {
 	m, err := LoadManifest(srcDir)
 	if err != nil {
@@ -869,6 +882,14 @@ func mustVersion(dir string) string {
 // the lockfile from the installed bytes. A failed install removes dest so a
 // retry starts clean.
 func installFresh(m *Manifest, srcDir, dest string) error {
+	// Full re-validation immediately before copying: the source tree is
+	// untrusted and may have changed since an earlier Validate call.
+	// Kind-specific caps (skill vs resource bytes) are enforced here;
+	// the per-file Stat/link re-check in the loop below covers swaps
+	// between this validation and each individual copy.
+	if err := m.Validate(srcDir); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return fmt.Errorf("plugin %q: cannot create %q: %v", m.Name, dest, err)
 	}
@@ -881,6 +902,22 @@ func installFresh(m *Manifest, srcDir, dest string) error {
 	for _, rel := range m.Files() {
 		src, err := resolveInside(srcDir, rel)
 		if err != nil {
+			return fmt.Errorf("plugin %q: %q: %v", m.Name, rel, err)
+		}
+		// Re-verify at copy time, not just at Validate time: the source
+		// tree may have changed between check and copy (TOCTOU). Same
+		// gates as validation — regular file, size cap, symlink inside.
+		info, err := os.Stat(src)
+		if err != nil {
+			return fmt.Errorf("plugin %q: cannot read %q: %v", m.Name, rel, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("plugin %q: %q is not a regular file", m.Name, rel)
+		}
+		if info.Size() > MaxResourceBytes {
+			return fmt.Errorf("plugin %q: %q is %d bytes (cap %d)", m.Name, rel, info.Size(), MaxResourceBytes)
+		}
+		if err := checkLinkInside(srcDir, src); err != nil {
 			return fmt.Errorf("plugin %q: %q: %v", m.Name, rel, err)
 		}
 		data, err := os.ReadFile(src)

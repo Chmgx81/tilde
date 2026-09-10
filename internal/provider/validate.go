@@ -13,6 +13,15 @@ import (
 // key is worse than an absent one). networkErr distinguishes "endpoint
 // unreachable" from "key rejected": the remedies differ (/login retry
 // vs. check the key).
+// closeBody closes a response body, tolerating nils: http.Do guarantees a
+// non-nil body on success today, but a future edit adding a new retry path
+// must not turn a bare Close into a nil-deref panic on this hot path.
+func closeBody(resp *http.Response) {
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+}
+
 func Validate(providerID, key, base string) (ok bool, networkErr bool, err error) {
 	if strings.TrimSpace(key) == "" {
 		return false, false, errors.New("empty key")

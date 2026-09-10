@@ -969,7 +969,6 @@ body:has(.tilde-home) .site-title::after {
 
 /* ── Responsive ── */
 @media (max-width: 64rem) {
-  .tilde-product-heading,
   .tilde-models-heading,
   .tilde-speed-heading,
   .tilde-orchestration,
@@ -977,7 +976,6 @@ body:has(.tilde-home) .site-title::after {
     grid-template-columns: 1fr;
   }
 
-  .tilde-product-heading,
   .tilde-models-heading,
   .tilde-speed-heading {
     gap: 1rem;
@@ -1086,7 +1084,6 @@ body:has(.tilde-home) .site-title::after {
     width: 100%;
   }
 
-  .tilde-product,
   .tilde-models,
   .tilde-orchestration {
     padding-inline: 1rem;

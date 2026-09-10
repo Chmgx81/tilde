@@ -9,7 +9,7 @@ const providers = [
   { name: 'OpenAI', detail: 'GPT models', slug: 'openai' },
   { name: 'Gemini', detail: 'Google models', slug: 'gemini' },
   { name: 'OpenRouter', detail: 'Live catalogue', slug: 'openrouter' },
-  { name: 'MCP', detail: 'Extension tools', slug: 'mcp' },
+  { name: 'OpenCode', detail: 'Any provider', slug: 'opencode' },
 ];
 
 const productWorkflow = {
@@ -54,7 +54,7 @@ const agentWorkflow = {
         and keep tools, tests, reviews, and delivery moving in one terminal.
       </p>
       <div class="tilde-actions">
-        <a class="tilde-button tilde-button-primary" href="/docs/install/">Install tilde</a>
+        <a class="tilde-button tilde-button-primary" href="https://github.com/Chmgx81/tilde">Install tilde</a>
         <a class="tilde-text-link" href="https://github.com/Chmgx81/tilde">View on GitHub <span aria-hidden="true">↗</span></a>
       </div>
       <div class="tilde-install" role="group" aria-label="Install command">
@@ -106,7 +106,7 @@ const agentWorkflow = {
         <h2 id="models-title">Use the best model for the job.</h2>
       </div>
       <p>
-        Connect Ollama, OpenAI, Anthropic, Gemini, or OpenRouter. Switch models for the active provider
+        Connect Ollama, OpenAI, Anthropic, Gemini, OpenRouter, or OpenCode. Switch models for the active provider
         from the terminal without changing how tilde works.
       </p>
     </div>
@@ -159,18 +159,19 @@ const agentWorkflow = {
         tilde can start fresh subagents on focused parts of a task and return their findings to one
         coordinator. You can see who owns each part while runtime limits keep the work bounded.
       </p>
-      <a class="tilde-text-link" href="/docs/reference/guides/agent-loop/">How the agent loop works <span aria-hidden="true">→</span></a>
+      <a class="tilde-text-link" href="/docs/architecture/">How the agent loop works <span aria-hidden="true">→</span></a>
     </div>
     <DemoWorkflow {...agentWorkflow} />
   </section>
 
   <section class="tilde-foundation" aria-labelledby="foundation-title">
     <div>
-      <p class="tilde-label">The foundation</p>
-      <h2 id="foundation-title">One Go binary. No runtime or plugin stack.</h2>
+        <p class="tilde-label">The foundation</p>
+        <h2 id="foundation-title">One Go binary. No runtime to install.</h2>
     </div>
     <dl>
       <div><dt>Built-in tools</dt><dd>Read, search, edit, write, and run shell commands without adding plugins.</dd></div>
+      <div><dt>Hash-pinned plugins</dt><dd>Extend with skills, hooks, and MCP servers from sources you trust.</dd></div>
       <div><dt>Local sessions</dt><dd>Resume or search past work from session files stored on your disk.</dd></div>
       <div><dt>Open source</dt><dd>Read the code that runs commands and edits files in your repository.</dd></div>
       <div><dt>No telemetry</dt><dd>tilde does not send product analytics from your machine.</dd></div>
@@ -182,8 +183,8 @@ const agentWorkflow = {
     <h2 id="final-title">Try tilde in a real repository.</h2>
     <p>Install the binary, connect a model provider, and run <code>tilde</code>.</p>
     <div class="tilde-actions">
-      <a class="tilde-button tilde-button-primary" href="/docs/install/">Install tilde</a>
-      <a class="tilde-text-link" href="/docs/quick-start/">Read the quick start <span aria-hidden="true">→</span></a>
+      <a class="tilde-button tilde-button-primary" href="https://github.com/Chmgx81/tilde">Install tilde</a>
+      <a class="tilde-text-link" href="/docs/plan/">Read the build plan <span aria-hidden="true">→</span></a>
     </div>
   </section>
 </div>

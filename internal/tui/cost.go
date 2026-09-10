@@ -58,9 +58,9 @@ func (m *Model) costSuffix() string {
 	}
 	in, out := 0, 0
 	if m.loop != nil {
-		// Run owns these writes; the bar only reads (same discipline
-		// as the post-turn receipt in agentDoneMsg).
-		in, out = m.loop.TotPrompt, m.loop.TotCompletion
+		// Live reads race Run's writes only via atomics; int() narrows
+		// the owned receipt back to a display width.
+		in, out = int(m.loop.TotPrompt.Load()), int(m.loop.TotCompletion.Load())
 	}
 	return buildCostSuffix(in, out, m.costIn, m.costOut, true)
 }

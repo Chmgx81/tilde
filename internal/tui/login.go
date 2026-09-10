@@ -48,7 +48,14 @@ func (m *Model) composerView(box lipgloss.Style) string {
 			Render("Enter verify & store · Esc cancel")
 		return box.Render(head + "\n" + body)
 	}
-	return box.Render(m.ta.View())
+	view := m.ta.View()
+	// Near-limit feedback: past 80% of the input cap, show the live
+	// count so the truncation at submit never surprises.
+	if n := m.ta.Length(); n > maxInputChars*4/5 {
+		view += "\n" + lipgloss.NewStyle().Foreground(fgDim).
+			Render(fmt.Sprintf("○ %s / %s chars", commaInt(n), commaInt(maxInputChars)))
+	}
+	return box.Render(view)
 }
 
 // overlayKeyEntry reports whether the masked key box owns the keyboard.

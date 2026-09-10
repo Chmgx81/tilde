@@ -10,7 +10,7 @@ does, and what order do we build it in. Everything else (TUI spec, policies,
 detailed tool code) hangs off this document. If a decision here conflicts
 with an older note, this file wins.
 
-For a quick orientation, see the [documentation index](/docs/reference/README/). Treat `DONE` as a
+For a quick orientation, see the [documentation index](/docs/readme/). Treat `DONE` as a
 claim that must remain backed by code and tests; use `TODO` and deferred notes
 to distinguish planned work from shipped behavior.
 
@@ -78,8 +78,8 @@ gets built against.
 | Sandboxing | **bubblewrap (bwrap), OS-level, Linux** | Isolation is a kernel/OS job, not a language job — Go calls the same syscalls Rust would. bwrap + denied network egress by default is a cheap, mature primitive, not a big engineering lift. |
 | Diffing | **`internal/tui/diff.go` hand-rolled hunk renderer (no diff dep)** | Inline diff rendering and per-edit revert with zero extra dependencies. |
 | Sessions | **JSONL, append-only** | Matches the industry-standard pattern (every major agent does this): replayable, crash-safe, never rewritten in place. |
-| Model access | **Provider interface** | Local Ollama as the zero-cost default; any HTTP-based model (Anthropic, OpenAI-compatible, OpenRouter) plugs into the same interface later. |
-| Permissions | **`policies.yaml`: deny / ask / allow tiers** | Matches the field's converged pattern (Command Code, Claude Code, etc. all land on some version of this). Deny beats ask beats allow, always. Ask tier also covers `todo_write` / `ask_user` / `web_fetch`. |
+| Model access | **Provider interface** | Local Ollama as the zero-cost default; Anthropic, OpenAI-compatible, OpenRouter, Gemini, and OpenCode backends plug into the same interface. |
+| Permissions | **`policies.yaml`: deny / ask / allow tiers** | Matches the field's converged pattern (Command Code, Claude Code, etc. all land on some version of this). Deny beats ask beats allow, always. Ask tier covers all mutating and network tools (`shell_command`, `mcp_call`, `web_fetch`, `web_search`, `web_shot`, file writes, worktree ops, work sessions, `memory`/`remember`, `todo_write`, `ask_user`). |
 | Secrets | **`internal/tools/scrub.go`: Scrub + IsHighRiskPath** | Dispatch redacts secret-shaped output before it re-enters context; `read_file` annotates high-risk paths. |
 | Project trust | **`internal/trust` + `tilde trust` / `untrust`** | Project skills stay unloaded until `--skills-project` (or env) or a recorded trust; missing/corrupt store resolves to untrusted. |
 | Compaction budget | **`provider.BudgetFor` model-aware auto-size** | Catalog context window when known, else 32000; explicit `--budget` / `TILDE_BUDGET` always wins. |
@@ -240,8 +240,10 @@ Rule of thumb for writing new policy rules: match `deny`/`ask` aggressively
 conservatively (an allow rule should only ever say yes to exactly what it
 names). Failing toward a prompt is always the safe direction.
 Ask tier also gates `todo_write`, `ask_user` (unwired/denied callback reads
-as deny), and `web_fetch` — which additionally needs `TILDE_ALLOW_NET=1`,
-http(s) only, 30s timeout, 5MB cap.
+as deny), `web_fetch` (which additionally needs `TILDE_ALLOW_NET=1`,
+http(s) only, 30s timeout, 5MB cap), `web_search`, `web_shot`, worktree
+ops, work sessions (`spawn/apply/discard_work`), and `memory`/`remember` —
+the full list lives in `policies.yaml` under `ask:`.
 
 ---
 
@@ -556,8 +558,8 @@ spec-first in `tui-design-spec.md` §2.21–§2.22:
   real content substituted back in at submission time. tilde adopts the
   same shape rather than inventing a new one, with one addition pulled
   directly from real user complaints found against the reference tools'
-  own issue trackers: the threshold is a config value
-  (`paste_collapse_lines`), not hardcoded — several of the tools reviewed
+  own issue trackers: the threshold is set from the environment
+  (`TILDE_PASTE_LINES`, default 4), not hardcoded — several of the tools reviewed
   had open, unresolved complaints about exactly that rigidity (voice
   dictation and editor-composed prompts wanting to see what they pasted).
   Don't repeat that mistake.
@@ -606,7 +608,7 @@ Saying no on purpose, so it doesn't get half-built by accident:
 
 ## 9. Current status snapshot (update in place, don't append new sections)
 
-As of v0.6+:
+As of v0.9+:
 
 | Area | Status |
 |---|---|
@@ -624,7 +626,7 @@ As of v0.6+:
 | Splash / fuzzy search / session picker UI | DONE — Phase 4 |
 | Skills loader | DONE — Phase 6 |
 | MCP client | DONE — Phase 6 |
-| Trajectory-level eval suite | DONE — Phase 7 (historical 7/15 → 22/24 result; current runs report task set, trials, costs + paths) |
+| Trajectory-level eval suite | DONE — Phase 7 (historical 7/15 → 14/15 per run, 28/30 across two runs; current runs report task set, trials, costs + paths) |
 | todo_write / ask_user / web_fetch (ask-tier) | DONE — buildHarness-registered; web_fetch also needs TILDE_ALLOW_NET |
 | Secret scrubber + high-risk path notes | DONE — Dispatch Scrub, read annotate |
 | Project trust gate (`tilde trust`/`untrust`) | DONE — skills fallback, deny on missing/corrupt store |

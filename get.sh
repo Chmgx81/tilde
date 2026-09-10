@@ -59,25 +59,21 @@ dl() {
 
 echo "tilde: downloading ${tag} for ${os}/${arch}..."
 dl "$tmp/${base}.${ext}" "$url"
-dl "$tmp/checksums.txt" "$sums_url" 2>/dev/null || true
+dl "$tmp/checksums.txt" "$sums_url"
 
-# --- verify checksum (best-effort: warn, don't block) ---
-if [ -f "$tmp/checksums.txt" ]; then
-    want=$(grep -F " ${base}.${ext}" "$tmp/checksums.txt" | awk '{print $1}' | head -n1)
-    if [ -n "$want" ]; then
-        if command -v sha256sum >/dev/null 2>&1; then
-            got=$(sha256sum "$tmp/${base}.${ext}" | awk '{print $1}')
-        elif command -v shasum >/dev/null 2>&1; then
-            got=$(shasum -a 256 "$tmp/${base}.${ext}" | awk '{print $1}')
-        else
-            got=""
-        fi
-        if [ -n "$got" ] && [ "$got" != "$want" ]; then
-            die "checksum mismatch (want $want, got $got) — download may be corrupt"
-        fi
-        echo "tilde: checksum ok"
-    fi
+# --- verify checksum (fail closed: no verification, no install) ---
+[ -f "$tmp/checksums.txt" ] || die "missing checksums.txt for ${tag} — refusing unverified install"
+want=$(grep -F " ${base}.${ext}" "$tmp/checksums.txt" | awk '{print $1}' | head -n1)
+[ -n "$want" ] || die "no checksum entry for ${base}.${ext} — refusing unverified install"
+if command -v sha256sum >/dev/null 2>&1; then
+    got=$(sha256sum "$tmp/${base}.${ext}" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1; then
+    got=$(shasum -a 256 "$tmp/${base}.${ext}" | awk '{print $1}')
+else
+    die "need sha256sum or shasum to verify the download — refusing unverified install"
 fi
+[ "$got" = "$want" ] || die "checksum mismatch (want $want, got $got) — download may be corrupt or tampered"
+echo "tilde: checksum ok"
 
 # --- extract ---
 case "$ext" in
@@ -86,6 +82,11 @@ case "$ext" in
 esac
 
 # --- install ---
+# The archive was checksum-verified as a whole, but re-check the entry
+# before copying: refuse a symlink or directory 'tilde' (a crafted
+# archive member would make cp follow it and copy the wrong bytes).
+[ -f "$tmp/$BIN" ] && [ ! -L "$tmp/$BIN" ] \
+    || die "release archive did not contain a regular file '$BIN' — refusing install"
 mkdir -p "$DEST"
 cp "$tmp/$BIN" "$DEST/$BIN"
 chmod +x "$DEST/$BIN"

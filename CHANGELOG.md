@@ -3,7 +3,7 @@
 Release notes are grouped by version and describe shipped behavior. For
 planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
 
-## v0.11.0 (unreleased)
+## v0.10.0 (unreleased)
 
 - `--version` and the TUI now include the short source revision for VCS
   builds (for example, `v0.9.0+g5f94724`), while release comparisons still
@@ -13,13 +13,12 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
 - `tilde run-due`: scheduled headless runs from `.tilde/schedule.yaml`
   (interval or daily HH:MM, state file, failed jobs retry next tick).
 - `tilde audit`: read the governance trail with since/tool/decision filters.
-- `tilde plugin install|verify|list`: hash-pinned local plugins (v1 manifest).
+- `tilde plugin install|upgrade|enable|disable|remove|rollback|verify|list`: hash-pinned local plugins (v1 manifest); `install --dry-run` previews.
 - `diagnose`: gofmt/parse-error/TODO diagnostics over Go code, read-only.
 - `remember`: vector memory over the repo (offline TF-IDF default,
   Ollama embeddings via `TILDE_EMBED_MODEL`); index is ask + Plan-blocked.
 - `web_shot`: headless-Firefox viewport screenshots (ask, SSRF-gated on
-  the initial URL; Firefox follows redirects internally, so prefer
-  `web_fetch` when only text is needed).
+  every redirect hop, viewport clamped 640–3840 × 480–2160).
 - `tilde ide-bridge`: stdio JSON bridge for IDE hosts (chat approvals deny).
 - `tilde models [provider]`: catalog windows + prices without network.
 - `sandbox.Containerfile` + image doc: digest-pinned podman backend image.
@@ -33,13 +32,13 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
 - Status bar shows session $ cost; audit records denials too.
 - `tilde --export`: headless brief export (cwd-contained).
 - Plan banner + Update Todos block; subagent ⋮/│ timeline rows.
-- Contrast-verified accent-select; exit 3 for all cloud providers.
+- Contrast-verified accent-select; exit 3 for provider errors (any backend, including ollama).
 - Secret scrubbing is one pattern set (`internal/scrub`; tools/hooks/session/audit
   consume it — hooks previously redacted a narrower subset).
 - `web_fetch` allow_net redirects refuse unless the target host is listed;
   `web_search` backend redirects re-validate scheme/userinfo/SSRF.
 
-P1+P2 user-visible changes (binary still reports `v0.9.0` until release):
+P1+P2 user-visible changes (binary still reports `v0.9.1` until release):
 
 - `web_search`: keyless web search (ask-tier, Plan-OK). Needs
   `TILDE_ALLOW_NET=1` or a listed host, like `web_fetch`.
@@ -50,10 +49,12 @@ P1+P2 user-visible changes (binary still reports `v0.9.0` until release):
   time; review the diff, then apply or discard it.
 - Credentials are sealed at rest (AES-GCM envelope, transparent on use).
 - `tilde update` verifies the release tag signature before pulling.
-- Hooks gained `session_start` / `session_end` and a minimal env (secrets
-  never pass through).
+- Hooks gained a minimal env (secrets never pass through);
+  `session_start` / `session_end` are parsed and shown but reserved —
+  not executed.
 - MCP gained remote servers, per-tool approval, and user-authoritative
-  merge (project configs cannot rewire your servers).
+  merge (project configs cannot rewire your servers). MCP servers run
+  unsandboxed with your user privileges — only install sources you trust.
 - Background tasks cap at 16 running; wide read-only turns flush at 8.
 - `symbol_search`: definition index (go/py/ts/js/rs) with reference fallback.
 - `memory`: project-local facts at `.tilde/memory.md` (recall reads free, save/forget ask).
@@ -61,7 +62,17 @@ P1+P2 user-visible changes (binary still reports `v0.9.0` until release):
 - `TILDE_BACKEND=podman` runs shell calls in a digest-pinned container.
 - Governance trail at `~/.tilde/audit/audit.jsonl` (hashes, never raw args).
 - Releases ship tarballs + checksums + SBOM; `install.sh --from-release TAG`
-  installs one sha256-verified.
+  installs one sha256-verified. `get.sh` now refuses unverified installs
+  (missing checksums, entry, or sha256 tool all fail closed).
+- `tilde --help` lists management subcommands; `tilde plugin install
+  <dir> --dry-run` previews a plugin install without writing.
+- TUI safety: resume-list delete, `/clear`, and named `/logout` all need a
+  second confirming press; `Esc` cancels a running shell escape and shows
+  armed in the status bar; `q` quits on an empty idle composer.
+- docs website (Astro + Starlight) with the doc set as `/docs/*` pages.
+- Secret scrubbing covers password/secret-style assignments, GitHub
+  OAuth/server tokens, all `xox*` Slack prefixes, and `OLLAMA_*`/`GEMINI_*`
+  key names; URL query forms keep the `query` marker (no double redact).
 
 ## v0.9.0
 

@@ -5,7 +5,7 @@ editUrl: false
 ---
 > Current implementation map and dependency rules.
 
-This is intentionally a pointer document, not a package-by-package encyclopedia. Read [Plan.md](/docs/reference/Plan/) for product decisions and [tui-design-spec.md](/docs/reference/tui-design-spec/) for user-facing behavior.
+This is intentionally a pointer document, not a package-by-package encyclopedia. Read [Plan.md](/docs/plan/) for product decisions and [tui-design-spec.md](/docs/tui-design-spec/) for user-facing behavior.
 
 Module layout:
 

@@ -5,8 +5,8 @@
 > Research reference, not product documentation.
 
 Use this report to understand ecosystem patterns and threat classes. For
-tilde's current behavior, use [docs/README.md](README.md) and
-[docs/Plan.md](Plan.md). Verify every external claim before using it in a
+tilde's current behavior, use [README.md](README.md) and
+[Plan.md](Plan.md). Verify every external claim before using it in a
 production, investment, or compliance decision.
 
 ---

@@ -1,8 +1,16 @@
 // Copies developer docs from ../docs/ into src/content/docs/docs/,
 // adding Starlight frontmatter and rewriting relative .md links.
+//
+// - Destination filenames are lowercased so slugs match the sidebar
+//   (e.g. ARCHITECTURE.md -> docs/architecture, Plan.md -> docs/plan).
+// - Internal .md links are rewritten to their site URL (/docs/<slug>/).
+// - Links that escape ../docs/ (e.g. ../README.md) are rewritten to
+//   their GitHub URL, since that file is not part of the site.
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const REPO_URL = 'https://github.com/Chmgx81/tilde/blob/main';
 
 const scriptsDir = dirname(fileURLToPath(import.meta.url));
 const websiteDir = resolve(scriptsDir, '..');
@@ -18,12 +26,12 @@ async function copyDir(source, destination) {
   await mkdir(destination, { recursive: true });
   for (const entry of await readdir(source, { withFileTypes: true })) {
     const sourcePath = join(source, entry.name);
-    const destPath = join(destination, entry.name);
     if (entry.isDirectory()) {
-      await copyDir(sourcePath, destPath);
+      await copyDir(sourcePath, join(destination, entry.name.toLowerCase()));
       continue;
     }
     if (!entry.name.endsWith('.md')) continue;
+    const destPath = join(destination, entry.name.toLowerCase());
     const raw = await readFile(sourcePath, 'utf8');
     const relPath = relative(sourceDir, sourcePath);
     await writeFile(destPath, transform(raw, relPath), 'utf8');
@@ -53,8 +61,14 @@ function rewriteLinks(content, relPath) {
   const currentDir = dirname(relPath);
   return content.replace(/\]\(([^)]+?\.md)(#[^)]*)?\)/g, (_match, link, anchor = '') => {
     const targetRel = join(currentDir, link);
-    const slug = toSlug(targetRel);
-    return `](/docs/reference/${slug}/${anchor})`;
+    if (targetRel.startsWith('..')) {
+      // Target lives outside ../docs/ (e.g. repo-root README.md) and is
+      // not copied to the site — link to it on GitHub instead.
+      const repoPath = relative(repoRoot, resolve(sourceDir, targetRel));
+      return `](${REPO_URL}/${repoPath}${anchor})`;
+    }
+    const slug = toSlug(targetRel).toLowerCase();
+    return `](/docs/${slug}/${anchor})`;
   });
 }
 

@@ -40,13 +40,21 @@ func Classify(err error) string {
 		return ClassAuthFailed
 	}
 
-	// Rate limiting: 429 / quota language / Retry-After. The bare
-	// "rate" match is intentionally broad per spec (covers rate limit,
-	// rate_limit, rate-limited).
+	// Rate limiting: 429 / quota language / Retry-After. Matched on
+	// word-boundary phrases — a bare "rate" substring misfires on
+	// ordinary words (generate, separate, operate, moderate, ...), which
+	// used to misclassify errors like "failed to generate response" and
+	// drive wrong retry/backoff behavior.
 	if strings.Contains(s, "429") ||
 		strings.Contains(s, "too many requests") ||
 		strings.Contains(s, "retry-after") ||
-		strings.Contains(s, "rate") {
+		strings.Contains(s, "rate limit") ||
+		strings.Contains(s, "rate_limit") ||
+		strings.Contains(s, "rate-limit") ||
+		strings.Contains(s, "ratelimit") ||
+		strings.Contains(s, "rate exceeded") ||
+		strings.Contains(s, "over quota") ||
+		strings.Contains(s, "quota exceeded") {
 		return ClassRateLimited
 	}
 

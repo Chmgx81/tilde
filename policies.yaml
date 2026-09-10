@@ -16,6 +16,10 @@
 # deny_paths:
 #   - "**/secrets/**"
 #   - "*.key"
+# `shell_poll` is intentionally unlisted: status/log polls read free like
+# the allow tier, while the kill action is Plan-blocked in code
+# (internal/policy + internal/mode) regardless of tiers — listing it
+# here would wrongly gate the read-only polls.
 deny: []
 ask:
   - write_file

@@ -169,15 +169,16 @@ func (m *Model) runSlash(cmd, args string, selected slashRow) tea.Cmd {
 			m.append("✗ an agent turn is running — Esc twice, then /clear.")
 			return nil
 		}
-		m.lines = nil
-		m.vp.SetContent("")
-		m.pasteEcho = nil   // echo line keys died with the transcript
-		m.selActive = false // an in-flight drag has nothing to anchor to
-		m.splashN = 0
-		m.vp.GotoBottom()
-		m.loop.SetMsgs(nil)
-		m.atLoaded = false // file list may have changed; rescan on next @
-		m.atFiles = nil
+		// Wiping the transcript + live context is irreversible in the
+		// UI: arm on first call, execute on repeat (same Esc-arm idiom
+		// as interrupts and resume deletes).
+		if time.Since(m.clearArmedAt) > escArmWindow {
+			m.clearArmedAt = time.Now()
+			m.append("⏵ repeat /clear to wipe the transcript and live context (session log on disk is kept).")
+			return nil
+		}
+		m.clearArmedAt = time.Time{}
+		m.doClear()
 		return nil
 	case "/copy":
 		return m.copyLines(args)
@@ -255,6 +256,21 @@ func (m *Model) runSlash(cmd, args string, selected slashRow) tea.Cmd {
 			m.append("✗ an agent turn is running — Esc twice, then /logout.")
 			return nil
 		}
+		// Deleting a stored credential is one-way in the UI: arm on
+		// first call (naming the provider), execute on repeat.
+		if !strings.EqualFold(strings.TrimSpace(args), m.logoutArmedArgs) ||
+			time.Since(m.logoutArmedAt) > escArmWindow {
+			m.logoutArmedArgs = strings.TrimSpace(args)
+			m.logoutArmedAt = time.Now()
+			if m.logoutArmedArgs == "" {
+				m.runLogout(args)
+				return nil
+			}
+			m.append("⏵ repeat /logout " + m.logoutArmedArgs + " to delete the stored credential.")
+			return nil
+		}
+		m.logoutArmedAt = time.Time{}
+		m.logoutArmedArgs = ""
 		m.runLogout(args)
 		return nil
 	case "/skills":
@@ -267,6 +283,21 @@ func (m *Model) runSlash(cmd, args string, selected slashRow) tea.Cmd {
 		m.append(fmt.Sprintf("✗ unknown command %q — type / to browse the palette.", cmd))
 		return nil
 	}
+}
+
+// doClear wipes the transcript and live context. Only called after the
+// two-press /clear confirm in runSlash.
+func (m *Model) doClear() {
+	m.lines = nil
+	m.vp.SetContent("")
+	m.pasteEcho = nil   // echo line keys died with the transcript
+	m.selActive = false // an in-flight drag has nothing to anchor to
+	m.splashN = 0
+	m.vp.GotoBottom()
+	m.loop.SetMsgs(nil)
+	m.atLoaded = false // file list may have changed; rescan on next @
+	m.atFiles = nil
+	m.append("● transcript cleared — live context reset (session log on disk is kept).")
 }
 
 // doExport writes a distilled markdown brief of a session log: the
@@ -373,6 +404,10 @@ func (m *Model) showDiff() {
 		return
 	}
 	m.append(lipgloss.NewStyle().Foreground(fgMuted).Render("● diff (working tree vs HEAD)"))
+	if strings.TrimSpace(out) == "" {
+		m.append(lipgloss.NewStyle().Foreground(fgMuted).Render("○ no changes — working tree matches HEAD."))
+		return
+	}
 	for _, ln := range strings.Split(out, "\n") {
 		if strings.HasPrefix(ln, "diff --git ") {
 			m.append("● " + strings.TrimPrefix(ln, "diff --git "))
@@ -437,6 +472,9 @@ func (m *Model) doUndo(args string) {
 // compactCmd runs CompactNow off the render thread.
 func (m *Model) compactCmd(focus string) tea.Cmd {
 	loop := m.loop
+	// Compaction can take the full 30s budget with no intermediate
+	// output: announce it so the wait reads as work, not a freeze.
+	m.append("● compacting context…")
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

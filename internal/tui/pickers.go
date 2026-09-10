@@ -148,7 +148,10 @@ func (m *Model) refreshPickers() {
 		if m.atCursor >= len(m.atItems) {
 			m.atCursor = 0
 		}
-		m.atOpen = len(m.atItems) > 0
+		// Stay open on zero matches: the dropdown then shows the
+		// empty state instead of vanishing mid-query (same contract
+		// as the slash picker's "no command matches" message).
+		m.atOpen = true
 		return
 	}
 	m.atOpen = false

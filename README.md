@@ -42,11 +42,11 @@ go build -o tilde .
 ./tilde
 ```
 
-Go 1.25 or newer and Linux with [bubblewrap](https://github.com/containers/bubblewrap) are required for the default sandbox. To use the local Ollama provider, install Ollama and make sure a model is available:
+Go 1.25 or newer and Linux with [bubblewrap](https://github.com/containers/bubblewrap) are required for the default sandbox. On macOS (where bwrap is unavailable) tilde refuses to start until you pass `--no-sandbox` / `TILDE_NO_SANDBOX=1` — shell tools then run unsandboxed, so prefer Linux for untrusted work. To use the local Ollama provider, install Ollama and make sure a model is available:
 
 ```sh
-ollama pull qwen2.5-coder:7b
-./tilde --provider ollama --model qwen2.5-coder:7b
+ollama pull qwen3.8-4b:16k
+./tilde --provider ollama --model qwen3.8-4b:16k
 ```
 
 Run `./tilde --help` for the current command and flag reference.
@@ -65,12 +65,12 @@ The agent loop is bounded by task, tool, timeout, and budget limits. Sessions ar
 
 ## Providers
 
-The provider layer keeps the session model independent from the model backend. Configure a supported provider through flags or environment variables; credentials are never meant to be committed to the repository.
+The provider layer keeps the session model independent from the model backend. Choose a backend with `--provider` (e.g. `--provider ollama`, `--provider openai`, `--provider anthropic`); model and credentials are configured per provider via flags or environment variables. Credentials are never meant to be committed to the repository.
 
 Common environment variables include:
 
 ```sh
-export TILDE_MODEL=qwen2.5-coder:7b
+export TILDE_MODEL=qwen3.8-4b:16k
 ```
 
 Use `./tilde --help` and the provider documentation in `docs/` for the exact options available in your checkout.
@@ -151,13 +151,13 @@ No security feature is a substitute for reviewing a plugin, hook, MCP server, or
 
 ## Configuration
 
-Configuration precedence is intentionally predictable:
+Configuration is per-feature rather than one global chain:
 
-1. command-line flags;
-2. environment variables;
-3. project configuration;
-4. user configuration;
-5. built-in defaults.
+- command-line flags and environment variables drive startup (provider, model, budget, approvals);
+- policy tiers come from project `policies.yaml` layered over built-in defaults;
+- MCP servers merge user config with project `.tilde/mcp.json`: your entries win on conflict, project entries only add new names (or disable), and project servers need `--mcp-project`/trust to start;
+- hooks concatenate project `.tilde/hooks.yaml` with user hooks (project runs first) and likewise need `--hooks-project`/trust;
+- skills load from both user and project skill dirs (project needs `--skills-project`/trust).
 
 Keep credentials in the environment or an external secret store. Do not place tokens, private keys, or provider credentials in project config, session exports, plugin manifests, or logs.
 

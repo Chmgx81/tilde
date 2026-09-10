@@ -8,6 +8,7 @@ package trust
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -52,8 +53,10 @@ func IsTrusted(absRoot string) bool {
 // Creates ~/.tilde with 0700; writes atomically via temp file + rename
 // with the store file set to 0600.
 func SetTrusted(absRoot string, v bool) error {
+	// An empty root would silently no-op as "success" and mask a caller
+	// bug (trust that was never recorded). Fail loudly instead.
 	if absRoot == "" {
-		return nil
+		return fmt.Errorf("trust: refusing empty root — pass an absolute project directory")
 	}
 	path, err := StorePath()
 	if err != nil {

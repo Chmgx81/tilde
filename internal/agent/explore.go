@@ -84,6 +84,12 @@ func (t *ExploreTool) Exec(ctx context.Context, args map[string]any) (string, er
 		}(i, task)
 	}
 	wg.Wait()
+	// A cancelled fan-out must read as cancelled, not as completed work:
+	// children derive their timeouts from ctx, so by now each result is
+	// either real or a cancellation error — but the batch itself failed.
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	var b strings.Builder
 	done := 0
 	for _, r := range results {

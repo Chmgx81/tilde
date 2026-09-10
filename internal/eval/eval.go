@@ -295,8 +295,8 @@ func (r *Runner) runTrial(ctx context.Context, task Task, dir string, trial int)
 		}
 	})
 	res.MS = time.Since(start).Milliseconds()
-	res.TokensIn = loop.TotPrompt
-	res.TokensOut = loop.TotCompletion
+	res.TokensIn = int(loop.TotPrompt.Load())
+	res.TokensOut = int(loop.TotCompletion.Load())
 	for _, e := range events {
 		if e.Kind == "assistant" {
 			res.Turns++

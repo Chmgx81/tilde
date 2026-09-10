@@ -64,8 +64,10 @@ func IsMutatingCall(name string, args map[string]any) bool {
 	}
 	if name == "memory" {
 		// recall reads; save/forget write .tilde/memory.md — same
-		// op-aware split as shell_poll above.
-		if op, _ := args["op"].(string); strings.EqualFold(strings.TrimSpace(op), "recall") {
+		// op-aware split as shell_poll above. A missing/empty op
+		// executes as recall (see Memory.Exec's default), so the gate
+		// must agree instead of Plan-blocking a read.
+		if op, _ := args["op"].(string); strings.TrimSpace(op) == "" || strings.EqualFold(strings.TrimSpace(op), "recall") {
 			return false
 		}
 		return true

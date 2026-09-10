@@ -381,6 +381,11 @@ func symbolDefsInFile(path, rel, ext, qLower string) ([]symbolHit, error) {
 		}
 		out = append(out, symbolHit{rel: rel, line: lineNo, kind: kind, name: name})
 	}
+	if err := sc.Err(); err != nil {
+		// Same receipt as search.go: lines past the 256KB cap are
+		// silently unsearched unless we say so.
+		out = append(out, symbolHit{rel: rel, line: lineNo + 1, kind: "note", name: fmt.Sprintf("[lines past 256KB skipped: %v — sample with read_file instead]", err)})
+	}
 	return out, nil
 }
 
@@ -422,6 +427,9 @@ func symbolRefsInFile(path, rel, qLower string, skip map[string]bool, budget int
 		if len(out) >= budget {
 			break
 		}
+	}
+	if err := sc.Err(); err != nil {
+		out = append(out, symbolHit{rel: rel, line: lineNo + 1, kind: "note", name: fmt.Sprintf("[lines past 256KB skipped: %v — sample with read_file instead]", err)})
 	}
 	return out, nil
 }

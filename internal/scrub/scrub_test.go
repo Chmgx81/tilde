@@ -107,6 +107,13 @@ func TestScrubNewPatterns(t *testing.T) {
 		{"npm", "tok=npm_abcdefghij1234567890XYZ", "<<REDACTED:npm>>", "npm_abcdefghij1234567890XYZ"},
 		{"npmauth", "//registry.npmjs.org/:_authToken=npm_abcdefghij1234567890XYZ", "<<REDACTED:npm>>", "npm_abcdefghij1234567890XYZ"},
 		{"pypi", "pwd=pypi-AgEIcHlwaS5vcmcCJHh4eHh4eHh4eA", "<<REDACTED:pypi>>", "pypi-AgEIcHlwaS5vcmcCJHh4eHh4eHh4eA"},
+		{"dbpassword", "DB_PASSWORD=hunter2hunter2", "<<REDACTED:secret>>", "hunter2hunter2"},
+		{"clientsecret", `{"client_secret": "GOCSPX-abcDEF1234567890"}`, "<<REDACTED:secret>>", "GOCSPX-abcDEF1234567890"},
+		{"passwd", "passwd: s3cr3tvalue", "<<REDACTED:secret>>", "s3cr3tvalue"},
+		{"githuboauth", "tok=gho_abcdefghij1234567890abcdefghij1234", "<<REDACTED:github>>", "gho_abcdefghij1234567890abcdefghij1234"},
+		{"githubserver", "tok=ghs_abcdefghij1234567890abcdefghij1234", "<<REDACTED:github>>", "ghs_abcdefghij1234567890abcdefghij1234"},
+		{"slackc", "tok=xoxc-123456789012-abcdefghij", "<<REDACTED:slack>>", "xoxc-123456789012-abcdefghij"},
+		{"ollamaenv", "OLLAMA_API_KEY=abcDEF123-_4567890", "<<REDACTED:apikey>>", "abcDEF123-_4567890"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -154,6 +161,21 @@ func TestScrubNormalPaths(t *testing.T) {
 		}
 		if a := AnnotateHighRisk(p); a != "" {
 			t.Errorf("AnnotateHighRisk(%q) = %q, want empty", p, a)
+		}
+	}
+}
+
+func TestScrubProseUntouched(t *testing.T) {
+	// Assignment-shaped rules must not eat ordinary prose: no [: =]
+	// join means no redaction, byte-for-byte.
+	prose := []string{
+		"the secret sauce recipe needs no redaction here",
+		"my password is long and I forgot it",
+		"store the token safely when you are done",
+	}
+	for _, p := range prose {
+		if got, n := Scrub(p); got != p || n != 0 {
+			t.Errorf("Scrub(%q) = %q, n=%d — prose must pass through untouched", p, got, n)
 		}
 	}
 }

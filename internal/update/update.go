@@ -374,6 +374,11 @@ func writeCheck(p string, c checkFile) {
 	}
 }
 
+// apiClient bounds the freshness check: a stalled api.github.com must
+// not hang startup's network path forever. The caller's ctx still
+// governs cancellation; this is a backstop for a ctx without deadline.
+var apiClient = &http.Client{Timeout: 30 * time.Second}
+
 // remoteVersion reads the newest release tag over the public API —
 // no auth, no identity. Returns ("","", nil) when the remote has no
 // parseable version tags (callers fall back to the commit-SHA check).
@@ -383,7 +388,7 @@ func remoteVersion(ctx context.Context) (tag, sha string, err error) {
 		return "", "", err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := apiClient.Do(req)
 	if err != nil {
 		return "", "", err
 	}
@@ -408,7 +413,7 @@ func remoteSHA(ctx context.Context) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := apiClient.Do(req)
 	if err != nil {
 		return "", err
 	}

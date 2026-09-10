@@ -142,25 +142,42 @@ func (m Model) updateResume(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyCtrlC:
 		return m, tea.Quit // the picker never traps quit
 	case tea.KeyUp:
+		m.resumeDeleteArm = "" // moving disarms a pending delete
 		if len(m.resumeItems) > 0 {
 			m.resumeCursor = (m.resumeCursor - 1 + len(m.resumeItems)) % len(m.resumeItems)
 		}
 		return m, nil
 	case tea.KeyDown:
+		m.resumeDeleteArm = ""
 		if len(m.resumeItems) > 0 {
 			m.resumeCursor = (m.resumeCursor + 1) % len(m.resumeItems)
 		}
 		return m, nil
 	case tea.KeyEsc:
 		m.resumeOpen = false
+		m.resumeDeleteArm = ""
 		m.ensureLog()
 		return m, nil
 	case tea.KeyEnter:
+		m.resumeDeleteArm = ""
 		m.selectResume()
 		return m, nil
 	}
 	if strings.ToLower(msg.String()) == "d" {
-		m.deleteResume()
+		m.deleteResumeArmed()
+		return m, nil
+	}
+	// Vim-style movement: this picker has no text filter, so j/k are
+	// unambiguous (filter pickers keep them as typed text).
+	if s := strings.ToLower(msg.String()); s == "j" || s == "k" {
+		m.resumeDeleteArm = ""
+		if len(m.resumeItems) > 0 {
+			if s == "j" {
+				m.resumeCursor = (m.resumeCursor + 1) % len(m.resumeItems)
+			} else {
+				m.resumeCursor = (m.resumeCursor - 1 + len(m.resumeItems)) % len(m.resumeItems)
+			}
+		}
 	}
 	return m, nil
 }
@@ -200,7 +217,7 @@ func (m Model) resumeView() string {
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
-	b.WriteString(truncANSI("  ↑↓ select · enter resume · d delete · esc cancel", m.vp.Width))
+	b.WriteString(truncANSI("  ↑↓ select · enter resume · d delete (press twice) · esc cancel", m.vp.Width))
 	return b.String()
 }
 
@@ -291,7 +308,27 @@ func (m *Model) ensureLog() {
 	_ = log.Append("meta", map[string]any{"root": m.root, "model": m.model, "budget": m.budget})
 }
 
-// deleteResume removes the highlighted session file.
+// deleteResumeArmed deletes the highlighted session file on a second
+// `d` press for the same row within the arm window. One keypress must
+// never destroy a session file: the first press only arms and names
+// the victim; moving the cursor or leaving the picker disarms.
+func (m *Model) deleteResumeArmed() {
+	if m.resumeCursor < 0 || m.resumeCursor >= len(m.resumeItems) {
+		return
+	}
+	it := m.resumeItems[m.resumeCursor]
+	if m.resumeDeleteArm == it.Path && time.Since(m.resumeDeleteAt) < escArmWindow {
+		m.resumeDeleteArm = ""
+		m.deleteResume()
+		return
+	}
+	m.resumeDeleteArm = it.Path
+	m.resumeDeleteAt = time.Now()
+	m.append("⏵ press d again to delete session " + it.ID + " (esc cancels)")
+}
+
+// deleteResume removes the highlighted session file. Only called from
+// deleteResumeArmed after the two-press confirm.
 func (m *Model) deleteResume() {
 	if m.resumeCursor < 0 || m.resumeCursor >= len(m.resumeItems) {
 		return

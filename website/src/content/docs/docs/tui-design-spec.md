@@ -204,7 +204,7 @@ document, not to make a silent exception:
 Shown once per new session start (not on resume — see §2.13).
 
 ```
-                     ~/dev/tilde · tilde v0.9.0
+                     ~/dev/tilde · tilde v0.9.1
 
 ╭────────────────────────────────────────────────────────────────────────────╮
 │ Welcome to tilde.                                                          │
@@ -342,14 +342,14 @@ Inline dropdown directly beneath the composer, replacing nothing above it.
     /mode <plan|build|auto>  Set mode explicitly (same as Tab)
     /skills               Browse and load a skill
     /compact [focus]      Summarize older turns to reclaim context
-    /clear                Start a new session
+    /clear                Start a new session (repeat to confirm the wipe)
     /copy [n]             Copy the transcript (or one line) to the clipboard
     /sandbox              Show current policy tier and overrides
     /diff                 Show working-tree diff for review
     /undo [n]             Revert the last n mutating steps
     /sessions             List and resume a past session
     /login [provider]     Configure cloud-provider auth (§2.24)
-    /logout [provider]    Remove stored provider auth
+    /logout [provider]    Remove stored provider auth (named provider: repeat to confirm)
     /export [id]           Write a portable markdown brief for handoff
     /quit                 Quit (same as Ctrl+C idle)
     /help                 Full keybinding + command reference
@@ -732,10 +732,11 @@ because this is a reference screen, not a log, and shouldn't compete with the
 timeline vocabulary it's explaining.
 
 ```
-  Keybindings                                                    tilde v0.9.0
+  Keybindings                                                    tilde v0.9.1
 
   Tab              Cycle mode: Plan → Build → Auto
   Ctrl+C           Clear draft; quit when empty (running turns use Esc Esc)
+  q                Quit when the composer is empty and nothing is running
   Esc Esc          Cancel the running turn (second press inside 2s)
   Ctrl+J           Newline in the composer
   Ctrl+Y           Copy latest assistant response to the clipboard (raw
@@ -756,9 +757,9 @@ timeline vocabulary it's explaining.
                    non-empty Up (still recalls) and navigating Down
                    (still walks). Unparseable values mean history.
   Shift+↑↓         Scroll transcript, even while a picker is open
-  PgUp/PgDn · Ctrl+U/D  Scroll transcript by half a screen
+  PgUp/PgDn        Scroll transcript by half a screen (Ctrl+U/D stay in the composer)
   Wheel / touchpad  Scroll transcript, even while a picker is open
-  Home/End         Jump to top of history / back to live
+  Home/End         Line home/end with a draft; top of history / back to live when empty
   esc              Dismiss overlay or picker
 
   Cell-motion mouse tracking is on: wheel motion (a touchpad two-finger
@@ -1202,7 +1203,7 @@ drawing a frame — so it does, and refuses to start into a broken state
 silently:
 
 ```
-tilde: policies.yaml line 14: invalid tier "mabye" (expected deny/ask/allow)
+tilde: policies.yaml line 14: invalid tier "mabye" (expected deny/ask/allow/allow_net/deny_paths)
        refusing to start — fix the policy file and try again.
 ```
 
@@ -1257,8 +1258,9 @@ must never require reading tilde's docs.
 **Credentials ladder (unambiguous, no silent fallback).**
 
 0. `--api-key` flag — this process only, wins outright.
-1. Stored credential from `/login` — `~/.tilde/credentials.json`, mode
-   `0600`, one entry per provider.
+1. Stored credential from `/login` — `~/.tilde/credentials.enc.json` (AES-GCM
+   envelope; a legacy plaintext `credentials.json` is still read as a
+   migration fallback), mode `0600`, one entry per provider.
 2. Ambient env var — `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (existing
    behavior).
 3. Not configured — never guessed, never prompted for mid-turn.
@@ -1281,7 +1283,9 @@ the single most common cloud-auth support question.
 - Bare `/login` renders the status matrix above as a dropdown (same
   machinery as §2.4); `/logout` lists and removes. With an argument, the
   composer becomes the key entry field: border amber, input masked as
-  `●` glyphs.
+  `●` glyphs. Removing a named credential needs a repeat press (same
+  two-press idiom as `/clear` and resume deletes); bare `/logout` only
+  lists and never deletes.
 - While the masked key field is open it owns the complete keyboard surface:
   bracketed paste enters the key field (never the underlying draft), Escape
   cancels and clears it, and resize updates its width with the content column.
@@ -1293,7 +1297,7 @@ the single most common cloud-auth support question.
   network failure → `✗ could not reach openai to validate — nothing
   stored` (no save-unvalidated path; a stored-but-broken key is worse
   than an absent one). Success toasts `✓ openai configured — key ····9f2a
-  stored in ~/.tilde/credentials.json`.
+  stored in ~/.tilde/credentials.enc.json`.
 - `/login` and `/logout` are ordinary palette entries (§2.4); both work
   mid-session — switching providers mid-conversation keeps the transcript
   and the session file exactly as-is.
@@ -1431,7 +1435,7 @@ second product:
 | Handoff panel | Printed as plain `ERROR:` line + non-zero exit code |
 | Skill picker | `--skill <name>` |
 | Session export (§2.22) | `--export <session-id> [--out path.md]` (cwd-contained, 0600) |
-| Provider retry loop (§2.23) | Retries silently (3 attempts, fail-fast auth, `Retry-After` honored); failures print once as `tilde [class]:`; unretryable errors print once and exit |
+| Provider retry loop (§2.23) | Retries silently (initial try + 1 retry = 2 attempts, fail-fast auth, `Retry-After` honored); failures print once as `tilde [class]:`; unretryable errors print once and exit |
 
 Headless output drops all color/glyph styling by default when stdout isn't a
 TTY (standard `NO_COLOR`-style detection) — the glyph vocabulary in §1.2

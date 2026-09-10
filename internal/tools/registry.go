@@ -362,14 +362,31 @@ func optStr(args map[string]any, key, def string) string {
 	return def
 }
 
-// optInt extracts an optional numeric arg (JSON numbers decode as float64).
+// optInt extracts an optional numeric arg (JSON numbers decode as float64;
+// direct Go callers may pass any int/uint/float width).
 func optInt(args map[string]any, key string, def int) int {
 	if v, ok := args[key]; ok {
 		switch n := v.(type) {
 		case float64:
 			return int(n)
+		case float32:
+			return int(n)
 		case int:
 			return n
+		case int8:
+			return int(n)
+		case int16:
+			return int(n)
+		case int32:
+			return int(n)
+		case int64:
+			return int(n)
+		case uint:
+			return int(n)
+		case uint32:
+			return int(n)
+		case uint64:
+			return int(n)
 		}
 	}
 	return def

@@ -100,7 +100,7 @@ func (o *OpenAI) Chat(ctx context.Context, messages []Message, tools []ToolDef) 
 		if retryableStatus(resp.StatusCode) && attempt < 2 {
 			_, _ = io.ReadAll(io.LimitReader(resp.Body, 4<<10))
 			delay := retryDelay(attempt, resp.Header)
-			resp.Body.Close()
+			closeBody(resp)
 			if err := sleepCtx(ctx, delay); err != nil {
 				return Response{}, err
 			}
@@ -111,7 +111,7 @@ func (o *OpenAI) Chat(ctx context.Context, messages []Message, tools []ToolDef) 
 		// once truncated long tool-call payloads into decode errors).
 		raw, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 		status := resp.StatusCode
-		resp.Body.Close()
+		closeBody(resp)
 		if err != nil {
 			return Response{}, fmt.Errorf("openai: read response from %s: %w — retry the request", o.Base, err)
 		}

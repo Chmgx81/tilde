@@ -38,7 +38,7 @@ func (m *Model) openMarketplace() {
 	}
 	ix, err := skills.Scan(m.root)
 	if err != nil {
-		m.append("✗ " + err.Error())
+		m.append("✗ cannot scan project skills: " + err.Error() + " — check .tilde/skills/ permissions and retry /plugins.")
 	}
 	if builtins, berr := skills.Bundled(); berr == nil {
 		for _, sk := range builtins {
@@ -99,10 +99,10 @@ func addHookRows(reg *marketplace.Registry, path, scope string, installed bool) 
 		}
 	}
 	for range cfg.SessionStart {
-		add("session_start", "session")
+		add("session_start (reserved — not executed)", "session")
 	}
 	for range cfg.SessionEnd {
-		add("session_end", "session")
+		add("session_end (reserved — not executed)", "session")
 	}
 }
 
@@ -245,10 +245,6 @@ func (m *Model) updateMarketplaceConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
-}
-
-func (m *Model) installMarketplacePending() (tea.Model, tea.Cmd) {
-	return m.executeMarketplacePending()
 }
 
 func (m *Model) executeMarketplacePending() (tea.Model, tea.Cmd) {
@@ -420,8 +416,19 @@ func (m Model) marketplaceView() string {
 	if len(rows) == 0 {
 		b.WriteString("  no matching items\n")
 	}
-	b.WriteString(truncANSI("  ←→ tabs · ↑↓ select · enter open · / search · esc close", width))
+	b.WriteString(truncANSI("  ←→ tabs · ↑↓ select · enter open · i install · type to filter · / clears · esc close", width))
 	return b.String()
+}
+
+// titleMarketplaceAction capitalises the first rune for a confirm
+// prompt header (e.g. "install" → "Install"). Marketplace actions are a
+// fixed ASCII enum, so a single-rune title is exact and avoids the
+// deprecated strings.Title.
+func titleMarketplaceAction(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func (m Model) marketplaceConfirmView() string {
@@ -438,7 +445,7 @@ func (m Model) marketplaceConfirmView() string {
 	if width <= 0 {
 		width = 80
 	}
-	b.WriteString(truncANSI(strings.Title(action)+" marketplace item?", width) + "\n\n")
+	b.WriteString(truncANSI(titleMarketplaceAction(action)+" marketplace item?", width) + "\n\n")
 	b.WriteString(marketplaceWrappedField("  ", safeMarketplaceText(item.Name)+" v"+safeMarketplaceText(item.Version), width))
 	b.WriteString("\n" + marketplaceWrappedField("  source: ", safeMarketplaceText(item.Source), width))
 	b.WriteString("\n" + marketplaceWrappedField("  scope: ", safeMarketplaceText(item.Scope), width))

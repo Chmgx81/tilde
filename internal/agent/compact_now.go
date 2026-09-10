@@ -16,14 +16,17 @@ func (l *Loop) CompactNow(ctx context.Context, focus string) (string, int) {
 	if comp == nil {
 		comp = &compact.Compactor{}
 	}
-	if l.Prov != nil && (focus != "" || comp.Summarize == nil) {
+	// Single locked read: /model may swap the backend concurrently, so
+	// both the nil-check and the summarizer must see the same provider —
+	// a raw field read here would race SetProvider.
+	if p := l.CurrentProvider(); p != nil && (focus != "" || comp.Summarize == nil) {
 		c2 := *comp
 		if focus != "" {
-			c2.Summarize = compact.SummarizeWithPrompt(l.Prov,
+			c2.Summarize = compact.SummarizeWithPrompt(p,
 				"Summarize this coding-agent session for context compaction with special attention to: "+focus+
 					". Also keep: the user's goal, key findings, decisions, what was tried, pending work. Terse — under 60 lines.")
 		} else {
-			c2.Summarize = compact.SummarizeWithProvider(l.CurrentProvider())
+			c2.Summarize = compact.SummarizeWithProvider(p)
 		}
 		comp = &c2
 	}

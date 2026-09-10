@@ -2,7 +2,7 @@
 type WorkflowItem = {
   label: string;
   detail: string;
-  status?: 'complete' | 'active' | 'done';
+  status?: 'active' | 'done';
 };
 
 type AgentRow = {
@@ -13,9 +13,8 @@ type AgentRow = {
 };
 
 type Props = {
-  variant: 'hero' | 'product' | 'agents';
+  variant: 'product' | 'agents';
   project?: string;
-  title?: string;
   progress?: string;
   mode?: string;
   request?: string;
@@ -23,13 +22,11 @@ type Props = {
   agent?: {
     label: string;
     detail: string;
-    elapsed?: string;
   };
   proof?: {
     command: string;
     elapsed: string;
   };
-  footer?: string[];
   coordinator?: {
     owner: string;
     task: string;

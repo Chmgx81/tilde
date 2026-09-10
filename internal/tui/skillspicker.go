@@ -21,7 +21,7 @@ func (m *Model) openSkills() {
 	}
 	ix, err := skills.Scan(m.root)
 	if err != nil {
-		m.append("✗ " + err.Error())
+		m.append("✗ cannot scan project skills: " + err.Error() + " — check .tilde/skills/ permissions and retry /skills.")
 	}
 	items := ix.List()
 	if len(items) == 0 {
@@ -177,7 +177,7 @@ func (m Model) skillsView() string {
 	if len(rows) == 0 {
 		b.WriteString("  no skills match — backspace to clear the filter\n")
 	}
-	b.WriteString(truncANSI("  ↑↓ select · enter load · / search · esc cancel", m.vp.Width))
+	b.WriteString(truncANSI("  ↑↓ select · enter load · type to filter · / clears · esc cancel", m.vp.Width))
 	return b.String()
 }
 

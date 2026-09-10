@@ -109,7 +109,11 @@ type Model struct {
 	running            bool
 	confirm            *confirmState
 	cancel             context.CancelFunc
-	escArmedAt         time.Time // first Esc of a double-Esc interrupt (zero = disarmed)
+	escCancel          context.CancelFunc // cancels a running shell escape (nil when none)
+	escArmedAt         time.Time          // first Esc of a double-Esc interrupt (zero = disarmed)
+	clearArmedAt       time.Time          // first /clear of the two-press wipe confirm
+	logoutArmedAt      time.Time          // first /logout of the two-press credential delete
+	logoutArmedArgs    string             // provider named by the armed /logout
 	root               string
 	model              string
 	costIn             float64 // cached per-1M USD in-price for m.model (see cost.go)
@@ -171,6 +175,8 @@ type Model struct {
 	resumeOpen         bool
 	resumeItems        []SessionItem
 	resumeCursor       int
+	resumeDeleteArm    string    // session path armed for delete (second `d` confirms)
+	resumeDeleteAt     time.Time // when the delete was armed
 	skillsOpen         bool
 	skillsItems        []skills.Skill
 	skillsCursor       int
@@ -490,11 +496,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.overlayKeyEntry() {
 			switch msg.Type {
 			case tea.KeyEnter:
+				// The endpoint check can take up to the keyentry
+				// timeout: say so up front — silence here reads as
+				// a hang, not validation.
+				m.append("● validating key with " + m.keyProvider + "…")
 				return m, validateKeyCmd(m.keyProvider, m.keyInput.Value(), "")
 			case tea.KeyEsc:
 				m.cancelKeyEntry()
 				return m, nil
 			case tea.KeyCtrlC:
+				m.cancelEscape()
 				return m, tea.Quit
 			}
 			var cmd tea.Cmd
@@ -548,6 +559,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.escArmedAt = time.Now()
 				return m, m.setToast("⏵ Esc again cancels the current turn")
 			}
+			// Idle but a shell escape is running: Esc cancels it.
+			if m.escCancel != nil {
+				m.escCancel()
+				m.escCancel = nil
+				return m, m.setToast("⏵ shell escape cancelled")
+			}
 			m.escArmedAt = time.Time{}
 		}
 		// Bracketed paste: bubbletea delivers the whole chunk as one
@@ -565,6 +582,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ta.Length() == 0 && !m.slashOpen && !m.atOpen {
 			m.helpOpen = true
 			return m, nil
+		}
+		// "q" on an empty composer quits when nothing owns the session:
+		// no draft, no turn running, no overlay/picker/confirm open.
+		// Anything else and the keystroke types normally.
+		if msg.Type == tea.KeyRunes && msg.String() == "q" &&
+			m.ta.Length() == 0 && len(m.pasteSegs) == 0 && !m.running &&
+			!m.slashOpen && !m.atOpen && !m.helpOpen && !m.resumeOpen &&
+			!m.skillsOpen && !m.marketplaceOpen && m.confirm == nil &&
+			m.pendingShell == "" && m.escCancel == nil {
+			return m, tea.Quit
 		}
 		switch msg.Type {
 		case tea.KeyTab:
@@ -586,6 +613,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.running {
 				return m, m.setToast("⏵ Esc twice cancels the current turn")
 			}
+			m.cancelEscape()
 			return m, tea.Quit
 		case tea.KeyCtrlJ:
 			m.ta.InsertString("\n")
@@ -650,8 +678,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+	case escStartedMsg:
+		m.escCancel = msg.cancel
+		return m, nil
 	case agentDoneMsg:
 		m.running = false
+		m.escCancel = nil          // a finished escape owns no interrupt arm
 		m.escArmedAt = time.Time{} // a dead turn owns no interrupt arm
 		// Remove the ◆ thinking indicator if it was never replaced by
 		// a stream (the model replied without streaming, e.g. a tool-only turn).
@@ -681,7 +713,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err == nil && hadTurn && turnElapsed >= reasonFloor {
 			dc := 0
 			if m.loop != nil {
-				dc = m.loop.TotCompletion - m.turnBaseCompletion
+				dc = int(m.loop.TotCompletion.Load()) - m.turnBaseCompletion
 				if dc < 0 {
 					dc = 0
 				}
@@ -824,14 +856,21 @@ func (m *Model) navigateHistory(msg tea.KeyMsg) bool {
 
 // updateScroll routes transcript-navigation keys. Pickers own ↑↓ (they
 // handle those before this runs), so plain ↑↓ here means no picker is
-// open. Shift+↑/↓ always scroll — even from inside a multiline draft.
+// open. Shift+↑/↓ and PgUp/PgDn always scroll — even from inside a
+// multiline draft. Ctrl+U/Ctrl+D are deliberately NOT trapped: they
+// belong to the composer (native textarea editing). Home/End scroll the
+// transcript only when the composer is empty — with a draft present,
+// line-home/line-end must reach the text being edited.
 // Pointer receiver: scroll position and the follow-tail pin must
 // survive back into the caller's model.
 func (m *Model) updateScroll(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch msg.Type {
-	case tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd,
-		tea.KeyShiftUp, tea.KeyShiftDown, tea.KeyCtrlU, tea.KeyCtrlD:
+	case tea.KeyPgUp, tea.KeyPgDown, tea.KeyShiftUp, tea.KeyShiftDown:
 		// always transcript navigation
+	case tea.KeyHome, tea.KeyEnd:
+		if m.ta.Length() > 0 {
+			return false, nil // draft present: editing keys stay in the composer
+		}
 	case tea.KeyUp, tea.KeyDown:
 		if m.ta.LineCount() > 1 {
 			return false, nil // multiline draft: arrows edit the draft first
@@ -840,9 +879,9 @@ func (m *Model) updateScroll(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return false, nil
 	}
 	switch {
-	case msg.Type == tea.KeyPgUp || msg.Type == tea.KeyCtrlU:
+	case msg.Type == tea.KeyPgUp:
 		m.scrollRows(true, m.vp.Height/2)
-	case msg.Type == tea.KeyPgDown || msg.Type == tea.KeyCtrlD:
+	case msg.Type == tea.KeyPgDown:
 		m.scrollRows(false, m.vp.Height/2)
 	case msg.Type == tea.KeyHome:
 		m.stick = false
@@ -1288,7 +1327,7 @@ func (m Model) submit() (tea.Model, tea.Cmd) {
 	m.turnDidWork = false // a fresh turn has done nothing yet; tool calls set it
 	m.turnStart = time.Now()
 	if m.loop != nil {
-		m.turnBaseCompletion = m.loop.TotCompletion
+		m.turnBaseCompletion = int(m.loop.TotCompletion.Load())
 	}
 	m.quietSince = m.turnStart
 	m.verbOrder = shuffleVerbs(rand.New(rand.NewSource(time.Now().UnixNano())))
@@ -1334,6 +1373,16 @@ func (m Model) runAgentCmd(ctx context.Context, goal string) tea.Cmd {
 	}
 }
 
+// maxTranscriptLines bounds in-memory scrollback: a runaway tool dump
+// must not grow the transcript (and every SetContent join) without
+// bound for the life of the session. The session log on disk keeps
+// everything; only the live view is trimmed.
+const maxTranscriptLines = 20000
+
+// maxCopyChars bounds whole-transcript (/copy with no argument)
+// clipboard ships. Single-line copies (/copy <n>) are unaffected.
+const maxCopyChars = 100000
+
 // append adds one already-styled line to the transcript and refreshes the
 // viewport. Follow-tail: auto-scroll only when the user is at (or was
 // pinned to) the bottom — reading history must not be yanked away by
@@ -1344,6 +1393,16 @@ func (m *Model) append(s string) {
 	m.quietSince = time.Now() // any transcript activity resets the reasoning-verb clock
 	for _, ln := range strings.Split(s, "\n") {
 		m.lines = append(m.lines, wrapLine(ln, m.vp.Width-1))
+	}
+	if over := len(m.lines) - maxTranscriptLines; over > 0 {
+		// Trim oldest first with a single leading marker (an older
+		// marker is dropped before prepending — markers never stack).
+		const trimMarker = "… older transcript trimmed to the latest lines (full history in the session log) …"
+		rest := m.lines[over:]
+		if len(rest) > 0 && rest[0] == trimMarker {
+			rest = rest[1:]
+		}
+		m.lines = append([]string{trimMarker}, rest...)
 	}
 	m.vp.SetContent(strings.Join(m.lines, "\n"))
 	if stick {
@@ -1425,6 +1484,13 @@ func (m *Model) copyLines(arg string) tea.Cmd {
 	text := strings.TrimRight(strings.Join(out, "\n"), " \t\n")
 	if strings.TrimSpace(text) == "" {
 		m.append("✗ /copy: nothing to copy — the transcript is empty.")
+		return nil
+	}
+	// Whole-transcript copies are unbounded by nature: refuse past the
+	// cap with a pointer at single-line copies instead of shipping
+	// megabytes to the clipboard (and hanging the UI doing it).
+	if strings.TrimSpace(arg) == "" && len(text) > maxCopyChars {
+		m.append(fmt.Sprintf("✗ /copy: transcript is %s — too large to copy whole. Copy one line with /copy <n>.", commaInt(len(text))))
 		return nil
 	}
 	if err := clipboardWrite(text); err == nil {
@@ -1680,7 +1746,7 @@ func (m *Model) renderCallLine(text string, grouped bool, extra string) {
 	// Colour the verb by category: writes green, edits amber,
 	// runs red, reads/lists muted — the transcript vocabulary
 	// is small enough for a direct map.
-	verbColor := fg
+	var verbColor lipgloss.Color
 	switch verb {
 	case "write_file":
 		verbColor = success
@@ -1961,6 +2027,12 @@ func (m *Model) statusBar() string {
 				return v + " · Esc×2 cancels"
 			}
 			return fmt.Sprintf("Working %ds · Esc×2 cancels", int(time.Since(m.turnStart).Seconds()))
+		}
+		// The interrupt arm outlives its 600ms toast: keep it visible
+		// in the bar until the window expires, so the armed state is
+		// never invisible.
+		if !m.escArmedAt.IsZero() && time.Since(m.escArmedAt) < escArmWindow {
+			return "Esc again cancels"
 		}
 		if ctx == "" {
 			return m.model
@@ -2288,7 +2360,7 @@ func shellDropdown(width int) string {
 func atDropdown(items []atRow, cursor, width int) string {
 	const maxRows = 7
 	if len(items) == 0 {
-		return ""
+		return truncANSI("  ○ no files match — esc to dismiss", width)
 	}
 	if cursor < 0 {
 		cursor = 0

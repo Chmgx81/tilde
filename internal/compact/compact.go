@@ -88,7 +88,19 @@ func (c *Compactor) keep() int {
 
 // Needed reports whether msgs are past the compaction threshold.
 func (c *Compactor) Needed(msgs []provider.Message) bool {
-	return Usage(msgs, c.budget()) >= Threshold
+	return c.NeededWith(msgs, 0)
+}
+
+// NeededWith is Needed plus a fixed overhead (system prompt, tool
+// schemas) that rides along with every model call but is not part of
+// msgs. Callers estimating "will the next request overflow" must use
+// this — Needed alone understates the true request size.
+func (c *Compactor) NeededWith(msgs []provider.Message, overhead int) bool {
+	b := c.budget()
+	if b <= 0 {
+		return false
+	}
+	return float64(Estimate(msgs)+overhead)/float64(b) >= Threshold
 }
 
 // Compact summarizes all but the trailing KeepRecent messages. It never

@@ -55,6 +55,9 @@ func (t *Task) Status() string {
 }
 
 // Kill stops the task. Idempotent: killing a finished task says so.
+// When the command was started as its own process group (Setpgid,
+// set in buildCmd), kill the whole group so descendants are reaped too —
+// never just the direct bash/podman client.
 func (t *Task) Kill() string {
 	if !t.Running() {
 		return fmt.Sprintf("task %s already finished (%s).", t.ID, t.Status())
@@ -62,8 +65,12 @@ func (t *Task) Kill() string {
 	if t.cmd.Process == nil {
 		return fmt.Sprintf("task %s has no live process handle.", t.ID)
 	}
-	if err := t.cmd.Process.Kill(); err != nil {
-		return fmt.Sprintf("could not kill task %s: %v — it may have just exited; check status.", t.ID, err)
+	if t.cmd.SysProcAttr != nil && t.cmd.SysProcAttr.Setpgid {
+		_ = syscall.Kill(-t.cmd.Process.Pid, syscall.SIGKILL)
+	} else {
+		if err := t.cmd.Process.Kill(); err != nil {
+			return fmt.Sprintf("could not kill task %s: %v — it may have just exited; check status.", t.ID, err)
+		}
 	}
 	<-t.done
 	return fmt.Sprintf("killed task %s.", t.ID)
@@ -354,11 +361,16 @@ func (t *Shell) buildCmd(ctx context.Context, cmdStr string, stdout, stderr io.W
 			warn = "[warning: sandbox disabled via TILDE_NO_SANDBOX=1 — command ran unsandboxed]\n"
 		}
 		cmd.Stdout, cmd.Stderr = stdout, stderr
+		// New process group so a delayed kill can reap the whole tree
+		// (the bwrap/lazy process and any descendants), not just the
+		// direct child — same guard the hooks path uses.
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		return cmd, warn, nil
 	}
 	cmd := exec.CommandContext(ctx, "bash", "-c", cmdStr)
 	cmd.Dir = t.Root
 	cmd.Stdout, cmd.Stderr = stdout, stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	return cmd, "", nil
 }
 
@@ -386,7 +398,10 @@ func (t *Shell) Exec(ctx context.Context, args map[string]any) (string, error) {
 	}
 
 	mgr := t.manager()
-	bgCtx, bgCancel := context.WithTimeout(ctx, max)
+	// Detached tasks must outlive the requesting turn: derive from a
+	// cancellation-free parent so a later turn cancel doesn't kill a task
+	// the caller was invited to poll across turns. Still bounded by BgMax.
+	bgCtx, bgCancel := context.WithTimeout(context.WithoutCancel(ctx), max)
 
 	task, terr := mgr.Start(cmdStr, bgCtx, bgCancel, func(stdout, stderr io.Writer) *exec.Cmd {
 		cmd, _, buildErr := t.buildCmd(bgCtx, cmdStr, stdout, stderr)

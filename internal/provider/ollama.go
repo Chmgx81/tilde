@@ -267,7 +267,7 @@ func (o *Ollama) Chat(ctx context.Context, messages []Message, tools []ToolDef) 
 			// then back off per Retry-After or exponentially.
 			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4<<10))
 			delay := retryDelay(attempt, resp.Header)
-			resp.Body.Close()
+			closeBody(resp)
 			if err := sleepCtx(ctx, delay); err != nil {
 				return Response{}, err
 			}

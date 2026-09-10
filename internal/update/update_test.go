@@ -385,7 +385,9 @@ func TestRunRefusesUnsignedTag(t *testing.T) {
 	gitRun(t, repo, "add", "-A")
 	gitRun(t, repo, "commit", "-qm", "v1")
 	// Unsigned (non-`-s`) version tag: no signature for verify-tag.
-	gitRun(t, repo, "tag", "v0.9.1")
+	// Must be NEWER than Version so the release-verification gate
+	// actually runs (a tag equal to Version is refresh-only by design).
+	gitRun(t, repo, "tag", "v99.0.0")
 	addCanonicalOrigin(t, repo, repo)
 	writeInstallRecord(t, filepath.Join(work, "home"), repo)
 	err := Run()

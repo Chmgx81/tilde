@@ -52,6 +52,14 @@ var (
 	fetchTagRe     = regexp.MustCompile(`(?s)<[^>]*>`)
 )
 
+// closeRespBody closes a response body, tolerating nils: a future edit
+// adding a new fetch path must not turn a bare Close into a nil-deref.
+func closeRespBody(resp *http.Response) {
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+}
+
 func (t *WebFetch) Exec(ctx context.Context, args map[string]any) (string, error) {
 	raw, err := strArg(args, "url")
 	if err != nil {

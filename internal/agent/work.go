@@ -69,6 +69,17 @@ func (s *WorkState) clearActive(path string) {
 	}
 }
 
+// refund returns one budget unit: setup failed before any child ran, so
+// the reservation consumed nothing real. Never called after runWork —
+// a child that ran (even one that failed) legitimately spent its call.
+func (s *WorkState) refund() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.calls > 0 {
+		s.calls--
+	}
+}
+
 // SpawnWorkTool runs one isolated writer child in a fresh git worktree.
 // The child is Plan-locked except the whitelisted write tools, cannot
 // spawn, and works only inside the worktree. The worktree is kept after
@@ -98,13 +109,11 @@ func (t *SpawnWorkTool) Exec(ctx context.Context, args map[string]any) (string, 
 		return "", fmt.Errorf("work sessions unavailable in this session (no work state wired)")
 	}
 	st.mu.Lock()
-	st.calls++
-	n := st.calls
 	active := st.active
+	next := st.calls + 1 // provisional number for the default path only
 	st.mu.Unlock()
-	if n > maxWorkCalls {
-		return "", fmt.Errorf("subagent budget exhausted (%d work calls this session) — continue with direct tools instead", maxWorkCalls)
-	}
+	// Validate everything before touching shared state: refusals (active
+	// session, bad args) must not consume budget.
 	if active != "" {
 		return "", fmt.Errorf("work session already active at %q: finish it with apply_work {\"path\": %q} or discard_work {\"path\": %q} before spawning another", active, active, active)
 	}
@@ -112,23 +121,31 @@ func (t *SpawnWorkTool) Exec(ctx context.Context, args map[string]any) (string, 
 	if err != nil {
 		return "", err
 	}
-	path := workOptStr(args, "path", fmt.Sprintf(".tilde-work/w%d", n))
+	path := workOptStr(args, "path", fmt.Sprintf(".tilde-work/w%d", next))
 	if strings.HasPrefix(path, "-") {
 		return "", fmt.Errorf("refusing work path %q: must not start with - (flag injection) — send a plain directory path", path)
 	}
 	branch := workOptStr(args, "branch", "")
-	// Reserve the single-writer slot before the child runs so a
-	// concurrent spawn refuses while this one is in flight.
+	// Reserve budget + the single-writer slot atomically: the budget
+	// check cannot race the increment, and a concurrent spawn refuses
+	// while this one is in flight.
 	st.mu.Lock()
+	if st.calls >= maxWorkCalls {
+		st.mu.Unlock()
+		return "", fmt.Errorf("subagent budget exhausted (%d work calls this session) — continue with direct tools instead", maxWorkCalls)
+	}
 	if st.active != "" {
 		dup := st.active
 		st.mu.Unlock()
 		return "", fmt.Errorf("work session already active at %q: finish it with apply_work {\"path\": %q} or discard_work {\"path\": %q} before spawning another", dup, dup, dup)
 	}
+	st.calls++
+	n := st.calls
 	st.active = path
 	st.mu.Unlock()
 	if st.NewChild == nil {
 		st.clearActive(path)
+		st.refund()
 		return "", fmt.Errorf("subagents unavailable in this session (no child factory wired)")
 	}
 	// Reuse the hardened worktree creation (containment + flag checks).
@@ -138,6 +155,7 @@ func (t *SpawnWorkTool) Exec(ctx context.Context, args map[string]any) (string, 
 	}
 	if _, err := (&tools.GitWorktreeAdd{Root: st.Root}).Exec(ctx, addArgs); err != nil {
 		st.clearActive(path)
+		st.refund()
 		return "", err
 	}
 	summary, err := st.runWork(ctx, task, path, st.resolve(path))

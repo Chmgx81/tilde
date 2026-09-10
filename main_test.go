@@ -41,6 +41,9 @@ func TestHeadlessExitCode(t *testing.T) {
 	if got := headlessExitCode(nil, "", true); got != 5 {
 		t.Fatalf("deny-tier hit = 5, got %d", got)
 	}
+	if got := headlessExitCode(fmt.Errorf("boom"), "", true); got != 5 {
+		t.Fatalf("deny-tier hit stays 5 even when the run later errors, got %d", got)
+	}
 	doom := fmt.Errorf("Same call (shell_command) issued 3 times in a row with no progress — reverting to Plan mode. Nothing further will be changed.")
 	if got := headlessExitCode(doom, "", false); got != 4 {
 		t.Fatalf("doom handoff = 4, got %d", got)

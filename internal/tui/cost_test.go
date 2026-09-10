@@ -85,7 +85,8 @@ func TestRefreshCostOnModelSwitch(t *testing.T) {
 // Status bar: cost appends next to ctx, existing segments never reflow.
 func TestStatusBarCostAppended(t *testing.T) {
 	loop := newTestLoop()
-	loop.TotPrompt, loop.TotCompletion = 1000, 500
+	loop.TotPrompt.Store(1000)
+	loop.TotCompletion.Store(500)
 	m := New(loop, mode.Plan, t.TempDir(), "openai/gpt-4.1-mini", 32000)
 	// (1000*0.4 + 500*1.6)/1e6 = 0.0012
 	m.ctx = "41% (13.1k/32k)"
@@ -103,7 +104,8 @@ func TestStatusBarCostAppended(t *testing.T) {
 // Status bar: unknown price hides the readout (no "$" anywhere).
 func TestStatusBarCostHiddenWhenUnknown(t *testing.T) {
 	loop := newTestLoop()
-	loop.TotPrompt, loop.TotCompletion = 100000, 50000
+	loop.TotPrompt.Store(100000)
+	loop.TotCompletion.Store(50000)
 	m := New(loop, mode.Plan, t.TempDir(), "opencode/glm-5.3", 32000)
 	m.ctx = "41% (13.1k/32k)"
 	if got := stripANSI(m.statusBar()); strings.Contains(got, "$") {
@@ -123,7 +125,8 @@ func TestStatusBarCostKnownFree(t *testing.T) {
 // Status bar: mid-turn Working indicator is never reflowed by cost.
 func TestStatusBarCostHiddenWhileRunning(t *testing.T) {
 	loop := newTestLoop()
-	loop.TotPrompt, loop.TotCompletion = 1000, 500
+	loop.TotPrompt.Store(1000)
+	loop.TotCompletion.Store(500)
 	m := New(loop, mode.Plan, t.TempDir(), "openai/gpt-4.1-mini", 32000)
 	m.ctx = "41% (13.1k/32k)"
 	m.turnStart = time.Now().Add(-30 * time.Second)

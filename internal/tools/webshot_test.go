@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +36,9 @@ func stubShot(t *testing.T, cap *shotCapture, png []byte) WebShot {
 	}
 	return WebShot{
 		AllowNet: func() bool { return true },
+		// Hermetic: stub tests never touch the network — redirect
+		// resolution is covered separately against httptest servers.
+		ResolveFinal: func(_ context.Context, raw string) (string, error) { return raw, nil },
 		LookPath: func(s string) (string, error) {
 			if s != "firefox" {
 				t.Errorf("LookPath called with %q, want firefox", s)
@@ -157,6 +162,7 @@ func TestWebShotWidthClamp(t *testing.T) {
 func TestWebShotGateDenied(t *testing.T) {
 	called := false
 	w := &WebShot{
+		ResolveFinal: func(_ context.Context, raw string) (string, error) { return raw, nil },
 		Runner: func(ctx context.Context, binary string, args ...string) ([]byte, error) {
 			called = true
 			return nil, nil
@@ -178,8 +184,9 @@ func TestWebShotHostAllowGate(t *testing.T) {
 	// HostAllow approves the loopback literal (no DNS involved), so the
 	// SSRF refusal — not the policy denial — proves the gate opened.
 	w := &WebShot{
-		AllowNet:  func() bool { return false },
-		HostAllow: func(host string) bool { return host == "127.0.0.1" },
+		ResolveFinal: func(_ context.Context, raw string) (string, error) { return raw, nil },
+		AllowNet:     func() bool { return false },
+		HostAllow:    func(host string) bool { return host == "127.0.0.1" },
 		LookPath: func(s string) (string, error) {
 			t.Error("browser lookup must not run for an SSRF target")
 			return "", errors.New("unreachable")
@@ -226,7 +233,7 @@ func TestWebShotUserinfoAndSSRF(t *testing.T) {
 		{"metadata", "http://169.254.169.254/latest/meta-data/", "refused"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			w := &WebShot{AllowNet: allow, LookPath: noSpawn}
+			w := &WebShot{AllowNet: allow, LookPath: noSpawn, ResolveFinal: func(_ context.Context, raw string) (string, error) { return raw, nil }}
 			_, err := w.Exec(context.Background(), map[string]any{"url": tc.url})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("expected %q error, got %v", tc.want, err)
@@ -237,8 +244,9 @@ func TestWebShotUserinfoAndSSRF(t *testing.T) {
 
 func TestWebShotNoFirefox(t *testing.T) {
 	w := &WebShot{
-		AllowNet: func() bool { return true },
-		LookPath: func(s string) (string, error) { return "", errors.New("not found in PATH") },
+		ResolveFinal: func(_ context.Context, raw string) (string, error) { return raw, nil },
+		AllowNet:     func() bool { return true },
+		LookPath:     func(s string) (string, error) { return "", errors.New("not found in PATH") },
 	}
 	_, err := w.Exec(context.Background(), map[string]any{"url": shotTestURL})
 	if err == nil || !strings.Contains(err.Error(), "install Firefox") {
@@ -261,5 +269,76 @@ func TestParsePNGSize(t *testing.T) {
 	copy(bad[12:16], "IDAT")
 	if _, _, err := parsePNGSize(bad); err == nil {
 		t.Fatal("non-IHDR first chunk must error")
+	}
+}
+
+func TestResolveShotTargetNoRedirect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	final, err := resolveShotTarget(context.Background(), srv.URL+"/page", nil)
+	if err != nil {
+		t.Fatalf("no-redirect page must resolve: %v", err)
+	}
+	if final != srv.URL+"/page" {
+		t.Fatalf("final = %q, want %q", final, srv.URL+"/page")
+	}
+}
+
+func TestResolveShotTargetRedirectToPrivateRefused(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Public start URL redirecting into loopback: classic SSRF.
+		http.Redirect(w, r, "http://127.0.0.1:9/metadata", http.StatusFound)
+	}))
+	defer srv.Close()
+	if _, err := resolveShotTarget(context.Background(), srv.URL, nil); err == nil {
+		t.Fatal("redirect to loopback must be refused")
+	} else if !strings.Contains(strings.ToLower(err.Error()), "refus") && !strings.Contains(err.Error(), "private") && !strings.Contains(err.Error(), "loopback") {
+		t.Fatalf("refusal must name the reason, got %q", err)
+	}
+}
+
+func TestResolveShotTargetRedirectLoopRefused(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, srv.URL, http.StatusFound)
+	}))
+	defer srv.Close()
+	if _, err := resolveShotTarget(context.Background(), srv.URL, nil); err == nil {
+		t.Fatal("redirect loop must be refused")
+	}
+}
+
+func TestResolveShotTargetHonorsHostAllowlist(t *testing.T) {
+	// Redirect to a public IP literal (no DNS needed): SSRF passes, so
+	// the host allowlist decides. The denial fires inside CheckRedirect
+	// before any fetch of the target — fully hermetic.
+	redir := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://93.184.216.34/", http.StatusFound)
+	}))
+	defer redir.Close()
+	denyHost := func(host string) bool { return false }
+	_, err := resolveShotTarget(context.Background(), redir.URL, denyHost)
+	if err == nil || !strings.Contains(err.Error(), "not in the approved hosts") || !strings.Contains(err.Error(), "93.184.216.34") {
+		t.Fatalf("non-allowlisted redirect target must be refused naming the host, got %v", err)
+	}
+	// Nil allowlist (session-wide network opt-in) must not refuse the
+	// chain for policy reasons — only SSRF rules apply. Use a same-server
+	// redirect so no external fetch happens.
+	var same *httptest.Server
+	same = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, same.URL+"/landing", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer same.Close()
+	// Same-server redirect stays on 127.0.0.1 → SSRF refusal is correct
+	// and must name the SSRF reason, not the allowlist.
+	_, err = resolveShotTarget(context.Background(), same.URL, nil)
+	if err == nil || strings.Contains(err.Error(), "approved hosts") {
+		t.Fatalf("loopback redirect must fail on SSRF grounds, got %v", err)
 	}
 }

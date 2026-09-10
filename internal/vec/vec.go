@@ -263,7 +263,12 @@ func (o *OllamaEmbedder) embedOne(client *http.Client, text string) ([]float64, 
 		return nil, fmt.Errorf("vec: ollama at %s unreachable for model %q: %v — is `ollama serve` running?", o.host(), model, err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	// Surface transport truncation as itself: a failed read must not
+	// masquerade as "bad JSON" and send the user down the wrong fix path.
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, fmt.Errorf("vec: ollama response body unreadable for model %q: %v — retry; if it persists the server is truncating responses", model, err)
+	}
 	if resp.StatusCode == http.StatusNotFound ||
 		(resp.StatusCode != http.StatusOK && modelMissingIn(string(raw))) {
 		return nil, pullErr(model, strings.TrimSpace(string(raw)))

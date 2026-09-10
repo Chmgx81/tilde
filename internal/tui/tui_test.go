@@ -726,8 +726,8 @@ func TestSkillsScopeColumnAligned(t *testing.T) {
 		{Name: "mid", Description: "x", Scope: "user"},
 	}}
 	view := m.skillsView()
-	if strings.Contains(view, "type to filter") || !strings.Contains(view, "/ search") {
-		t.Fatalf("footer must say / search:\n%s", view)
+	if !strings.Contains(view, "type to filter") || !strings.Contains(view, "/ clears") {
+		t.Fatalf("footer must say type to filter + / clears:\n%s", view)
 	}
 	var widths []int
 	for _, ln := range strings.Split(view, "\n") {
@@ -2100,7 +2100,7 @@ func TestSinglePairUngrouped(t *testing.T) {
 func TestThoughtReceipt(t *testing.T) {
 	// Provider-reported tokens: wall time plus generation rate.
 	loop := newTestLoop()
-	loop.TotCompletion = 82
+	loop.TotCompletion.Store(82)
 	m := New(loop, mode.Plan, t.TempDir(), "ollama/m", 32000)
 	m.running = true
 	m.turnStart = time.Now().Add(-3 * time.Second)
@@ -3120,5 +3120,127 @@ func TestExpandableToolOutputSurvivesPlanBannerRemoval(t *testing.T) {
 	full := stripANSI(strings.Join(after.lines, "\n"))
 	if !strings.Contains(full, "line-13") || after.toolOverflow != nil {
 		t.Fatalf("expansion anchor must survive removal of the Plan banner:\n%s", full)
+	}
+}
+
+func TestResumeDeleteNeedsTwoPresses(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session_del.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loop := newTestLoop()
+	m := New(loop, mode.Build, "/tmp", "ollama/m", 32000)
+	m.loop.Log = nil // ensure the open-session guard cannot interfere
+	m.resumeItems = []SessionItem{{ID: "session_del", Path: path}}
+	m.resumeCursor = 0
+	d := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}
+	mm, _ := m.updateResume(d)
+	m = mm.(Model)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal("first d must only arm, not delete")
+	}
+	if m.resumeDeleteArm == "" {
+		t.Fatal("first d must arm the delete")
+	}
+	mm, _ = m.updateResume(d)
+	m = mm.(Model)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("second d must delete the armed session")
+	}
+}
+
+func TestResumeDeleteDisarmedByCursorMove(t *testing.T) {
+	dir := t.TempDir()
+	mk := func(id string) SessionItem {
+		p := filepath.Join(dir, id+".jsonl")
+		if err := os.WriteFile(p, []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return SessionItem{ID: id, Path: p}
+	}
+	loop := newTestLoop()
+	m := New(loop, mode.Build, "/tmp", "ollama/m", 32000)
+	m.loop.Log = nil
+	m.resumeItems = []SessionItem{mk("a"), mk("b")}
+	m.resumeCursor = 0
+	d := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}
+	mm, _ := m.updateResume(d)
+	m = mm.(Model)
+	mm, _ = m.updateResume(tea.KeyMsg{Type: tea.KeyDown})
+	m = mm.(Model)
+	if m.resumeCursor != 1 {
+		t.Fatal("cursor must move")
+	}
+	mm, _ = m.updateResume(d)
+	m = mm.(Model)
+	// Armed row b (one press); row a's arm must have died with the move.
+	if _, err := os.Stat(m.resumeItems[0].Path); err != nil {
+		t.Fatal("moving the cursor must disarm: row a deleted without re-arm")
+	}
+}
+
+func TestClearNeedsTwoPresses(t *testing.T) {
+	loop := newTestLoop()
+	m := New(loop, mode.Build, "/tmp", "ollama/m", 32000)
+	m.lines = []string{"keep me"}
+	m.loop.SetMsgs(nil)
+	m.runSlash("/clear", "", slashRow{})
+	if len(m.lines) == 0 {
+		t.Fatal("first /clear must only arm, not wipe")
+	}
+	m.runSlash("/clear", "", slashRow{})
+	if len(m.lines) != 1 || !strings.Contains(m.lines[0], "transcript cleared") {
+		t.Fatalf("second /clear must wipe with a receipt, lines=%v", m.lines)
+	}
+}
+
+func TestLogoutNamedNeedsTwoPresses(t *testing.T) {
+	loop := newTestLoop()
+	m := New(loop, mode.Build, "/tmp", "ollama/m", 32000)
+	n := len(m.lines)
+	m.runSlash("/logout", "openai", slashRow{})
+	if len(m.lines) != n+1 || !strings.Contains(m.lines[n], "repeat /logout openai") {
+		t.Fatalf("first /logout must arm naming the provider, lines=%v", m.lines)
+	}
+}
+
+func TestQQuitsOnEmptyIdleComposer(t *testing.T) {
+	loop := newTestLoop()
+	m := New(loop, mode.Build, "/tmp", "ollama/m", 32000)
+	m.ta.SetValue("")
+	q := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+	_, cmd := m.Update(q)
+	if cmd == nil {
+		t.Fatal("q on an empty idle composer must quit")
+	}
+	// With a draft present, q must type, not quit.
+	m2 := New(loop, mode.Build, "/tmp", "ollama/m", 32000)
+	m2.ta.SetValue("query")
+	mm, _ := m2.Update(q)
+	m2 = mm.(Model)
+	if m2.ta.Value() != "queryq" {
+		t.Fatalf("q with a draft must type, got %q", m2.ta.Value())
+	}
+}
+
+func TestStateMarkersSurviveColorStripping(t *testing.T) {
+	// State must never be color-only: strip all ANSI styling and the
+	// markers/words must still carry the meaning (NO_COLOR terminals,
+	// monochrome displays, copy/paste logs).
+	empty := stripANSI(atDropdown(nil, 0, 80))
+	if !strings.Contains(empty, "no files match") {
+		t.Fatalf("empty @ state unreadable without color: %q", empty)
+	}
+	rows := []atRow{{path: "main.go", rendered: "main.go"}}
+	full := stripANSI(atDropdown(rows, 0, 80))
+	if !strings.Contains(full, "→") || !strings.Contains(full, "main.go") {
+		t.Fatalf("selection cursor/path unreadable without color: %q", full)
+	}
+	help := stripANSI(helpView(80))
+	for _, want := range []string{"Esc Esc", "Cancel the running turn", "Ctrl+C", "q", "Quit"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("help unreadable without color, missing %q", want)
+		}
 	}
 }

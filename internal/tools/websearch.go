@@ -248,17 +248,44 @@ func (t *WebSearch) cacheGet(key string) (string, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	e, ok := t.cache[key]
-	if !ok || time.Now().After(e.expiry) {
+	if !ok {
+		return "", false
+	}
+	if time.Now().After(e.expiry) {
+		// Evict on read: expired entries must not accumulate for the
+		// life of the session (unbounded memory growth).
+		delete(t.cache, key)
 		return "", false
 	}
 	return e.output, true
 }
+
+const searchCacheMax = 200
 
 func (t *WebSearch) cachePut(key, out string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.cache == nil {
 		t.cache = map[string]searchCacheEntry{}
+	}
+	// Bounded: evict an arbitrary expired entry first, else one
+	// arbitrary entry, so distinct queries can't grow the map forever.
+	if len(t.cache) >= searchCacheMax {
+		now := time.Now()
+		evicted := false
+		for k, e := range t.cache {
+			if now.After(e.expiry) {
+				delete(t.cache, k)
+				evicted = true
+				break
+			}
+		}
+		if !evicted {
+			for k := range t.cache {
+				delete(t.cache, k)
+				break
+			}
+		}
 	}
 	t.cache[key] = searchCacheEntry{output: out, expiry: time.Now().Add(searchTTL)}
 }

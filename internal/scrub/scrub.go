@@ -32,9 +32,9 @@ var (
 	// trades a small false-negative risk (lone secret without its key ID)
 	// for avoiding bulk false positives.
 	reScrubAWSSecret      = regexp.MustCompile(`[A-Za-z0-9/+=]{40}`)
-	reScrubGitHub         = regexp.MustCompile(`(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}`)
+	reScrubGitHub         = regexp.MustCompile(`(?:gh[pousr]_|gho_|ghu_|ghs_|ghr_|github_pat_)[A-Za-z0-9_]{20,}`)
 	reScrubGitLab         = regexp.MustCompile(`glpat-[A-Za-z0-9_-]{20,}`)
-	reScrubSlack          = regexp.MustCompile(`(?:xox[abdeoprs]|xapp)-[A-Za-z0-9-]+`)
+	reScrubSlack          = regexp.MustCompile(`(?:xox[a-z]|xapp)-[A-Za-z0-9-]+`)
 	reScrubReplicate      = regexp.MustCompile(`rk_live_[A-Za-z0-9_-]{8,}`)
 	reScrubNPM            = regexp.MustCompile(`npm_[A-Za-z0-9_]{8,}`)
 	reScrubNpmAuth        = regexp.MustCompile(`(?i)(_authtoken\s*[:=]\s*["']?)[A-Za-z0-9_.\-/+=]{8,}`)
@@ -44,7 +44,13 @@ var (
 	reScrubJWT            = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
 	reScrubOpenCodeAssign = regexp.MustCompile(`(?i)(opencode_api_key["']?\s*[:=]\s*["']?)[A-Za-z0-9_.\-/+=]{8,}`)
 	reScrubAPIKeyAssign   = regexp.MustCompile(`(?i)(["']?(?:api[_-]?key|api_secret|authorization)["']?\s*[:=]\s*["']?)[A-Za-z0-9_.\-/+=]{8,}`)
-	reScrubQueryParam     = regexp.MustCompile(`(?i)([?&](?:key|token|secret|password|access_token|refresh_token|id_token|client_secret|api_key|apikey|auth|authorization|session|sig|signature|code)=)[^&#\s]*`)
+	// reScrubSecretAssign catches password/secret-style assignments
+	// (env files, JSON, YAML, KEY=value) that no prefixed-token rule
+	// covers: DB_PASSWORD=…, "client_secret": "…". Deliberately
+	// [: =]-joined only — a bare word followed by prose ("the secret
+	// sauce") must not redact.
+	reScrubSecretAssign = regexp.MustCompile(`(?i)(["']?(?:password|passwd|pwd|client_secret|access_token|secret_token|private_key)["']?\s*[:=]\s*["']?)[A-Za-z0-9_.\-/+=]{4,}`)
+	reScrubQueryParam   = regexp.MustCompile(`(?i)([?&](?:key|token|secret|password|access_token|refresh_token|id_token|client_secret|api_key|apikey|auth|authorization|session|sig|signature|code)=)[^&#\s]*`)
 )
 
 // Scrub redacts secrets in s, returning the cleaned string and the number
@@ -85,6 +91,9 @@ func Scrub(s string) (string, int) {
 	replace(reScrubOpenCodeAssign, `$1<<REDACTED:opencode>>`)
 	replace(reScrubAPIKeyAssign, `$1<<REDACTED:apikey>>`)
 	replace(reScrubQueryParam, `$1<<REDACTED:query>>`)
+	// After the query rule: in a URL the query marker wins (no double
+	// redaction); bare KEY=value assignments still fall through to here.
+	replace(reScrubSecretAssign, `$1<<REDACTED:secret>>`)
 	if home := os.Getenv("HOME"); home != "" {
 		if c := strings.Count(s, home); c > 0 {
 			n += c

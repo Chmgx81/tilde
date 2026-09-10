@@ -19,6 +19,7 @@ export default defineConfig({
         {
           label: 'Get started',
           items: [
+            { label: 'Overview', slug: 'docs/readme' },
             { label: 'Architecture', slug: 'docs/architecture' },
             { label: 'Design spec', slug: 'docs/tui-design-spec' },
           ],

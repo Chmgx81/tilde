@@ -161,13 +161,6 @@ func renderToolResultLimit(text string, limit int) (string, bool) {
 	return strings.Join(out, "\n"), truncated
 }
 
-// capResultLines bounds a result body for the transcript; the session
-// log always keeps everything. Shared by the diff/new-file branches
-// and the generic path below — one cap, one notice, no forks.
-func capResultLines(lines []string) (kept []string, truncated bool) {
-	return capResultLinesLimit(lines, maxToolResultLines)
-}
-
 func capResultLinesLimit(lines []string, limit int) (kept []string, truncated bool) {
 	if limit > 0 && len(lines) > limit {
 		return lines[:limit], true

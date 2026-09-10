@@ -195,35 +195,67 @@ func (m *Model) shellEscape(cmdStr string) {
 			}
 		}
 		go func() {
-			m.emitShellResult(cmdStr, send)
+			ctx, cancel := context.WithCancel(context.Background())
+			send(escStartedMsg{cancel: cancel})
+			defer cancel()
+			m.emitShellResultCtx(ctx, cmdStr, send)
 			send(agentDoneMsg{})
 		}()
 	}
 }
 
 // shellEscapeCmd runs a confirm-approved escape off the render thread.
+// The escape gets its own cancellable context (stored on the Model via
+// escStartedMsg): quitting or pressing Esc mid-escape cancels the shell
+// tool instead of leaving it running uncancellable up to its timeout.
 func (m Model) shellEscapeCmd(cmdStr string) tea.Cmd {
 	pp := m.progPtr
 	return func() tea.Msg {
+		ctx, cancel := context.WithCancel(context.Background())
 		send := func(msg tea.Msg) {
 			if pp != nil && *pp != nil {
 				(*pp).Send(msg)
 			}
 		}
-		m.emitShellResult(cmdStr, send)
+		send(escStartedMsg{cancel: cancel})
+		defer cancel()
+		m.emitShellResultCtx(ctx, cmdStr, send)
 		return agentDoneMsg{}
 	}
 }
 
-func (m Model) emitShellResult(cmdStr string, send func(tea.Msg)) {
+// escStartedMsg carries a running shell escape's cancel func to the
+// Model (the tea.Cmd closure only holds a copy of the Model, so it
+// cannot store the cancel itself).
+type escStartedMsg struct {
+	cancel context.CancelFunc
+}
+
+// cancelEscape stops a running shell escape, if any. Called from the
+// quit and idle-Esc paths so an approved escape never outlives the
+// session's intent to stop.
+func (m *Model) cancelEscape() {
+	if m.escCancel != nil {
+		m.escCancel()
+		m.escCancel = nil
+	}
+}
+
+func (m Model) emitShellResultCtx(ctx context.Context, cmdStr string, send func(tea.Msg)) {
 	args := map[string]any{"command": cmdStr}
 	send(agentEventMsg(agent.Event{Kind: "tool_call", Text: "shell_command " + cmdStr}))
+	// Mirror Loop.appendLog (loop.go): a dead session log is never silent
+	// — surface the first error instead of swallowing it.
 	if m.loop.Log != nil {
-		_ = m.loop.Log.Append("tool_call", map[string]any{"name": "shell_command", "args": args})
+		if err := m.loop.Log.Append("tool_call", map[string]any{"name": "shell_command", "args": args}); err != nil {
+			send(agentEventMsg(agent.Event{Kind: "system", Text: "session log: " + err.Error()}))
+		}
 	}
-	out := m.loop.Reg.Dispatch(context.Background(), "shell_command", args)
+	out := m.loop.Reg.Dispatch(ctx, "shell_command", args)
 	if m.loop.Log != nil {
-		_ = m.loop.Log.Append("tool_result", map[string]any{"name": "shell_command", "output": out})
+		if err := m.loop.Log.Append("tool_result", map[string]any{"name": "shell_command", "output": out}); err != nil {
+			send(agentEventMsg(agent.Event{Kind: "system", Text: "session log: " + err.Error()}))
+		}
 	}
 	send(agentEventMsg(agent.Event{Kind: "tool_result", Text: out}))
 }

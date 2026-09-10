@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
-
+	"sync/atomic"
 	"tilde/internal/compact"
 	"tilde/internal/mode"
 	"tilde/internal/policy"
@@ -65,9 +65,11 @@ type Event struct {
 // write-once at startup and needs no lock.
 //
 // TotPrompt/TotCompletion accumulate provider-reported token usage for
-// the run. Written by Run only; read after Run returns (eval reports,
-// turn summaries). Heuristic estimates still drive compaction (they exist
-// pre-call); these are the receipt, used for cost tracking.
+// the run. Written by Run as each model reply lands; read concurrently
+// by the render thread for the live cost bar and per-turn token delta,
+// so they are atomics, not bare ints. Heuristic estimates still drive
+// compaction (they exist pre-call); these are the receipt, used for
+// cost tracking.
 type Loop struct {
 	Prov provider.Provider
 	Reg  *tools.Registry
@@ -75,8 +77,8 @@ type Loop struct {
 	Cfg  Config
 	Msgs []provider.Message
 
-	TotPrompt     int
-	TotCompletion int
+	TotPrompt     atomic.Int64
+	TotCompletion atomic.Int64
 
 	mu sync.Mutex
 	// pmut guards Prov: /model may swap the backend mid-session while a
@@ -129,13 +131,48 @@ func (l *Loop) appendLog(typ string, data map[string]any, emit func(Event)) {
 	}
 }
 
+// composeSys builds the system prompt for this iteration: identity +
+// tool docs + mode rule, project rules on top, writer-child Plan
+// exception when set. Reloaded per iteration so mid-session installs
+// and AGENTS.md drop-ins apply with no restart.
+func (l *Loop) composeSys() string {
+	sys := systemPrompt(l.Reg.Names(), l.GetMode()) + l.systemExtra()
+	// Project ground truth outranks generic harness rules. RulesOK
+	// mirrors the project skills trust gate (main.go), never auto-on.
+	if l.Cfg.RulesOK {
+		if r, ok := rules.Load(l.Cfg.Root); ok {
+			sys = r.PromptBlock() + "\n" + sys
+		}
+	}
+	// Writer children are Plan-locked except their whitelist: say so,
+	// or the stock Plan rule ("do NOT call write_file") contradicts
+	// the task. No other loop sets PlanAllow, so no other prompt moves.
+	if l.GetMode() == mode.Plan && len(l.Cfg.PlanAllow) > 0 {
+		sys += "Exception: you MAY call " + strings.Join(l.Cfg.PlanAllow, ", ") +
+			" (confined to your worktree); all other mutating tools stay blocked.\n"
+	}
+	return sys
+}
+
+// callOverhead estimates the non-context tokens every model call
+// carries: the composed system prompt + ~32 tokens per registered tool
+// schema (name, description, parameter refs — errs upward so we compact
+// early rather than overflow silently).
+func callOverhead(sys string, ndefs int) int {
+	return (len("system")+len(sys)+12)/4 + ndefs*32
+}
+
 // maybeCompact runs the shared pre-call compaction path: no-op (no
 // marker, no log) when nothing was dropped. Reused at the top of every
 // iteration and after tool results land, so a mid-turn output spike is
 // compacted before the next model call instead of overflowing it.
-func (l *Loop) maybeCompact(ctx context.Context, comp *compact.Compactor, emit func(Event)) bool {
+// The overhead (system prompt + tool schemas) must be included: the
+// decision is about the next request's total size, not live context
+// alone — otherwise a turn under 80% live but over budget with schemas
+// would skip compaction and overflow.
+func (l *Loop) maybeCompact(ctx context.Context, comp *compact.Compactor, overhead int, emit func(Event)) bool {
 	live := l.MsgsSnapshot()
-	if !comp.Needed(live) {
+	if !comp.NeededWith(live, overhead) {
 		return false
 	}
 	res := comp.Compact(ctx, live)
@@ -282,23 +319,7 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 	for i := 0; i < maxIters; i++ {
 		// System prompt is composed fresh every iteration so mid-session
 		// installs (skills, MCP servers) appear with no restart.
-		sys := systemPrompt(l.Reg.Names(), l.GetMode()) + l.systemExtra()
-		// Project ground truth outranks generic harness rules. Reloaded
-		// per iteration like skills/MCP so a mid-session AGENTS.md
-		// drop-in works with no restart; RulesOK mirrors the project
-		// skills trust gate (main.go), never auto-on.
-		if l.Cfg.RulesOK {
-			if r, ok := rules.Load(l.Cfg.Root); ok {
-				sys = r.PromptBlock() + "\n" + sys
-			}
-		}
-		// Writer children are Plan-locked except their whitelist: say so,
-		// or the stock Plan rule ("do NOT call write_file") contradicts
-		// the task. No other loop sets PlanAllow, so no other prompt moves.
-		if l.GetMode() == mode.Plan && len(l.Cfg.PlanAllow) > 0 {
-			sys += "Exception: you MAY call " + strings.Join(l.Cfg.PlanAllow, ", ") +
-				" (confined to your worktree); all other mutating tools stay blocked.\n"
-		}
+		sys := l.composeSys()
 		defs := l.toolDefs()
 		live := l.MsgsSnapshot()
 		// Pre-check + auto-compaction: never silently overflow. The
@@ -307,23 +328,21 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 		// extras) + ~32 tokens per registered tool schema (name,
 		// description, parameter refs — errs upward so we compact
 		// early rather than overflow silently).
-		used := compact.Estimate(live) +
-			(len("system")+len(sys)+12)/4 +
-			len(defs)*32
+		used := compact.Estimate(live) + callOverhead(sys, len(defs))
 		pct := 0
 		if budget > 0 {
 			pct = used * 100 / budget
 		}
 		emit(Event{Kind: "usage", Text: compact.Label(used, budget), Pct: pct})
-		l.maybeCompact(ctx, comp, emit)
+		l.maybeCompact(ctx, comp, callOverhead(sys, len(defs)), emit)
 		full := append([]provider.Message{{Role: "system", Content: sys}}, l.MsgsSnapshot()...)
 		resp, err := l.chatTurn(ctx, full, defs, emit)
 		if err != nil {
 			emit(Event{Kind: "system", Text: "model error [" + provider.Classify(err) + "]: " + err.Error()})
 			return "", err
 		}
-		l.TotPrompt += resp.Usage.Prompt
-		l.TotCompletion += resp.Usage.Completion
+		l.TotPrompt.Add(int64(resp.Usage.Prompt))
+		l.TotCompletion.Add(int64(resp.Usage.Completion))
 		// Thinking trace (transparency): when the backend exposes model
 		// reasoning, surface it as its own event ahead of the reply and
 		// record it in the session log — the user sees how a decision
@@ -469,7 +488,9 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 		pending = nil
 		// Mid-turn spike: tool outputs just landed — re-check before the
 		// next model call via the same shared path as the top of loop.
-		l.maybeCompact(ctx, comp, emit)
+		// Recompute the overhead fresh: a mid-turn install can change
+		// the tool set after the top-of-iteration estimate.
+		l.maybeCompact(ctx, comp, callOverhead(l.composeSys(), len(l.toolDefs())), emit)
 	}
 	msg := fmt.Sprintf("Iteration cap (%d) reached — stopping cheap instead of looping. Summarize partial progress and hand back to the user.", maxIters)
 	emit(Event{Kind: "handoff", Text: msg})
@@ -568,8 +589,10 @@ func (l *Loop) flushBatch(ctx context.Context, batch []provider.ToolCall, emit f
 		out string
 	}
 	outs := make([]res, len(batch))
+	started := make([]bool, len(batch))   // worker dispatched (may still be running)
+	completed := make([]bool, len(batch)) // Dispatch returned; outs[i] is final
 	var wg sync.WaitGroup
-	var mu sync.Mutex // guards outs so a cancelled wait can read them safely
+	var mu sync.Mutex // guards outs/started/completed so a cancelled wait can read them safely
 	// Semaphore: at most flushParallel Dispatch calls in flight — one
 	// goroutine per call with no bound burns FDs on wide turns.
 	sem := make(chan struct{}, l.flushParallel())
@@ -587,9 +610,13 @@ func (l *Loop) flushBatch(ctx context.Context, batch []provider.ToolCall, emit f
 		go func(i int, tc provider.ToolCall) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			mu.Lock()
+			started[i] = true
+			mu.Unlock()
 			out := l.Reg.Dispatch(ctx, tc.Name, tc.Args)
 			mu.Lock()
 			outs[i].out = out
+			completed[i] = true
 			mu.Unlock()
 		}(i, tc)
 	}
@@ -610,16 +637,36 @@ func (l *Loop) flushBatch(ctx context.Context, batch []provider.ToolCall, emit f
 	mu.Lock()
 	got := make([]res, len(outs))
 	copy(got, outs)
+	wasStarted := make([]bool, len(started))
+	copy(wasStarted, started)
+	wasCompleted := make([]bool, len(completed))
+	copy(wasCompleted, completed)
 	mu.Unlock()
 	if !cancelled {
 		wg.Wait() // done already closed; no-op barrier before ordered read
 	}
 	for i, tc := range batch {
+		if !wasStarted[i] {
+			// Never dispatched (cancellation won the semaphore race):
+			// emitting an empty result would fabricate tool output the
+			// model then reasons over. Skip it entirely.
+			continue
+		}
 		emit(Event{Kind: "tool_call", Text: tc.Name + " " + shortArgs(tc.Args)})
 		l.appendLog("tool_call", map[string]any{"name": tc.Name, "args": tc.Args}, emit)
-		emit(Event{Kind: "tool_result", Text: got[i].out})
-		l.appendLog("tool_result", map[string]any{"name": tc.Name, "output": got[i].out}, emit)
-		l.AppendMsg(provider.Message{Role: "user", Content: "Tool " + tc.Name + " result:\n" + got[i].out})
+		out := got[i].out
+		if cancelled && !wasCompleted[i] {
+			// Dispatched but killed mid-flight: say so honestly instead
+			// of presenting a truncated/empty string as the real result,
+			// and keep it out of the model context.
+			out = "(cancelled before the tool returned)"
+			emit(Event{Kind: "tool_result", Text: out})
+			l.appendLog("tool_result", map[string]any{"name": tc.Name, "output": out, "cancelled": true}, emit)
+			continue
+		}
+		emit(Event{Kind: "tool_result", Text: out})
+		l.appendLog("tool_result", map[string]any{"name": tc.Name, "output": out}, emit)
+		l.AppendMsg(provider.Message{Role: "user", Content: "Tool " + tc.Name + " result:\n" + out})
 	}
 	if cancelled {
 		return ctx.Err()

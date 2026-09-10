@@ -8,6 +8,14 @@ editUrl: false
 Status: optional. Bubblewrap remains the default sandbox; use this image when
 the deployment environment standardizes on Podman.
 
+**Resource model.** Both backends isolate the agent's filesystem and network,
+but they cap resources differently. Bubblewrap gives you filesystem/network
+isolation (`--unshare-pid --unshare-net --die-with-parent`) yet, by itself,
+cannot bound resident memory or process count — a fork/memory-bomb payload
+shares the host cgroup. The Podman backend additionally enforces
+`--pids-limit 256` and `--memory 4g`, so it is the backend to reach for when
+running untrusted or potentially hostile payloads (`TILDE_BACKEND=podman`).
+
 Minimal agent-execution image: `fedora-minimal` + go, git, coreutils,
 bash. Chosen over `archlinux:base` because Fedora ships versioned
 releases (`:41`) with stable digests, while Arch is rolling — a digest

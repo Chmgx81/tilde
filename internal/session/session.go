@@ -54,7 +54,11 @@ func Open(id string) (*Log, error) {
 
 // Append writes one entry (never rewrites in place). Flush + fsync per
 // entry: session volume is low, crash-safety first (spec §2.23).
+// A zero-value Log (nil writer/file) errors instead of panicking.
 func (l *Log) Append(typ string, data map[string]any) error {
+	if l == nil || l.w == nil || l.f == nil {
+		return fmt.Errorf("session: log not open — cannot append %q", typ)
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	e := Entry{TS: time.Now().UTC(), Type: typ, Data: data}
@@ -76,7 +80,11 @@ func (l *Log) Append(typ string, data map[string]any) error {
 }
 
 // Close flushes and closes, reporting a flush failure instead of hiding it.
+// A zero-value Log errors instead of panicking.
 func (l *Log) Close() error {
+	if l == nil || l.w == nil || l.f == nil {
+		return fmt.Errorf("session: log not open — nothing to close")
+	}
 	if err := l.w.Flush(); err != nil {
 		_ = l.f.Close()
 		return fmt.Errorf("session: flush on close: %w", err)

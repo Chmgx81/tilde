@@ -83,6 +83,12 @@ hook execution are separate state-changing actions. Each action must preserve
 source provenance, validate paths and manifests, and remain reversible where
 possible. Never install an extension solely because it appears in a catalog.
 
+Local MCP servers run as unsandboxed child processes with your user
+privileges and full environment — outside the bwrap sandbox by design
+(they need real egress and binaries). Only start servers from sources you
+trust; project `.tilde/mcp.json` entries additionally need `--mcp-project`
+or a recorded trust.
+
 ## Signed remote catalog foundation
 
 `internal/marketplace/remote.go` provides bounded HTTPS retrieval, Ed25519

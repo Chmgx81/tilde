@@ -43,7 +43,11 @@ type Config struct {
 	Root   string              `yaml:"-"`
 	Before map[string][]string `yaml:"before"`
 	After  map[string][]string `yaml:"after"`
-	// SessionStart runs once at session startup; SessionEnd runs at exit.
+	// SessionStart/SessionEnd are RESERVED for a future session
+	// lifecycle: parsed, merged, and shown in the marketplace view, but
+	// deliberately NOT executed — auto-running configured commands at
+	// startup/exit would expand the auto-exec surface, so only the
+	// before/after phases run today.
 	SessionStart []string `yaml:"session_start"`
 	SessionEnd   []string `yaml:"session_end"`
 }
@@ -180,9 +184,15 @@ func runHook(ctx context.Context, tool, argsJSON, stdin, cmdStr string) (string,
 			}
 		}
 		runErr = <-wait
-		if runErr == nil {
-			runErr = cctx.Err()
+		if runErr != nil {
+			// The timer fired first: whatever the wait status is, the
+			// hook overran its budget — say so explicitly instead of
+			// surfacing a bare "signal: killed".
+			runErr = fmt.Errorf("hook timed out after 30s: %v", runErr)
 		}
+		// A nil wait result here means the process exited cleanly in
+		// the same instant the timer fired (the kill found nothing to
+		// kill): report success, not a timeout.
 	}
 	s := capOutput(out.String())
 	s = scrubLocal(s)

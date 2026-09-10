@@ -66,6 +66,11 @@ func BuildPodmanArgs(root string, allowNet bool, image string, cmd ...string) ([
 	args := []string{
 		"run", "--rm", "-i",
 		"--read-only",
+		// Containment against fork/memory bombs. No --user flag: the
+		// image already pins USER agent (see sandbox.Containerfile) and
+		// overriding it would break worktree file ownership.
+		"--pids-limit", "256",
+		"--memory", "4g",
 	}
 	if !allowNet {
 		args = append(args, "--network", "none")
