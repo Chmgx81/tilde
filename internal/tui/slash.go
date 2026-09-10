@@ -39,6 +39,9 @@ var slashCommands = []slashRow{
 	{"/copy [n]", "Copy transcript (or line n) to the clipboard"},
 	{"/sandbox", "Show current policy tier and overrides"},
 	{"/diff", "Show working-tree diff for review"},
+	{"/critic", "Score-gated self-review of the working-tree diff"},
+	{"/apply [path]", "Apply the pending work session (keep worktree)"},
+	{"/discard [path]", "Discard the pending work session (remove worktree)"},
 	{"/undo [n]", "Revert the last n mutating steps"},
 	{"/sessions", "List and resume a past session"},
 	{"/export [id]", "Write a portable markdown brief for handoff"},
@@ -198,6 +201,23 @@ func (m *Model) runSlash(cmd, args string, selected slashRow) tea.Cmd {
 		return nil
 	case "/diff":
 		m.showDiff()
+		return nil
+	case "/critic":
+		m.showCritic()
+		return nil
+	case "/apply":
+		if m.running {
+			m.append("✗ an agent turn is running — Esc twice, then /apply.")
+			return nil
+		}
+		m.doApplyWork(args)
+		return nil
+	case "/discard":
+		if m.running {
+			m.append("✗ an agent turn is running — Esc twice, then /discard.")
+			return nil
+		}
+		m.doDiscardWork(args)
 		return nil
 	case "/undo":
 		if m.running {

@@ -31,7 +31,7 @@ func helpView(width int) string {
 	for _, r := range rows {
 		s += truncANSI("  "+padRunesRight(r[0], 22)+r[1], width) + "\n"
 	}
-	s += "\n" + truncANSI("  Slash commands: /mode /compact /clear /copy /sandbox /diff /undo /sessions /export /model /login /logout /skills /plugins /marketplace /help /quit", width) + "\n"
+	s += "\n" + truncANSI("  Slash commands: /mode /compact /clear /copy /sandbox /diff /critic /apply /discard /undo /sessions /export /model /login /logout /skills /plugins /marketplace /help /quit", width) + "\n"
 	s += truncANSI("  press esc to close", width)
 	return s
 }

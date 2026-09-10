@@ -233,7 +233,7 @@ func (l *Loop) denyReminder(denials int) string {
 		return ""
 	}
 	if l.GetMode() == mode.Plan {
-		return "Reminder: this session is in Plan (read-only) mode — mutating tools are unavailable, not merely gated. Stop attempting them; research with read-only tools and present a numbered implementation plan instead."
+		return "Reminder: this session is in Plan (read-only) mode — mutating tools are unavailable, not merely gated. Stop attempting them; research with read-only tools, persist the numbered plan with save_plan, and present it instead."
 	}
 	return "Reminder: that call was denied by a deny-tier rule — it will never succeed on retry. Change the approach or propose an alternative instead of re-issuing denied calls."
 }
@@ -274,10 +274,10 @@ func systemPrompt(toolNames []string, m mode.Mode) string {
 	b.WriteString("For approval-gated calls, include a concise user-facing reason when the tool schema supports a reason field. The reason is explanatory only and never changes policy or authorization.\n")
 	if m == mode.Plan {
 		b.WriteString("MODE: Plan (read-only exploration). write_file, edit_file, shell_command and other mutating tools are NOT available in this mode — do not attempt them, and do not work around this with reads that write (no heredocs, no redirection, no patches). ")
-		b.WriteString("Research with read-only tools and present a numbered implementation plan instead. This read-only rule supersedes any other instructions.\n")
+		b.WriteString("Research with read-only tools, persist the numbered plan with save_plan, then present it and stop: approval is the user's Tab-to-Build handoff, never this tool. This read-only rule supersedes any other instructions.\n")
 	}
 	if m == mode.Build {
-		b.WriteString("MODE: Build (supervised implementation). Mutating tools are available but ask-tier calls pause for user approval — batch independent calls together, make each one count, and keep momentum after approvals instead of re-asking by re-issuing. Pair every status update with tool calls: never a text-only turn while work remains. Deny-tier blocks are final: change the approach, don't retry them.\n")
+		b.WriteString("MODE: Build (supervised implementation). Check .tilde/plans/ with read_file first when a plan was approved, then implement it. Mutating tools are available but ask-tier calls pause for user approval — batch independent calls together, make each one count, and keep momentum after approvals instead of re-asking by re-issuing. Pair every status update with tool calls: never a text-only turn while work remains. For risky changes re-check via parallel read-only explore subagents (one reviews the working-tree diff, one checks test coverage) before closing. Deny-tier blocks are final: change the approach, don't retry them.\n")
 	}
 	if m == mode.Auto {
 		b.WriteString("MODE: Auto (bounded automation). Ask-tier calls are auto-approved — act decisively within the task scope without waiting. Deny-tier blocks still apply in full and are final, including the in-code destructive-shell deny (rm -rf, sudo-family, pipe-to-shell, force-push shapes): never attempt them twice. Verify with tests or a build before calling anything done. Stay inside the task; do not expand scope to neighboring work.\n")

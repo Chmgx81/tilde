@@ -1117,7 +1117,7 @@ func TestGateDenialsInjectPlanReminder(t *testing.T) {
 	}
 	found := false
 	for _, m := range loop.MsgsSnapshot() {
-		if strings.Contains(m.Content, "numbered implementation plan instead") {
+		if strings.Contains(m.Content, "persist the numbered plan with save_plan") {
 			found = true
 		}
 	}
