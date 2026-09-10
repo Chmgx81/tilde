@@ -46,6 +46,14 @@ func (s *WorkState) resolve(p string) string {
 	return filepath.Clean(filepath.Join(s.Root, p))
 }
 
+// Active returns the pending worktree path, or "" when no session is
+// active. The TUI uses it to resolve /apply and /discard with no args.
+func (s *WorkState) Active() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.active
+}
+
 // checkActive verifies a session is pending at path. Callers must NOT
 // hold s.mu.
 func (s *WorkState) checkActive(path string) (string, error) {
@@ -368,6 +376,8 @@ func NewWorkChild(parent *Loop, task, workRoot string) *Loop {
 				reg.Register(&tools.GitDiff{Root: workRoot})
 			case *tools.GitWorktreeList:
 				reg.Register(&tools.GitWorktreeList{Root: workRoot})
+			case *tools.SavePlan:
+				reg.Register(&tools.SavePlan{Root: workRoot})
 			default:
 				reg.Register(tl)
 			}

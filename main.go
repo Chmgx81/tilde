@@ -81,6 +81,7 @@ Commands:
   audit   [--since T] [--tool N] [--decision D] [--json]
                                    read the append-only audit log
   run-due [--yes]                  run due scheduled jobs now
+  schedule [--json]                list scheduled jobs with due state + next run
   prune   [--sessions D|--audit D] [--yes]
                                    delete old sessions / trim audit log (dry run by default)
   fork <id> [--at RFC3339]         branch a session at a message
@@ -156,9 +157,10 @@ Flags:
 	// `tilde audit [--since ...] [--tool ...] [--decision ...] [--json]`
 	// reads the governance trail. `tilde run-due [--yes]` executes due
 	// schedule entries by re-invoking this binary headlessly per job.
+	// `tilde schedule [--json]` lists schedule entries with due state.
 	// `tilde plugin install <dir> [--upgrade] | upgrade <dir> |
 	// enable|disable|remove|rollback <name> | verify <name> | list`
-	// manages hash-pinned local plugins. All three dispatch before any
+	// manages hash-pinned local plugins. All four dispatch before any
 	// session-shaped setup: they need no provider, no log, no TUI.
 	if flag.NArg() > 0 && flag.Arg(0) == "audit" {
 		if err := runAuditCmd(flag.Args()); err != nil {
@@ -169,6 +171,13 @@ Flags:
 	}
 	if flag.NArg() > 0 && flag.Arg(0) == "run-due" {
 		if err := runDueCmd(flag.Args()); err != nil {
+			fmt.Fprintln(os.Stderr, "tilde:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if flag.NArg() > 0 && flag.Arg(0) == "schedule" {
+		if err := runScheduleCmd(flag.Args()); err != nil {
 			fmt.Fprintln(os.Stderr, "tilde:", err)
 			os.Exit(1)
 		}
@@ -754,6 +763,7 @@ func buildHarness(root string) harness {
 	h.reg.Register(&tools.Memory{Root: root})
 	h.reg.Register(&tools.Diagnose{Root: root, Seen: h.seen})
 	h.reg.Register(&tools.Remember{Root: root, Seen: h.seen})
+	h.reg.Register(&tools.SavePlan{Root: root})
 	return h
 }
 
@@ -1259,6 +1269,85 @@ func runAuditCmd(args []string) error {
 	}
 	if skipped > 0 {
 		fmt.Fprintf(os.Stderr, "tilde: warning: skipped %d corrupt audit lines\n", skipped)
+	}
+	return nil
+}
+
+// runScheduleCmd implements `tilde schedule [--json]`: read-only listing
+// of .tilde/schedule.yaml jobs with enabled/due/next-run columns. Bad
+// config fails loud (exit 1 via the caller); the OS still owns waking.
+func runScheduleCmd(args []string) error {
+	fs := flag.NewFlagSet("schedule", flag.ContinueOnError)
+	asJSON := fs.Bool("json", false, "one JSON object per line")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() > 0 {
+		return fmt.Errorf("usage: tilde schedule [--json] — got extra args %q", fs.Args())
+	}
+	root, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("cannot determine working dir: %w", err)
+	}
+	jobs, err := schedule.LoadFile(filepath.Join(root, ".tilde", "schedule.yaml"))
+	if err != nil {
+		return err
+	}
+	st, err := schedule.LoadState(filepath.Join(root, ".tilde", "schedule-state.json"))
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	dueSet := map[string]bool{}
+	for _, j := range schedule.Due(now, jobs, st) {
+		dueSet[j.ID] = true
+	}
+	if *asJSON {
+		for _, j := range jobs {
+			next, ok := schedule.NextRun(now, j, st)
+			obj := map[string]any{
+				"id":      j.ID,
+				"enabled": j.Enabled,
+				"due":     dueSet[j.ID],
+				"every":   j.Every.String(),
+				"at":      j.At,
+			}
+			if last, has := st[j.ID]; has && !last.IsZero() {
+				obj["last_run"] = last.UTC().Format(time.RFC3339)
+			} else {
+				obj["last_run"] = nil
+			}
+			if ok {
+				obj["next_run"] = next.UTC().Format(time.RFC3339)
+			} else {
+				obj["next_run"] = nil
+			}
+			b, err := json.Marshal(obj)
+			if err != nil {
+				return fmt.Errorf("schedule: marshal row: %w", err)
+			}
+			fmt.Println(string(b))
+		}
+		return nil
+	}
+	if len(jobs) == 0 {
+		fmt.Println("tilde: schedule: no jobs (.tilde/schedule.yaml missing or empty)")
+		return nil
+	}
+	for _, j := range jobs {
+		due := "no"
+		if dueSet[j.ID] {
+			due = "yes"
+		}
+		next := "-"
+		if n, ok := schedule.NextRun(now, j, st); ok {
+			next = n.UTC().Format(time.RFC3339)
+		}
+		at := j.At
+		if at == "" {
+			at = "-"
+		}
+		fmt.Printf("%s enabled=%t due=%s every=%s at=%s next=%s\n", j.ID, j.Enabled, due, j.Every, at, next)
 	}
 	return nil
 }

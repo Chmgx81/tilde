@@ -61,4 +61,15 @@ func TestPlanGate(t *testing.T) {
 	if err := Plan.AllowedCall("remember", map[string]any{"op": "index"}); err == nil {
 		t.Fatal("Plan must block remember index")
 	}
+	// save_plan is Plan-visible by design: absent from the mutating set,
+	// so Plan mode allows it (verified here, never by weakening a gate).
+	if IsMutating("save_plan") {
+		t.Fatal("save_plan must not be mutating")
+	}
+	if err := Plan.Allowed("save_plan"); err != nil {
+		t.Fatalf("Plan must allow save_plan: %v", err)
+	}
+	if err := Plan.AllowedCall("save_plan", map[string]any{"title": "t", "content": "c"}); err != nil {
+		t.Fatalf("Plan must allow save_plan call: %v", err)
+	}
 }

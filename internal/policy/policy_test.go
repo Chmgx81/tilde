@@ -458,6 +458,19 @@ func TestUnattendedApprovalIsReadOnly(t *testing.T) {
 	}
 }
 
+func TestSavePlanAllowTier(t *testing.T) {
+	// save_plan is read-only-adjacent (plan artifact under .tilde/plans):
+	// Allow by default and Allow when listed in the allow tier — never
+	// Ask/Deny.
+	if got := (&Policy{}).Check("save_plan", map[string]any{"title": "t", "content": "c"}); got != Allow {
+		t.Fatalf("default save_plan = %v, want Allow", got)
+	}
+	p := &Policy{File: &File{Allow: []string{"save_plan"}}}
+	if got := p.Check("save_plan", map[string]any{"title": "t", "content": "c"}); got != Allow {
+		t.Fatalf("allow-tier save_plan = %v, want Allow", got)
+	}
+}
+
 func TestUnattendedPolicyKeepsMutationsAsk(t *testing.T) {
 	p := &Policy{AlwaysAllow: true, Unattended: true}
 	for _, tc := range []struct {

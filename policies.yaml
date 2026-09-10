@@ -50,3 +50,4 @@ allow:
   - spawn_explore
   - symbol_search
   - diagnose
+  - save_plan
