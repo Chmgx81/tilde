@@ -50,6 +50,32 @@ Never commit with a red build, vet finding, unformatted file, or failing test.
 - Architecture boundaries: `docs/ARCHITECTURE.md`.
 - Marketplace/plugins: `docs/marketplace.md`.
 
+## Reference agents (local only: `~/Desktop/Materials/`)
+
+Consult these when designing modes, permissions, prompts, or verification —
+follow the cited pattern, don't copy code across languages.
+
+- `alysis-code/` — gate-is-law + tool-exposure-by-mode (with tests), persona
+  clamp rule (never raise above session mode), always-on destructive denylist.
+- `codex/` — verification discipline: scoped test commands, integration over
+  unit for agent logic, change-size caps, model-context budgets.
+- `grok-build/` — `CapabilityMode` read-only filtering, explicit plan toolsets,
+  destructive-command blocklists with bypass tests.
+- `kimi-code/` — yolo/auto split, denial discipline ("adjust approach, don't
+  retry unchanged"), verify-before-done turn closing.
+- `OpenHands-CLI/` — confirmation-mode design (always-ask / always-approve /
+  llm-approve) for approval-timing decisions.
+- `pi/` — `setActiveTools` plan-mode pattern, destructive vs safe command
+  patterns, parallel subagent fan-out.
+- `cline/` — plan/act/yolo presets, plan→act handoff wording, mistake-tracker
+  anti-runaway, batch-independent-calls discipline.
+- `freebuff/` — parallel-tools-always discipline, plan-only orchestrator prompt,
+  validate/test step in multi-step work.
+- `kilocode/` — permission ceilings that user rules can't widen, guarded tool
+  lists for read-only modes.
+- `opencode/` — permission rulesets + plan-file flow, doom-loop threshold,
+  deny-still-enforced-under-auto.
+
 ## Git
 
 - Small, single-purpose commits on `main`; lowercase one-line messages
