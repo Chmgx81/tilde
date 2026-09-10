@@ -57,24 +57,43 @@ follow the cited pattern, don't copy code across languages.
 
 - `alysis-code/` — gate-is-law + tool-exposure-by-mode (with tests), persona
   clamp rule (never raise above session mode), always-on destructive denylist.
+  Also: SHA-fingerprinted session grants, verification-evidence hierarchy with
+  blast-radius gate, Forge plan flow (worktrees + gates + repair loop).
 - `codex/` — verification discipline: scoped test commands, integration over
-  unit for agent logic, change-size caps, model-context budgets.
+  unit for agent logic, change-size caps, model-context budgets. Also:
+  3-consecutive-denial circuit breaker (abort + guidance), sandbox-escalation
+  requests with justification + prefix rules, snapshot tests for UI.
 - `grok-build/` — `CapabilityMode` read-only filtering, explicit plan toolsets,
-  destructive-command blocklists with bypass tests.
+  destructive-command blocklists with bypass tests. Also: TodoGate turn
+  re-opening while todos pending, best-of-N tournament evaluation, whole-
+  process Landlock/Seatbelt sandbox profiles.
 - `kimi-code/` — yolo/auto split, denial discipline ("adjust approach, don't
-  retry unchanged"), verify-before-done turn closing.
+  retry unchanged"), verify-before-done turn closing. Also: ordered deny-first
+  policy chain, resource-conflict parallelism (overlap non-conflicting calls),
+  plan revisions with sha tracking, compaction honesty rules.
 - `OpenHands-CLI/` — confirmation-mode design (always-ask / always-approve /
-  llm-approve) for approval-timing decisions.
+  llm-approve) for approval-timing decisions. Also: critic self-review loop
+  (score-gated refinement with iteration cap), Textual snapshot-test
+  discipline, env-vars-ignored-by-default config stance.
 - `pi/` — `setActiveTools` plan-mode pattern, destructive vs safe command
-  patterns, parallel subagent fan-out.
+  patterns, parallel subagent fan-out. Also: JSONL tree sessions with
+  rebranch/fork, structured compaction schema, extension-only architecture
+  (core stays tiny; workflows are extensions).
 - `cline/` — plan/act/yolo presets, plan→act handoff wording, mistake-tracker
-  anti-runaway, batch-independent-calls discipline.
+  anti-runaway, batch-independent-calls discipline. Also: loop soft-3/hard-5
+  thresholds, yolo gated on `submit_and_exit`, checkpoint/undo recovery.
 - `freebuff/` — parallel-tools-always discipline, plan-only orchestrator prompt,
-  validate/test step in multi-step work.
+  validate/test step in multi-step work. Also: reviewer+basher verify fan-out
+  per task, direct/propose/patch tool triplets, buffbench eval harness with
+  flake hunting.
 - `kilocode/` — permission ceilings that user rules can't widen, guarded tool
-  lists for read-only modes.
+  lists for read-only modes. Also: rule-source explanations in approval
+  prompts, memory-as-context-not-instruction, 5-phase plan-file workflow with
+  exit review, per-agent step caps.
 - `opencode/` — permission rulesets + plan-file flow, doom-loop threshold,
-  deny-still-enforced-under-auto.
+  deny-still-enforced-under-auto. Also: reject-with-message feedback
+  (`CorrectedError`), question tool for clarifications, terse turn-closing
+  with mandatory lint/typecheck.
 
 ## Git
 
