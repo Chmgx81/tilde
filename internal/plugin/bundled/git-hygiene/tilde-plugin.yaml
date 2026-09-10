@@ -1,0 +1,5 @@
+name: git-hygiene
+version: 1.0.0
+description: Small-commit discipline and history hygiene for everyday git work.
+skills:
+  - skills/commit-guide.md

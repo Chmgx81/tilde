@@ -53,7 +53,38 @@ func TestDiscoverRejectsCatalogPathEscape(t *testing.T) {
 		t.Fatal(err)
 	}
 	reg, errs := Discover(root, "", nil, nil)
-	if reg.Len() != 0 || len(errs) != 1 {
-		t.Fatalf("catalog escape was not rejected: items=%d errors=%v", reg.Len(), errs)
+	// Seed catalog entries (Scope bundled) are always present; the
+	// malicious catalog item itself must contribute nothing.
+	nonSeed := 0
+	for _, it := range reg.Items(Marketplace, "") {
+		if it.Scope != "bundled" {
+			nonSeed++
+		}
+	}
+	if nonSeed != 0 || len(errs) != 1 {
+		t.Fatalf("catalog escape was not rejected: non-seed=%d errors=%v", nonSeed, errs)
+	}
+}
+
+func TestSeedCatalogListsStarters(t *testing.T) {
+	reg, errs := Discover(t.TempDir(), t.TempDir(), nil, nil)
+	if len(errs) != 0 {
+		t.Fatalf("seed discover must be error-free: %v", errs)
+	}
+	var names []string
+	for _, it := range reg.Items(Marketplace, "") {
+		if it.Scope != "bundled" {
+			continue
+		}
+		names = append(names, it.Name)
+		if !it.Installable || it.Installed {
+			t.Errorf("seed entry %q must be installable and not installed", it.Name)
+		}
+		if it.InstallPath == "" {
+			t.Errorf("seed entry %q needs an install path", it.Name)
+		}
+	}
+	if len(names) < 2 {
+		t.Fatalf("Marketplace tab needs seed entries, got %v", names)
 	}
 }

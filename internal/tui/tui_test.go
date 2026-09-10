@@ -3325,3 +3325,26 @@ func TestThinkTickNeverRewritesBuriedRow(t *testing.T) {
 		t.Fatalf("tick must not touch other rows: %q", m.lines[1])
 	}
 }
+
+func TestMarketplaceEmptyHintsPerTab(t *testing.T) {
+	m := New(newTestLoop(), mode.Build, t.TempDir(), "ollama/m", 32000)
+	m.vp.Width = 80
+	cases := map[string]string{
+		"Hooks":       ".tilde/hooks.yaml",
+		"Plugins":     "Marketplace tab",
+		"Marketplace": "catalog.yaml",
+		"Skills":      ".tilde/skills/",
+		"MCP Servers": "mcp.json",
+	}
+	for i, tab := range marketplaceTabs {
+		m.marketplaceTab = i
+		view := stripANSI(m.marketplaceView())
+		want, ok := cases[string(tab)]
+		if !ok {
+			t.Fatalf("untested tab %q — extend this test", tab)
+		}
+		if !strings.Contains(view, want) {
+			t.Errorf("empty %s tab must hint %q, got:\n%s", tab, want, view)
+		}
+	}
+}

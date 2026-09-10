@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"tilde/internal/plugin"
 )
 
 type Kind string
@@ -93,7 +95,9 @@ func (r *Registry) Add(item Item) {
 }
 
 func normalizeItem(item Item) Item {
-	if item.Remote || strings.Contains(item.Source, "://") {
+	// embedded://plugin sources ship inside the binary: local and reviewed,
+	// not remote — they install through the standard validated path.
+	if item.Remote || (strings.Contains(item.Source, "://") && !strings.HasPrefix(item.Source, plugin.EmbeddedScheme)) {
 		item.Remote = true
 		item.Installable = false
 		item.Diagnostics = mergeDiagnostics(item.Diagnostics, []string{"remote source is metadata-only; remote installation is disabled"})

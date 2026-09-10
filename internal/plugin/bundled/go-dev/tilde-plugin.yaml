@@ -1,0 +1,5 @@
+name: go-dev
+version: 1.0.0
+description: Go review checklist for tilde sessions (vet, gofmt, tests, errors).
+skills:
+  - skills/go-review.md

@@ -66,6 +66,9 @@ P1+P2 user-visible changes (binary still reports `v0.9.1` until release):
   (missing checksums, entry, or sha256 tool all fail closed).
 - `tilde --help` lists management subcommands; `tilde plugin install
   <dir> --dry-run` previews a plugin install without writing.
+- Marketplace tab seeds bundled starter plugins (`go-dev`, `git-hygiene`)
+  installable offline with one keypress (`embedded://` sources run the full
+  validated install); empty tabs explain what belongs there and the next step.
 - TUI safety: resume-list delete, `/clear`, and named `/logout` all need a
   second confirming press; `Esc` cancels a running shell escape and shows
   armed in the status bar; `q` quits on an empty idle composer.

@@ -84,7 +84,38 @@ func Discover(root, pluginDir string, ix *skills.Index, mcpNames []string) (Regi
 	for _, name := range mcpNames {
 		r.Add(Item{Kind: MCPServers, Name: name, Scope: "workspace", Installed: true})
 	}
+	for _, item := range seedCatalog(pluginDir) {
+		r.Add(item)
+	}
 	return r, errs
+}
+
+// seedCatalog lists the starter plugins baked into the binary so the
+// Marketplace tab has one-key installs on a fresh machine instead of an
+// empty shelf. Entries resolve via the embedded://plugin/<name> scheme;
+// Installed reflects the user plugin dir (installed copies show up as
+// Plugins through the regular scan above).
+func seedCatalog(pluginDir string) []Item {
+	var out []Item
+	for _, name := range plugin.BundledNames() {
+		m, err := plugin.BundledManifest(name)
+		if err != nil {
+			continue
+		}
+		src := plugin.EmbeddedScheme + name
+		installed := false
+		if pluginDir != "" {
+			if st, err := os.Stat(filepath.Join(pluginDir, name)); err == nil && st.IsDir() {
+				installed = true
+			}
+		}
+		out = append(out, Item{Kind: Marketplace, Name: m.Name, Version: m.Version, Scope: "bundled",
+			Description: m.Description, Source: src, InstallPath: src, Installed: installed,
+			Installable: true, Verified: true,
+			Provenance: []Provenance{{Scope: "bundled", Source: src, InstallPath: src, Version: m.Version, Installable: true}},
+			Skills:     append([]string(nil), m.Skills...), Agents: append([]string(nil), m.Agents...)})
+	}
+	return out
 }
 
 type catalog struct {

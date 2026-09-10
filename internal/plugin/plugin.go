@@ -387,6 +387,12 @@ func LoadLockfile(installedDir string) (*Lockfile, error) {
 // DryRun validates a source plugin and reports what install would copy,
 // without writing anything. Preview for the destructive install path.
 func DryRun(srcDir string) (name, version string, files []string, err error) {
+	if dir, staged, err := resolveSrc(srcDir); err != nil {
+		return "", "", nil, err
+	} else if staged {
+		defer os.RemoveAll(dir)
+		srcDir = dir
+	}
 	m, err := LoadManifest(srcDir)
 	if err != nil {
 		return "", "", nil, err
@@ -398,6 +404,14 @@ func DryRun(srcDir string) (name, version string, files []string, err error) {
 }
 
 func Install(srcDir, pluginHome string) (string, error) {
+	// Embedded starter plugins (embedded://plugin/<name>) materialize to
+	// a temp dir first; everything below runs the directory path.
+	if dir, staged, err := resolveSrc(srcDir); err != nil {
+		return "", err
+	} else if staged {
+		defer os.RemoveAll(dir)
+		srcDir = dir
+	}
 	m, err := LoadManifest(srcDir)
 	if err != nil {
 		return "", err
@@ -445,6 +459,12 @@ func Install(srcDir, pluginHome string) (string, error) {
 // failed staging, activation, or state write leaves the old active tree in
 // place.
 func Upgrade(srcDir, pluginHome string) (string, error) {
+	if dir, staged, err := resolveSrc(srcDir); err != nil {
+		return "", err
+	} else if staged {
+		defer os.RemoveAll(dir)
+		srcDir = dir
+	}
 	m, err := LoadManifest(srcDir)
 	if err != nil {
 		return "", err

@@ -414,3 +414,43 @@ func TestUpgradeFailureLeavesActivePluginUntouched(t *testing.T) {
 		t.Fatalf("failed upgrade changed active content: %q", got)
 	}
 }
+
+func TestBundledNames(t *testing.T) {
+	names := BundledNames()
+	found := map[string]bool{}
+	for _, n := range names {
+		found[n] = true
+	}
+	for _, want := range []string{"go-dev", "git-hygiene"} {
+		if !found[want] {
+			t.Errorf("bundled starter %q missing, got %v", want, names)
+		}
+	}
+}
+
+func TestInstallEmbeddedStarter(t *testing.T) {
+	home := t.TempDir()
+	dest, err := Install(EmbeddedScheme+"go-dev", home)
+	if err != nil {
+		t.Fatalf("embedded install: %v", err)
+	}
+	if !Verify(dest) {
+		t.Fatal("installed embedded plugin must verify against its lockfile")
+	}
+	m, err := LoadManifest(dest)
+	if err != nil || m.Name != "go-dev" {
+		t.Fatalf("installed manifest: %+v %v", m, err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "skills", "go-review.md")); err != nil {
+		t.Fatalf("embedded skill file missing after install: %v", err)
+	}
+}
+
+func TestInstallEmbeddedUnknown(t *testing.T) {
+	if _, err := Install(EmbeddedScheme+"nope", t.TempDir()); err == nil {
+		t.Fatal("unknown embedded plugin must error")
+	}
+	if _, _, _, err := DryRun(EmbeddedScheme + "go-dev"); err != nil {
+		t.Fatalf("embedded dry run: %v", err)
+	}
+}

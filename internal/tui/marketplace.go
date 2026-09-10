@@ -365,6 +365,26 @@ func (m *Model) loadSkillByName(name string) {
 	m.append("✗ skill not found: " + name)
 }
 
+// emptyMarketplaceHint tells an empty tab what belongs there and the
+// exact next step — an empty shelf should read as an invitation, never
+// as a broken view.
+func emptyMarketplaceHint(tab marketplace.Kind) string {
+	switch tab {
+	case marketplace.Hooks:
+		return "  no hooks — add .tilde/hooks.yaml (project) or ~/.tilde/hooks.yaml, then --hooks-project"
+	case marketplace.Plugins:
+		return "  no plugins installed — open the Marketplace tab and press i on a starter"
+	case marketplace.Marketplace:
+		return "  no catalog entries — add .tilde/marketplace/catalog.yaml (see docs/marketplace.md)"
+	case marketplace.Skills:
+		return "  no skills — add NAME.md to .tilde/skills/ or ~/.tilde/skills/"
+	case marketplace.MCPServers:
+		return "  no MCP servers — configure ~/.tilde/mcp.json or project .tilde/mcp.json"
+	default:
+		return "  no matching items"
+	}
+}
+
 func (m Model) marketplaceView() string {
 	rows := m.marketplaceItems.Items(marketplaceTabs[m.marketplaceTab], m.marketplaceQuery)
 	var b strings.Builder
@@ -425,7 +445,7 @@ func (m Model) marketplaceView() string {
 		b.WriteByte('\n')
 	}
 	if len(rows) == 0 {
-		b.WriteString("  no matching items")
+		b.WriteString(emptyMarketplaceHint(marketplaceTabs[m.marketplaceTab]))
 		b.WriteByte('\n')
 	}
 	b.WriteString(truncANSI("  ←→ tabs · ↑↓ select · enter open · i install · type to filter · / clears · esc close", width))
