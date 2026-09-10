@@ -101,6 +101,39 @@ func TestNormalizeOrderedListBareNumbers(t *testing.T) {
 	}
 }
 
+func TestNormalizeOrderedListInsertsBlankLine(t *testing.T) {
+	// LLMs often emit a heading followed immediately by numbered items
+	// with no blank line: Glamour needs the blank to separate the list
+	// from the preceding paragraph.
+	in := "Key bugs/issues:\n1Dead else branch\n2No type checks"
+	got := stripANSI(renderMarkdownText(in, 80))
+	// The items must render as a list, not inline text. After
+	// normalisation + blank-line insertion, "1. Dead" should appear
+	// on its own line (not glued to "Key bugs/issues:").
+	if strings.Contains(got, "issues:1.") || strings.Contains(got, "issues: 1.") {
+		t.Fatalf("list must be separated from heading: %q", got)
+	}
+	if strings.Contains(got, "1Dead") {
+		t.Fatalf("bare number not normalised: %q", got)
+	}
+}
+
+func TestNormalizeOrderedListNoFalsePositives(t *testing.T) {
+	// Lines like "3am" or "2nd" must not be treated as list items.
+	in := "It was 3am\nHe finished 2nd\n5Redundant seed"
+	got := stripANSI(renderMarkdownText(in, 80))
+	if strings.Contains(got, "3. am") {
+		t.Fatalf("3am must not be normalised: %q", got)
+	}
+	if strings.Contains(got, "2. nd") {
+		t.Fatalf("2nd must not be normalised: %q", got)
+	}
+	// 5Redundant → 5. Redundant (uppercase after digit = list item)
+	if strings.Contains(got, "5Redundant") {
+		t.Fatalf("5Redundant should be normalised: %q", got)
+	}
+}
+
 func TestNormalizeSkipsNonListNumbers(t *testing.T) {
 	// Lowercase after number: not a list item (e.g. "3am", "2nd place").
 	in := "It was 3am when it happened\nHe came 2nd in the race"

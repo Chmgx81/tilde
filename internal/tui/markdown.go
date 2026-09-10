@@ -16,11 +16,22 @@ import (
 // ("3am", "2nd") are not list items and pass through unchanged.
 var reBareNumber = regexp.MustCompile(`^(\d+)([A-Z])`)
 
+// reNumberedItem matches a line that starts with a number, a dot,
+// and a space — a properly formatted ordered-list item ("1. Dead").
+var reNumberedItem = regexp.MustCompile(`^\d+\. `)
+
 // normalizeOrderedListItems fixes bare numbered lines that lack the
 // dot-space separator Glamour needs to recognise them as ordered lists.
 // Each "NText" becomes "N. Text" so the Markdown parser treats it as
 // a list item. Non-list lines, blank lines, and already-proper lists
 // ("1. text") pass through unchanged.
+//
+// Glamour requires a blank line before a list to separate it from the
+// preceding paragraph (standard CommonMark). Without that blank line,
+// "1. Dead" merges into the paragraph and renders as inline text.
+// This function inserts that separator: the first list item in a run
+// gets a blank line injected before it when the preceding line is
+// neither blank nor a list item.
 func normalizeOrderedListItems(text string) string {
 	lines := strings.Split(text, "\n")
 	changed := false
@@ -30,7 +41,22 @@ func normalizeOrderedListItems(text string) string {
 		}
 		if m := reBareNumber.FindStringSubmatch(ln); m != nil {
 			lines[i] = m[1] + ". " + m[2] + ln[len(m[0]):]
+			ln = lines[i]
 			changed = true
+		}
+		// Ensure a blank line before the first list item in a run so
+		// Glamour separates it from the preceding paragraph.
+		if reNumberedItem.MatchString(ln) && i > 0 {
+			prev := strings.TrimSpace(lines[i-1])
+			if prev != "" && !reNumberedItem.MatchString(prev) && !reBareNumber.MatchString(prev) {
+				// Insert a blank line before this item.
+				newLines := make([]string, 0, len(lines)+1)
+				newLines = append(newLines, lines[:i]...)
+				newLines = append(newLines, "")
+				newLines = append(newLines, lines[i:]...)
+				lines = newLines
+				changed = true
+			}
 		}
 	}
 	if !changed {

@@ -2297,8 +2297,9 @@ func TestTurnBoundaryPadding(t *testing.T) {
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	after := nm.(Model)
 	n := len(after.lines)
-	if !strings.Contains(stripANSI(after.lines[n-2]), "→ hello") {
-		t.Fatalf("first echo missing, tail:\n%s", stripANSI(strings.Join(after.lines[n-3:], "\n")))
+	// The echo is at n-3 because submit appends: blank + echo + ◆ thinking.
+	if !strings.Contains(stripANSI(after.lines[n-3]), "→ hello") {
+		t.Fatalf("first echo missing, tail:\n%s", stripANSI(strings.Join(after.lines[n-4:], "\n")))
 	}
 	if strings.TrimSpace(stripANSI(after.lines[n-3])) == "" &&
 		strings.TrimSpace(stripANSI(after.lines[n-4])) == "" {
@@ -2318,13 +2319,21 @@ func TestTurnBoundaryPadding(t *testing.T) {
 	if idx < 0 {
 		t.Fatal("second echo missing")
 	}
-	if idx < 3 || strings.TrimSpace(stripANSI(lines2[idx-1])) != "" ||
-		strings.TrimSpace(stripANSI(lines2[idx-2])) != "" {
-		t.Fatalf("one blank row must open the turn, got %q then %q",
-			stripANSI(lines2[idx-1]), stripANSI(lines2[idx-2]))
+	// Layout with thinking indicator and breathing room:
+	//   ... → hello
+	//   (breathing room)
+	//   ◆ thinking
+	//   (boundary gap)
+	//   → build it
+	//   (breathing room)
+	//   ◆ thinking
+	// So idx-1 is breathing room (blank), idx-3 is boundary gap (blank),
+	// idx-4 is the previous echo.
+	if idx < 4 || strings.TrimSpace(stripANSI(lines2[idx-1])) != "" {
+		t.Fatalf("blank row must precede the echo, got %q", stripANSI(lines2[idx-1]))
 	}
-	if !strings.Contains(stripANSI(lines2[idx-3]), "→ hello") {
-		t.Fatalf("gap must sit directly after the previous turn, got %q", stripANSI(lines2[idx-3]))
+	if !strings.Contains(stripANSI(lines2[idx-4]), "→ hello") {
+		t.Fatalf("gap must sit after the previous turn, got %q", stripANSI(lines2[idx-4]))
 	}
 }
 

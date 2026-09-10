@@ -222,6 +222,10 @@ type Model struct {
 	streamActive  bool
 	streamTick    int
 	toolOverflow  *toolOverflow
+	// thinkingShown tracks whether a ◆ thinking indicator line is in
+	// the transcript during the gap between turn start and first stream
+	// delta. It is removed when streaming begins or the turn completes.
+	thinkingShown bool
 }
 
 type toolOverflow struct {
@@ -649,6 +653,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case agentDoneMsg:
 		m.running = false
 		m.escArmedAt = time.Time{} // a dead turn owns no interrupt arm
+		// Remove the ◆ thinking indicator if it was never replaced by
+		// a stream (the model replied without streaming, e.g. a tool-only turn).
+		if m.thinkingShown {
+			m.lines = m.lines[:len(m.lines)-1]
+			m.thinkingShown = false
+		}
 		hadTurn := !m.turnStart.IsZero()
 		turnElapsed := time.Since(m.turnStart)
 		m.turnStart = time.Time{}
@@ -1282,6 +1292,11 @@ func (m Model) submit() (tea.Model, tea.Cmd) {
 	}
 	m.quietSince = m.turnStart
 	m.verbOrder = shuffleVerbs(rand.New(rand.NewSource(time.Now().UnixNano())))
+	// Show a thinking indicator while the model is silent (before the
+	// first stream delta arrives). Removed when streaming starts or
+	// the turn completes — the user always sees progress, never a gap.
+	m.append(lipgloss.NewStyle().Foreground(fgDim).Render("◆ thinking"))
+	m.thinkingShown = true
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	// The verb tick rides alongside the agent command so long model
@@ -1595,6 +1610,11 @@ func (m *Model) expandToolOutput() tea.Cmd {
 func (m *Model) renderAssistantDelta(delta string) {
 	if delta == "" {
 		return
+	}
+	if m.thinkingShown {
+		// Remove the ◆ thinking indicator before starting the stream.
+		m.lines = m.lines[:len(m.lines)-1]
+		m.thinkingShown = false
 	}
 	if !m.streamActive {
 		m.streamActive = true
