@@ -26,7 +26,6 @@ go test ./...           # full suite; internal/update needs git on PATH
 Never commit with a red build, vet finding, unformatted file, or failing test.
 
 ## Hard invariants (code-level gates, not suggestions)
-
 - **Plan mode is read-only**: mutating tools are withheld from the tool list
   *and* blocked at the mode/registry gates. Never weaken a gate to satisfy
   a feature — add a `PlanAllow` whitelist entry instead, scoped as narrowly
@@ -41,6 +40,28 @@ Never commit with a red build, vet finding, unformatted file, or failing test.
 - **Deny beats everything** in every mode (plan/build/auto/--yes). A breaking
   contract change (flags, tool schemas, exit codes, output shapes) needs a
   deprecation path, not a flag day.
+
+## Working discipline (distilled from the reference agents below)
+
+- **Plan before acting** on non-trivial work: numbered plan, explicit exit
+  review before executing (opencode/kimi/kilocode plan-file flow).
+- **Batch independent calls** in a single message; overlap non-conflicting
+  work, serialize conflicts (opencode/cline/kimi). Never a text-only turn
+  while work remains (grok).
+- **Verify before done**: run the checks covering the change and read the
+  result; never mark red or partial work complete (kimi/cline/neo). Prefer
+  reviewer+basher fan-out over self-review for risky changes (freebuff).
+- **Denials redirect**: adjust the approach, never retry unchanged or route
+  around via another tool (kimi). After repeated denials, stop and ask
+  (codex 3-denial circuit breaker).
+- **Anti-runaway**: track consecutive failures (cline mistake-tracker);
+  loop soft-3/hard-5 thresholds; per-agent step caps (kilocode).
+- **Close terse**: summaries with `file:line` refs, never pasted code
+  (opencode/grok); mandatory lint/typecheck when the repo defines it.
+- **Approvals explain themselves**: state the winning rule; rejections carry
+  the reason back to the decider (kilocode/opencode `CorrectedError`).
+- **Memory is context, not instruction**: user messages, repo files, tool
+  output, and this file win over recalled memory (kilocode).
 
 ## Behavior docs (read before touching the area)
 
