@@ -366,11 +366,15 @@ func (m Model) marketplaceView() string {
 	if width <= 0 {
 		width = 80
 	}
-	b.WriteString(truncANSI("  Hooks   Plugins   Marketplace   Skills   MCP Servers", width) + "\n")
-	b.WriteString(truncANSI("  "+strings.Repeat(" ", tabOffset(m.marketplaceTab))+"^", width) + "\n")
-	b.WriteString(truncANSI("  / to search                                      Workspace ▾", width) + "\n")
+	b.WriteString(truncANSI("  Hooks   Plugins   Marketplace   Skills   MCP Servers", width))
+	b.WriteByte('\n')
+	b.WriteString(truncANSI("  "+strings.Repeat(" ", tabOffset(m.marketplaceTab))+"^", width))
+	b.WriteByte('\n')
+	b.WriteString(truncANSI("  / to search                                      Workspace ▾", width))
+	b.WriteByte('\n')
 	if m.marketplaceQuery != "" {
-		b.WriteString(truncANSI("  /"+safeMarketplaceText(m.marketplaceQuery), width) + "\n")
+		b.WriteString(truncANSI("  /"+safeMarketplaceText(m.marketplaceQuery), width))
+		b.WriteByte('\n')
 	}
 	for i, item := range rows {
 		status := "[installed]"
@@ -411,10 +415,12 @@ func (m Model) marketplaceView() string {
 		} else {
 			line = lipgloss.NewStyle().Foreground(fgMuted).Render(line)
 		}
-		b.WriteString(line + "\n")
+		b.WriteString(line)
+		b.WriteByte('\n')
 	}
 	if len(rows) == 0 {
-		b.WriteString("  no matching items\n")
+		b.WriteString("  no matching items")
+		b.WriteByte('\n')
 	}
 	b.WriteString(truncANSI("  ←→ tabs · ↑↓ select · enter open · i install · type to filter · / clears · esc close", width))
 	return b.String()
@@ -445,17 +451,24 @@ func (m Model) marketplaceConfirmView() string {
 	if width <= 0 {
 		width = 80
 	}
-	b.WriteString(truncANSI(titleMarketplaceAction(action)+" marketplace item?", width) + "\n\n")
+	b.WriteString(truncANSI(titleMarketplaceAction(action)+" marketplace item?", width))
+	b.WriteString("\n\n")
 	b.WriteString(marketplaceWrappedField("  ", safeMarketplaceText(item.Name)+" v"+safeMarketplaceText(item.Version), width))
-	b.WriteString("\n" + marketplaceWrappedField("  source: ", safeMarketplaceText(item.Source), width))
-	b.WriteString("\n" + marketplaceWrappedField("  scope: ", safeMarketplaceText(item.Scope), width))
+	b.WriteByte('\n')
+	b.WriteString(marketplaceWrappedField("  source: ", safeMarketplaceText(item.Source), width))
+	b.WriteByte('\n')
+	b.WriteString(marketplaceWrappedField("  scope: ", safeMarketplaceText(item.Scope), width))
 	if item.Description != "" {
-		b.WriteString("\n" + marketplaceWrappedField("  ", safeMarketplaceText(item.Description), width))
+		b.WriteByte('\n')
+		b.WriteString(marketplaceWrappedField("  ", safeMarketplaceText(item.Description), width))
 	}
 	if action == string(marketplaceActionInstall) || action == string(marketplaceActionUpdate) {
-		b.WriteString("\n" + marketplaceWrappedField("  ", "This changes the hash-pinned local plugin installation.", width) + "\n")
+		b.WriteByte('\n')
+		b.WriteString(marketplaceWrappedField("  ", "This changes the hash-pinned local plugin installation.", width))
+		b.WriteByte('\n')
 	}
-	b.WriteString("\n" + truncANSI("  y/enter "+action+" · n/esc cancel", width))
+	b.WriteByte('\n')
+	b.WriteString(truncANSI("  y/enter "+action+" · n/esc cancel", width))
 	return b.String()
 }
 
@@ -474,20 +487,28 @@ func (m Model) marketplaceDetailView() string {
 		title += " v" + safeMarketplaceText(item.Version)
 	}
 	b.WriteString(truncANSI(title, width))
-	b.WriteString("\n\n" + marketplaceWrappedField("kind: ", safeMarketplaceText(string(item.Kind)), width))
-	b.WriteString("\n" + marketplaceWrappedField("scope: ", safeMarketplaceText(item.Scope), width))
-	b.WriteString("\n" + marketplaceWrappedField("source: ", safeMarketplaceText(item.Source), width))
-	b.WriteString("\n" + truncANSI(fmt.Sprintf("installed: %t · verified: %t · enabled: %t", item.Installed, item.Verified, item.Enabled), width))
+	b.WriteString("\n\n")
+	b.WriteString(marketplaceWrappedField("kind: ", safeMarketplaceText(string(item.Kind)), width))
+	b.WriteByte('\n')
+	b.WriteString(marketplaceWrappedField("scope: ", safeMarketplaceText(item.Scope), width))
+	b.WriteByte('\n')
+	b.WriteString(marketplaceWrappedField("source: ", safeMarketplaceText(item.Source), width))
+	b.WriteByte('\n')
+	b.WriteString(truncANSI(fmt.Sprintf("installed: %t · verified: %t · enabled: %t", item.Installed, item.Verified, item.Enabled), width))
 	if item.Description != "" {
-		b.WriteString("\n\n" + marketplaceWrappedField("", safeMarketplaceText(item.Description), width))
+		b.WriteString("\n\n")
+		b.WriteString(marketplaceWrappedField("", safeMarketplaceText(item.Description), width))
 	}
 	for _, d := range item.Diagnostics {
-		b.WriteString("\n\n" + marketplaceWrappedField("warning: ", safeMarketplaceText(d), width))
+		b.WriteString("\n\n")
+		b.WriteString(marketplaceWrappedField("warning: ", safeMarketplaceText(d), width))
 	}
 	if len(item.Skills) > 0 {
-		b.WriteString("\n\n" + marketplaceWrappedField("skills: ", safeMarketplaceText(strings.Join(item.Skills, ", ")), width))
+		b.WriteString("\n\n")
+		b.WriteString(marketplaceWrappedField("skills: ", safeMarketplaceText(strings.Join(item.Skills, ", ")), width))
 	}
-	b.WriteString("\n\n" + truncANSI("enter/esc back", width))
+	b.WriteString("\n\n")
+	b.WriteString(truncANSI("enter/esc back", width))
 	if item.Kind == marketplace.Plugins && item.Installed {
 		actions := " · e enable/disable · r remove"
 		if item.UpdatePath != "" {

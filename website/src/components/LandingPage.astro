@@ -50,8 +50,7 @@ const agentWorkflow = {
       <p class="tilde-eyebrow">Fast · Sandbox-first · Open source</p>
       <h1 id="tilde-title">Built for real engineering.</h1>
       <p class="tilde-hero-lede">
-        tilde turns complex repository work into a visible workflow. Delegate focused tasks to subagents
-        and keep tools, tests, reviews, and delivery moving in one terminal.
+        tilde turns complex repo work into a visible workflow — delegate, test, review, and ship from one terminal.
       </p>
       <div class="tilde-actions">
         <a class="tilde-button tilde-button-primary" href="https://github.com/Chmgx81/tilde">Install tilde</a>
@@ -71,9 +70,8 @@ const agentWorkflow = {
     </div>
   </section>
 
-  <section class="tilde-speed" aria-labelledby="speed-title">
+  <section class="tilde-speed reveal" aria-labelledby="speed-title">
     <div class="tilde-speed-heading">
-      <p class="tilde-label">Built for speed</p>
       <h2 id="speed-title">Less waiting. More useful work in motion.</h2>
       <p>
         tilde coordinates visible workflows and focused subagents. Independent reads, searches, and
@@ -99,12 +97,9 @@ const agentWorkflow = {
     </div>
   </section>
 
-  <section class="tilde-models" aria-labelledby="models-title">
+  <section class="tilde-models reveal" aria-labelledby="models-title">
     <div class="tilde-models-heading">
-      <div>
-        <p class="tilde-label">Providers and models</p>
-        <h2 id="models-title">Use the best model for the job.</h2>
-      </div>
+      <h2 id="models-title">Use the best model for the job.</h2>
       <p>
         Connect Ollama, OpenAI, Anthropic, Gemini, OpenRouter, or OpenCode. Switch models for the active provider
         from the terminal without changing how tilde works.
@@ -124,16 +119,15 @@ const agentWorkflow = {
     </p>
   </section>
 
-  <section class="tilde-intro" aria-labelledby="difference-title">
-    <p class="tilde-label">From issue to merge</p>
+  <section class="tilde-intro reveal" aria-labelledby="difference-title">
     <h2 id="difference-title">Follow the work from issue to merge.</h2>
     <p>
-      tilde can inspect the issue, isolate the work, change the code, run tests, delegate review,
-      open the pull request, and respond to feedback. The workflow stays visible from start to finish.
+      tilde inspects the issue, isolates the work, changes code, runs tests, opens the pull request,
+      and responds to feedback — all in one visible workflow.
     </p>
   </section>
 
-  <section class="tilde-principles" aria-label="tilde principles">
+  <section class="tilde-principles reveal" aria-label="tilde principles">
     <article>
       <span>01</span>
       <h3>Works in the real repository</h3>
@@ -151,22 +145,21 @@ const agentWorkflow = {
     </article>
   </section>
 
-  <section class="tilde-orchestration" aria-labelledby="orchestration-title">
+  <section class="tilde-orchestration reveal" aria-labelledby="orchestration-title">
     <div class="tilde-orchestration-copy">
       <p class="tilde-label">Focused delegation</p>
       <h2 id="orchestration-title">One coordinator. Focused workers.</h2>
       <p>
-        tilde can start fresh subagents on focused parts of a task and return their findings to one
-        coordinator. You can see who owns each part while runtime limits keep the work bounded.
+        tilde starts fresh subagents on focused parts of a task and returns their findings to one
+        coordinator — ownership visible, runtime bounded.
       </p>
       <a class="tilde-text-link" href="/docs/architecture/">How the agent loop works <span aria-hidden="true">→</span></a>
     </div>
     <DemoWorkflow {...agentWorkflow} />
   </section>
 
-  <section class="tilde-foundation" aria-labelledby="foundation-title">
+  <section class="tilde-foundation reveal" aria-labelledby="foundation-title">
     <div>
-        <p class="tilde-label">The foundation</p>
         <h2 id="foundation-title">One Go binary. No runtime to install.</h2>
     </div>
     <dl>
@@ -178,7 +171,7 @@ const agentWorkflow = {
     </dl>
   </section>
 
-  <section class="tilde-final" aria-labelledby="final-title">
+  <section class="tilde-final reveal" aria-labelledby="final-title">
     <p class="tilde-label">tilde Harness</p>
     <h2 id="final-title">Try tilde in a real repository.</h2>
     <p>Install the binary, connect a model provider, and run <code>tilde</code>.</p>
@@ -227,4 +220,22 @@ const agentWorkflow = {
       if (copyStatus) copyStatus.textContent = 'Copy failed. Select the command manually.';
     }
   });
+
+  // Scroll reveal: sections fade up once on entry (transform + opacity
+  // only, GPU-cheap). Respects prefers-reduced-motion via the matching
+  // CSS override — no JS media check needed.
+  const revealed = document.querySelectorAll('.tilde-home .reveal');
+  if ('IntersectionObserver' in window && revealed.length > 0) {
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      }
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.12 });
+    revealed.forEach((el) => io.observe(el));
+  } else {
+    revealed.forEach((el) => el.classList.add('in'));
+  }
 </script>
