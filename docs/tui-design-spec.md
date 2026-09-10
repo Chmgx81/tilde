@@ -101,6 +101,7 @@ vocabulary, not a style choice per screen.
 | `@` | File-reference prefix | `fg-muted` |
 | `⋯` | In-progress (replaces a braille spinner frame in static renders) | `fg-muted` |
 | `◆` | Reasoning / "thought" marker (§2.20) | `fg-dim` |
+| `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠿` | Waiting spinner frames — the pre-response thinking row only (§2.20) | `fg-dim` |
 | `◇` | Model thinking trace actually emitted by the backend (§2.10) | `fg-dim` |
 
 Rule: **one glyph, one column.** Glyphs never wrap to a second line and never
@@ -919,12 +920,27 @@ dim line before the first action of that turn:
   product decision this spec doesn't take a position on.
 - Skip the line entirely below the floor — a 1.5 line for every single
   turn is noise, not signal, and trains the eye to stop reading it.
-- **Pre-response, the wait itself animates.** Between turn start and the
-  first stream delta, one dim row spins in place (braille frame +
-  elapsed seconds, ~8fps, rewritten — never appended): `⠋ thinking 12s`.
-  The tick stops the moment streaming starts or the turn ends, and it
-  never rewrites any other row. A frozen "thinking" line during a slow
-  model wait reads as hung; motion plus elapsed time reads as work.
+- **Pre-response, the wait itself animates (added 2026-09-10).** Between
+  turn start and the first stream delta, one dim row spins in place:
+  `<braille frame> thinking <elapsed>s` (e.g. `⠋ thinking 12s`). A
+  frozen "thinking" line during a slow model wait reads as hung; motion
+  plus elapsed time reads as work. Contract:
+  - **Frames:** the ten-cell braille cycle
+    `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠿` at ~8fps (`120ms` tick), `fg-dim`, same
+    glyph family as `◆`/`◇`/`○` — text, never color-only, and still
+    meaningful with all styling stripped.
+  - **Rewrite, never append:** the tick rewrites its own transcript row
+    in place. Scrollback grows by exactly one row per wait no matter how
+    long the model takes.
+  - **Row ownership:** the tick fires only while its row is still the
+    last transcript row of a live turn. If any other row lands after it
+    (or the turn ends), the loop dies silently instead of rewriting the
+    wrong row.
+  - **No residue:** the row is removed when streaming starts and when
+    the turn completes — the wait leaves zero transcript rows behind.
+    The post-hoc `◆ Thought for Ns` receipt (above) is the only record.
+  - **Cancel-safe:** quitting or cancelling mid-wait kills the tick with
+    the turn; no orphaned animation outlives the session intent.
 
 **Live reasoning microcopy (while the wait is happening, not after).**
 The post-hoc receipt above only helps in scrollback. While the model is
