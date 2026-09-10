@@ -3280,3 +3280,48 @@ func TestCancelledTurnReadsAsReceiptNotError(t *testing.T) {
 		t.Fatalf("cancelled turn needs a calm receipt, transcript:\n%s", joined)
 	}
 }
+
+func TestThinkTickAnimatesInPlace(t *testing.T) {
+	m := New(newTestLoop(), mode.Build, t.TempDir(), "ollama/m", 32000)
+	m.lines = []string{"row one"}
+	m.thinkingShown = true
+	m.running = true
+	m.turnStart = time.Now()
+	m.thinkLine = 0
+	m.thinkFrame = 0
+	mm, cmd := m.Update(thinkTickMsg{})
+	m = mm.(Model)
+	if cmd == nil {
+		t.Fatal("live thinking indicator must re-arm its tick")
+	}
+	if len(m.lines) != 1 {
+		t.Fatalf("tick must rewrite in place, not append: %d lines", len(m.lines))
+	}
+	plain := stripANSI(m.lines[0])
+	if !strings.Contains(plain, "thinking") || plain == "◆ thinking" {
+		t.Fatalf("tick must advance the frame, got %q", plain)
+	}
+	// Dead indicator (stream started, turn done) must not re-arm.
+	m.thinkingShown = false
+	_, cmd = m.Update(thinkTickMsg{})
+	if cmd != nil {
+		t.Fatal("dead thinking indicator must let its tick loop die")
+	}
+}
+
+func TestThinkTickNeverRewritesBuriedRow(t *testing.T) {
+	m := New(newTestLoop(), mode.Build, t.TempDir(), "ollama/m", 32000)
+	m.lines = []string{"◆ thinking", "tool result arrived after"}
+	m.thinkingShown = true
+	m.running = true
+	m.turnStart = time.Now()
+	m.thinkLine = 0 // no longer last: rows appended after it
+	mm, cmd := m.Update(thinkTickMsg{})
+	m = mm.(Model)
+	if cmd != nil {
+		t.Fatal("buried indicator must not re-arm")
+	}
+	if m.lines[1] != "tool result arrived after" {
+		t.Fatalf("tick must not touch other rows: %q", m.lines[1])
+	}
+}

@@ -919,6 +919,12 @@ dim line before the first action of that turn:
   product decision this spec doesn't take a position on.
 - Skip the line entirely below the floor — a 1.5 line for every single
   turn is noise, not signal, and trains the eye to stop reading it.
+- **Pre-response, the wait itself animates.** Between turn start and the
+  first stream delta, one dim row spins in place (braille frame +
+  elapsed seconds, ~8fps, rewritten — never appended): `⠋ thinking 12s`.
+  The tick stops the moment streaming starts or the turn ends, and it
+  never rewrites any other row. A frozen "thinking" line during a slow
+  model wait reads as hung; motion plus elapsed time reads as work.
 
 **Live reasoning microcopy (while the wait is happening, not after).**
 The post-hoc receipt above only helps in scrollback. While the model is

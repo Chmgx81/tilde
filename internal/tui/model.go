@@ -233,6 +233,11 @@ type Model struct {
 	// the transcript during the gap between turn start and first stream
 	// delta. It is removed when streaming begins or the turn completes.
 	thinkingShown bool
+	// thinkLine/thinkFrame animate that indicator in place: the tick
+	// rewrites the same transcript row (spinner frame + elapsed time)
+	// instead of appending, so a long model wait reads as motion.
+	thinkLine  int
+	thinkFrame int
 }
 
 type toolOverflow struct {
@@ -281,6 +286,20 @@ type streamTickMsg struct{}
 func tickStreamCmd() tea.Cmd {
 	return tea.Tick(400*time.Millisecond, func(time.Time) tea.Msg { return streamTickMsg{} })
 }
+
+// thinkTickMsg re-renders the thinking indicator ~8x/second while the
+// model is silent. Re-arms only while the indicator is still the last
+// transcript row of a running turn — anything else lets the loop die.
+type thinkTickMsg struct{}
+
+func tickThinkCmd() tea.Cmd {
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return thinkTickMsg{} })
+}
+
+// thinkFrames is the spinner vocabulary for the waiting indicator:
+// braille-geometric frames in tilde's dim style, matching the existing
+// ◆/◇/○ glyph language (text, never color-only).
+var thinkFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠿"}
 
 // verbTickMsg re-renders on a 2s cadence while a turn runs. Renders are
 // otherwise message-driven, so without it the Working-seconds counter
@@ -441,6 +460,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.streamTick++
 			m.replaceAssistantStream()
 			return m, tickStreamCmd()
+		}
+		return m, nil
+	case thinkTickMsg:
+		// Animate the thinking indicator in place — but only while it
+		// is still the last transcript row of a live turn. Anything
+		// else (stream started, turn done, rows appended after it)
+		// lets this loop die instead of rewriting the wrong row.
+		if m.thinkingShown && m.running && !m.turnStart.IsZero() &&
+			m.thinkLine == len(m.lines)-1 && m.thinkLine >= 0 {
+			m.thinkFrame++
+			frame := thinkFrames[m.thinkFrame%len(thinkFrames)]
+			secs := int(time.Since(m.turnStart).Seconds())
+			m.lines[m.thinkLine] = lipgloss.NewStyle().Foreground(fgDim).Render(
+				fmt.Sprintf("%s thinking %ds", frame, secs))
+			m.vp.SetContent(strings.Join(m.lines, "\n"))
+			if m.stick || m.vp.AtBottom() {
+				m.vp.GotoBottom()
+			}
+			return m, tickThinkCmd()
 		}
 		return m, nil
 	case verbTickMsg:
@@ -1342,13 +1380,16 @@ func (m Model) submit() (tea.Model, tea.Cmd) {
 	// Show a thinking indicator while the model is silent (before the
 	// first stream delta arrives). Removed when streaming starts or
 	// the turn completes — the user always sees progress, never a gap.
+	// The indicator animates in place (spinner + elapsed) via think ticks.
 	m.append(lipgloss.NewStyle().Foreground(fgDim).Render("◆ thinking"))
 	m.thinkingShown = true
+	m.thinkLine = len(m.lines) - 1
+	m.thinkFrame = 0
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	// The verb tick rides alongside the agent command so long model
 	// waits animate instead of freezing; it stops itself at done.
-	return m, tea.Batch(m.runAgentCmd(ctx, sendGoal), tickVerbCmd())
+	return m, tea.Batch(m.runAgentCmd(ctx, sendGoal), tickVerbCmd(), tickThinkCmd())
 }
 
 func (m Model) runAgentCmd(ctx context.Context, goal string) tea.Cmd {

@@ -76,6 +76,8 @@ P1+P2 user-visible changes (binary still reports `v0.9.1` until release):
 - Agent loop prompt requires plan-first, build-through-tools discipline:
   code is delivered via `write_file`/`edit_file` and summarized, never
   pasted in full into chat.
+- The pre-response `thinking` row animates in place (spinner + elapsed)
+  instead of sitting frozen during slow model waits.
 - docs website (Astro + Starlight) with the doc set as `/docs/*` pages.
 - Secret scrubbing covers password/secret-style assignments, GitHub
   OAuth/server tokens, all `xox*` Slack prefixes, and `OLLAMA_*`/`GEMINI_*`
