@@ -3244,3 +3244,39 @@ func TestStateMarkersSurviveColorStripping(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadSkillByNameLoadsBundled(t *testing.T) {
+	// Regression: bundled skills (embedded:// sources) failed ParseFile
+	// and every marketplace Enter reported "skill not found".
+	builtins, err := skills.Bundled()
+	if err != nil || len(builtins) == 0 {
+		t.Fatalf("need bundled skills for this test: %v", err)
+	}
+	m := New(newTestLoop(), mode.Build, t.TempDir(), "ollama/m", 32000)
+	var reg marketplace.Registry
+	for _, sk := range builtins {
+		reg.Add(marketplace.Item{Kind: marketplace.Skills, Name: sk.Name, Scope: "bundled", Source: "embedded://bundled/" + sk.Name + ".md"})
+	}
+	m.marketplaceItems = reg
+	m.loadSkillByName(builtins[0].Name)
+	joined := strings.Join(m.lines, "\n")
+	if strings.Contains(joined, "skill not found") || strings.Contains(joined, "cannot load skill") {
+		t.Fatalf("bundled skill must load, transcript:\n%s", joined)
+	}
+	if !strings.Contains(joined, "Loaded skill: "+builtins[0].Name) {
+		t.Fatalf("missing load receipt, transcript:\n%s", joined)
+	}
+}
+
+func TestCancelledTurnReadsAsReceiptNotError(t *testing.T) {
+	m := New(newTestLoop(), mode.Build, t.TempDir(), "ollama/m", 32000)
+	mm, _ := m.Update(agentDoneMsg{Err: context.Canceled})
+	m = mm.(Model)
+	joined := strings.Join(m.lines, "\n")
+	if strings.Contains(joined, "✗ context canceled") {
+		t.Fatalf("cancelled turn must not render a raw error, transcript:\n%s", joined)
+	}
+	if !strings.Contains(joined, "turn cancelled") {
+		t.Fatalf("cancelled turn needs a calm receipt, transcript:\n%s", joined)
+	}
+}

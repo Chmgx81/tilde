@@ -63,3 +63,20 @@ func TestClassify(t *testing.T) {
 		})
 	}
 }
+
+func TestClassifyCancelled(t *testing.T) {
+	for _, msg := range []string{
+		"context canceled",
+		"context cancelled",
+		"loop.Run: context canceled",
+		"turn failed: Context Canceled by user",
+	} {
+		if got := Classify(errors.New(msg)); got != ClassCancelled {
+			t.Errorf("Classify(%q) = %q, want cancelled", msg, got)
+		}
+	}
+	// Deadline-exceeded stays a timeout, not a cancel.
+	if got := Classify(errors.New("context deadline exceeded")); got != ClassTimeout {
+		t.Errorf("deadline exceeded = %q, want timeout", got)
+	}
+}

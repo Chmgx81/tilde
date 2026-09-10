@@ -194,3 +194,20 @@ func TestBundledSkillsAreEmbeddedAndVerified(t *testing.T) {
 		}
 	}
 }
+
+func TestParseFileEmbeddedSource(t *testing.T) {
+	builtins, err := Bundled()
+	if err != nil || len(builtins) == 0 {
+		t.Fatalf("need bundled skills for this test: %v", err)
+	}
+	got, err := ParseFile("embedded://bundled/"+builtins[0].Name+".md", "bundled")
+	if err != nil {
+		t.Fatalf("embedded source must resolve: %v", err)
+	}
+	if got.Name != builtins[0].Name || got.Body == "" {
+		t.Fatalf("wrong skill back: %+v", got.Name)
+	}
+	if _, err := ParseFile("embedded://bundled/no-such-skill.md", "bundled"); err == nil {
+		t.Fatal("unknown embedded skill must error")
+	}
+}

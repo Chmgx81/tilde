@@ -350,10 +350,16 @@ func (m *Model) refreshMarketplaceSelection(kind marketplace.Kind, name string) 
 func (m *Model) loadSkillByName(name string) {
 	for _, sk := range m.marketplaceItems.Items(marketplace.Skills, "") {
 		if sk.Name == name {
-			if actual, err := skills.ParseFile(sk.Source, sk.Scope); err == nil {
-				m.loadSkill(actual)
+			actual, err := skills.ParseFile(sk.Source, sk.Scope)
+			if err != nil {
+				// The row exists but its source won't load (permissions,
+				// moved file): name the reason instead of claiming the
+				// skill doesn't exist.
+				m.append("✗ cannot load skill " + name + ": " + err.Error())
 				return
 			}
+			m.loadSkill(actual)
+			return
 		}
 	}
 	m.append("✗ skill not found: " + name)

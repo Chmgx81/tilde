@@ -9,7 +9,7 @@ import "strings"
 // transport/provider errors (HTTP statuses, timeouts, dial failures)
 // — not agent logic errors (bad tool args, empty replies, etc.).
 //
-// Precedence is auth > rate > timeout > unreachable: the first class
+// Precedence is cancelled > auth > rate > timeout > unreachable: the first class
 // whose substring matches wins. Matching is case-insensitive substring
 // on err.Error(). A nil error yields "".
 const (
@@ -17,6 +17,7 @@ const (
 	ClassTimeout     = "timeout"
 	ClassUnreachable = "unreachable"
 	ClassAuthFailed  = "auth_failed"
+	ClassCancelled   = "cancelled"
 	ClassUnknown     = "unknown"
 )
 
@@ -27,6 +28,14 @@ func Classify(err error) string {
 		return ""
 	}
 	s := strings.ToLower(err.Error())
+
+	// Cancellation first: a user- or timeout-cancelled turn is neither
+	// auth, rate, timeout, nor unreachable — and must never read as
+	// "unknown". (Deadline-exceeded stays a timeout; see below.)
+	if strings.Contains(s, "context canceled") ||
+		strings.Contains(s, "context cancelled") {
+		return ClassCancelled
+	}
 
 	// Auth first: must fail fast, never retried as transient.
 	if strings.Contains(s, "401") ||

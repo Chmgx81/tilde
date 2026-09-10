@@ -5,6 +5,7 @@ package tui
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -698,7 +699,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.quietSince = time.Time{}
 		m.verbOrder = nil
 		if msg.Err != nil {
-			m.append(lipgloss.NewStyle().Foreground(danger).Render("✗ " + msg.Err.Error()))
+			// A cancelled turn is not a failure: Esc/quit stops the loop
+			// with context.Canceled, which must read as a calm receipt —
+			// never a red "✗ context canceled" error.
+			if errors.Is(msg.Err, context.Canceled) {
+				m.append(lipgloss.NewStyle().Foreground(fgMuted).Render("○ turn cancelled — partial work (if any) stays in the session log."))
+			} else {
+				m.append(lipgloss.NewStyle().Foreground(danger).Render("✗ " + msg.Err.Error()))
+			}
 		} else if !msg.NoDone {
 			m.append(lipgloss.NewStyle().Foreground(success).Render("✓ Done"))
 		}

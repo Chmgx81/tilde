@@ -69,6 +69,10 @@ P1+P2 user-visible changes (binary still reports `v0.9.1` until release):
 - TUI safety: resume-list delete, `/clear`, and named `/logout` all need a
   second confirming press; `Esc` cancels a running shell escape and shows
   armed in the status bar; `q` quits on an empty idle composer.
+- Bundled skills load from the marketplace (embedded sources resolve via
+  `ParseFile`; load failures name the reason instead of "not found").
+- Cancelled turns read as a calm receipt, not `✗ context canceled`;
+  error classification gains a `cancelled` class.
 - docs website (Astro + Starlight) with the doc set as `/docs/*` pages.
 - Secret scrubbing covers password/secret-style assignments, GitHub
   OAuth/server tokens, all `xox*` Slack prefixes, and `OLLAMA_*`/`GEMINI_*`

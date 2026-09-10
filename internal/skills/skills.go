@@ -229,6 +229,21 @@ func (ix *Index) AddBuiltin(sk Skill) {
 
 // ParseFile parses one skill file.
 func ParseFile(path, scope string) (Skill, error) {
+	// Bundled skills live in the binary (embed.FS), not on disk: their
+	// Source is an embedded:// URL that os.ReadFile cannot open. Resolve
+	// them from the bundled set so every caller holding a Source — the
+	// marketplace loader included — can load them the same way.
+	if strings.HasPrefix(path, "embedded://") {
+		name := strings.TrimSuffix(filepath.Base(path), ".md")
+		if bundled, err := Bundled(); err == nil {
+			for _, sk := range bundled {
+				if sk.Name == name {
+					return sk, nil
+				}
+			}
+		}
+		return Skill{}, fmt.Errorf("skill %q: no bundled skill named %q", path, name)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Skill{}, fmt.Errorf("skill %q: cannot read: %v", path, err)
