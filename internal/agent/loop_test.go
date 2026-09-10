@@ -999,3 +999,17 @@ func TestLoopPlanGateDenyAudited(t *testing.T) {
 	}
 	t.Fatalf("plan-gate block must audit a deny, got %+v", sink.events)
 }
+
+func TestSystemPromptForbidsChatDumps(t *testing.T) {
+	// Regression: in Auto/Build the model once printed a full HTML file
+	// into chat instead of planning and building through tools. The
+	// artifact discipline must survive in every mode's prompt.
+	for _, m := range []mode.Mode{mode.Plan, mode.Build, mode.Auto} {
+		p := systemPrompt([]string{"write_file", "read_file"}, m)
+		for _, want := range []string{"write_file", "git_diff", "plan first"} {
+			if !strings.Contains(strings.ToLower(p), want) {
+				t.Errorf("mode %v prompt must contain %q", m, want)
+			}
+		}
+	}
+}

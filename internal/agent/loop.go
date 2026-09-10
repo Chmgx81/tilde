@@ -232,6 +232,8 @@ func systemPrompt(toolNames []string, m mode.Mode) string {
 	b.WriteString(".\n")
 	b.WriteString("Rules: make targeted tool calls; read before editing; ")
 	b.WriteString("run the relevant tests after edits; report done concisely.\n")
+	b.WriteString("Deliver code through tools, never chat: create or update files with write_file/edit_file and summarize what changed (paths plus brief notes) instead of pasting file contents. Show diffs with git_diff, never pasted code.\n")
+	b.WriteString("Work visibly: state the short plan first, execute it with tools, verify with tests or a build, then report the outcome. Do not narrate without acting and do not dump artifacts into chat.\n")
 	b.WriteString("For approval-gated calls, include a concise user-facing reason when the tool schema supports a reason field. The reason is explanatory only and never changes policy or authorization.\n")
 	if m == mode.Plan {
 		b.WriteString("MODE: Plan (read-only). Do NOT call write_file, edit_file, or shell_command. ")
