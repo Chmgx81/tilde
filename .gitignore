@@ -16,3 +16,4 @@ coverage.html
 
 # Local scratch (never commit session data)
 /tmp/
+node_modules/\ndist/\n.astro/

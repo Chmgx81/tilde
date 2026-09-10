@@ -1,0 +1,1145 @@
+/* ── tilde dark theme, adapted from Neo's design system ── */
+
+:root,
+:root[data-theme='light'] {
+  --sl-font-system: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --sl-font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --sl-color-accent-low: #1a1640;
+  --sl-color-accent: #6d5cff;
+  --sl-color-accent-high: #8b7dff;
+  --sl-color-white: #f0f0eb;
+  --sl-color-gray-1: #d3d3cd;
+  --sl-color-gray-2: #a6a69f;
+  --sl-color-gray-3: #7a7b75;
+  --sl-color-gray-4: #51534f;
+  --sl-color-gray-5: #27272a;
+  --sl-color-gray-6: #18181b;
+  --sl-color-gray-7: #111113;
+  --sl-color-black: #09090b;
+  --sl-color-blue-low: #1a1640;
+  --sl-color-blue: #6d5cff;
+  --sl-color-blue-high: #8b7dff;
+  --sl-radius-medium: 0.35rem;
+  --sl-radius-large: 0.55rem;
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #1a1640;
+  --sl-color-accent: #6d5cff;
+  --sl-color-accent-high: #8b7dff;
+  --sl-color-white: #f0f0eb;
+  --sl-color-gray-1: #d3d3cd;
+  --sl-color-gray-2: #a6a69f;
+  --sl-color-gray-3: #7a7b75;
+  --sl-color-gray-4: #51534f;
+  --sl-color-gray-5: #27272a;
+  --sl-color-gray-6: #18181b;
+  --sl-color-gray-7: #111113;
+  --sl-color-black: #09090b;
+  --sl-color-blue-low: #1a1640;
+  --sl-color-blue: #6d5cff;
+  --sl-color-blue-high: #8b7dff;
+}
+
+/* Documentation */
+.site-title {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.site-title::after {
+  content: '/';
+  color: var(--sl-color-accent);
+  margin-inline-start: 0.28rem;
+}
+
+.header {
+  border-bottom-color: var(--sl-color-gray-5);
+  backdrop-filter: blur(16px);
+}
+
+.sidebar-pane {
+  border-inline-end-color: var(--sl-color-gray-5);
+}
+
+.sidebar-content a[aria-current='page'] {
+  font-weight: 650;
+}
+
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3 {
+  letter-spacing: -0.025em;
+}
+
+.sl-markdown-content h1,
+.sl-markdown-content h2 {
+  font-weight: 700;
+}
+
+.sl-markdown-content :not(h1, h2, h3, h4, h5, h6) + :is(h2, h3):not(:where(.not-content *)) {
+  margin-block-start: 2.5em;
+}
+
+.expressive-code {
+  --ec-brdRad: 0.45rem;
+}
+
+.card {
+  border-color: var(--sl-color-gray-5) !important;
+  border-radius: 0.55rem !important;
+  box-shadow: none !important;
+}
+
+/* The landing page owns the content panel. */
+body:has(.tilde-home) .content-panel:not(:has(.tilde-home)) {
+  display: none;
+}
+
+.content-panel:has(.tilde-home) {
+  padding: 0;
+  overflow: hidden;
+  background: #09090b;
+  border-top: 0;
+}
+
+.content-panel:has(.tilde-home) .sl-container,
+.content-panel:has(.tilde-home) .sl-markdown-content {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+}
+
+.content-panel:has(.tilde-home) footer {
+  display: none;
+}
+
+html:has(.tilde-home),
+body:has(.tilde-home) {
+  background: #09090b;
+}
+
+body:has(.tilde-home) .header {
+  position: absolute;
+  color: #f0f0eb;
+  background: #09090b;
+  border-bottom-color: #27272a;
+  backdrop-filter: none;
+}
+
+body:has(.tilde-home) .header .social-icons::after {
+  border: 0;
+  margin: 0;
+}
+
+body:has(.tilde-home) .header a,
+body:has(.tilde-home) .header button {
+  color: inherit;
+}
+
+body:has(.tilde-home) .header button[aria-label='Search'],
+body:has(.tilde-home) .header select,
+body:has(.tilde-home) .header starlight-theme-select {
+  display: none;
+}
+
+body:has(.tilde-home) .site-title::after {
+  color: #6d5cff;
+}
+
+.tilde-home {
+  --tilde-paper: #09090b;
+  --tilde-white: #111113;
+  --tilde-ink: #f0f0eb;
+  --tilde-muted: #a1a1aa;
+  --tilde-faint: #71717a;
+  --tilde-line: #27272a;
+  --tilde-line-dark: #1f1f23;
+  --tilde-accent: #6d5cff;
+  --tilde-accent-soft: rgba(109,92,255,0.08);
+  --tilde-success: #22c55e;
+  --tilde-danger: #ef4444;
+  --tilde-amber: #f59e0b;
+  --tilde-space-1: 0.5rem;
+  --tilde-space-2: 1rem;
+  --tilde-space-3: 1.5rem;
+  --tilde-space-4: 2.5rem;
+  --tilde-space-5: 4rem;
+  --tilde-space-6: 6.5rem;
+  color: var(--tilde-ink);
+  background: var(--tilde-paper);
+  font-family: var(--sl-font-system);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.tilde-home *,
+.tilde-home *::before,
+.tilde-home *::after {
+  box-sizing: border-box;
+}
+
+.tilde-home :is(h1, h2, h3, p, ul, ol, dl, dd) {
+  margin: 0;
+}
+
+.tilde-home :is(h1, h2) {
+  color: var(--tilde-ink);
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.tilde-home ::selection {
+  color: #09090b;
+  background: var(--tilde-accent);
+}
+
+.tilde-home h3 {
+  color: var(--tilde-ink);
+  font-family: var(--sl-font-system);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.tilde-eyebrow,
+.tilde-label {
+  color: var(--tilde-accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+/* ── Hero ── */
+.tilde-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100% - 3rem, 70rem);
+  margin: 0 auto;
+  padding: var(--tilde-space-5) 0 var(--tilde-space-6);
+  text-align: center;
+}
+
+.tilde-hero h1 {
+  max-width: 16ch;
+  margin: 0 auto 1.25rem;
+  font-size: clamp(3.4rem, 6vw, 5.5rem);
+  line-height: 1;
+}
+
+.tilde-hero-copy {
+  min-width: 0;
+  width: 100%;
+}
+
+.tilde-hero .tilde-eyebrow {
+  margin-bottom: 1rem;
+}
+
+.tilde-hero .tilde-hero-lede {
+  max-width: 36rem;
+  margin-inline: auto;
+  color: var(--tilde-muted);
+  font-size: clamp(1rem, 1.35vw, 1.12rem);
+  line-height: 1.5;
+}
+
+.tilde-hero .tilde-actions {
+  justify-content: center;
+}
+
+/* ── Actions ── */
+.tilde-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1.45rem;
+  margin-top: 2rem;
+}
+
+.tilde-button,
+.tilde-text-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.tilde-button {
+  min-height: 2.9rem;
+  padding: 0.75rem 1.15rem;
+  border: 1px solid var(--tilde-ink);
+  border-radius: 0.38rem;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.tilde-button-primary {
+  color: #09090b;
+  background: var(--tilde-ink);
+}
+
+.tilde-button-primary:hover {
+  color: #fff;
+  background: #d4d4d8;
+  transform: translateY(-1px);
+}
+
+.tilde-text-link {
+  gap: 0.4rem;
+  color: var(--tilde-ink);
+  border-bottom: 1px solid var(--tilde-line);
+}
+
+.tilde-text-link:hover {
+  color: var(--tilde-accent);
+  border-bottom-color: var(--tilde-accent);
+}
+
+/* ── Install bar ── */
+.tilde-install {
+  display: flex;
+  align-items: center;
+  width: min(100%, 43rem);
+  max-width: 100%;
+  min-height: 3.25rem;
+  margin: 1.5rem auto 0;
+  padding-left: 1rem;
+  overflow: hidden;
+  color: var(--tilde-muted);
+  text-align: left;
+  background: var(--tilde-white);
+  border: 1px solid var(--tilde-line);
+  border-radius: 0.45rem;
+}
+
+.tilde-install code {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--sl-font-mono);
+  font-size: 0.73rem;
+  color: var(--tilde-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tilde-install button {
+  display: grid;
+  flex: 0 0 3.25rem;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-left: auto;
+  padding: 0;
+  place-items: center;
+  color: var(--tilde-muted);
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--tilde-line);
+  cursor: pointer;
+}
+
+.tilde-install button:hover {
+  color: var(--tilde-ink);
+  background: var(--tilde-white);
+}
+
+.tilde-install button svg {
+  grid-area: 1 / 1;
+  width: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.tilde-install .check-icon,
+.tilde-install button.copied .copy-icon {
+  display: none;
+}
+
+.tilde-install button.copied .check-icon {
+  display: block;
+  color: var(--tilde-success);
+}
+
+.tilde-hero-workflow {
+  width: 100%;
+  margin-top: var(--tilde-space-5);
+  text-align: left;
+}
+
+.tilde-hero-workflow .tilde-workflow {
+  box-shadow: 0 2rem 5rem rgba(0,0,0,0.3);
+}
+
+.tilde-hero-workflow .tilde-request {
+  padding: 1.15rem 1.5rem;
+}
+
+.tilde-hero-workflow .tilde-plan {
+  padding: 1.35rem 1.5rem 0.9rem;
+}
+
+.tilde-hero-workflow .tilde-plan li {
+  padding: 0.65rem 0;
+}
+
+.tilde-copy-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+/* ── Card ── */
+.tilde-card {
+  overflow: hidden;
+  background: var(--tilde-white);
+  border: 1px solid var(--tilde-line-dark);
+  border-radius: 0.65rem;
+  box-shadow: 0 1.5rem 4rem rgba(0,0,0,0.2);
+}
+
+/* ── Workflow ── */
+.tilde-workflow-top,
+.tilde-plan-meta,
+.tilde-proof,
+.tilde-agent {
+  display: flex;
+  align-items: center;
+}
+
+.tilde-workflow-top {
+  justify-content: space-between;
+  min-height: 3.15rem;
+  padding: 0 1.25rem;
+  color: var(--tilde-muted);
+  font-family: var(--sl-font-mono);
+  font-size: 0.72rem;
+  border-bottom: 1px solid var(--tilde-line);
+}
+
+.tilde-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tilde-mode i {
+  flex: none;
+}
+
+.tilde-status-dot {
+  display: block;
+  width: 0.4rem;
+  height: 0.4rem;
+  background: var(--tilde-accent);
+  border-radius: 50%;
+}
+
+@keyframes tilde-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.tilde-status-dot {
+  animation: tilde-pulse 2.2s ease-in-out infinite;
+}
+
+.tilde-request {
+  display: flex;
+  gap: 0.7rem;
+  padding: 1.5rem 1.75rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--tilde-line);
+}
+
+.tilde-request > span {
+  color: var(--tilde-accent);
+  font-weight: 800;
+}
+
+.tilde-plan {
+  padding: 1.7rem 1.75rem 1.3rem;
+}
+
+.tilde-plan-meta {
+  justify-content: space-between;
+  color: var(--tilde-faint);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tilde-plan ol {
+  padding: 0;
+  list-style: none;
+}
+
+.tilde-plan li {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr;
+  gap: 0.65rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--tilde-line-dark);
+  align-items: start;
+}
+
+.tilde-plan li:last-child {
+  border-bottom: 0;
+}
+
+.tilde-check {
+  display: grid;
+  width: 1.05rem;
+  height: 1.05rem;
+  place-items: center;
+  color: var(--tilde-accent);
+  font-size: 0.7rem;
+  border: 1px solid var(--tilde-line);
+  border-radius: 50%;
+  margin-top: 2px;
+}
+
+.tilde-plan .done .tilde-check {
+  color: #fff;
+  background: var(--tilde-accent);
+  border-color: var(--tilde-accent);
+}
+
+.tilde-plan .active .tilde-check i {
+  width: 0.38rem;
+  height: 0.38rem;
+}
+
+.tilde-plan strong,
+.tilde-plan small {
+  display: block;
+}
+
+.tilde-plan strong {
+  color: var(--tilde-ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.tilde-plan small {
+  margin-top: 0.15rem;
+  color: var(--tilde-faint);
+  font-family: var(--sl-font-mono);
+  font-size: 0.68rem;
+}
+
+.tilde-agent {
+  justify-content: space-between;
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  color: var(--tilde-muted);
+  font-family: var(--sl-font-mono);
+  font-size: 0.65rem;
+  background: var(--tilde-accent-soft);
+  border-left: 2px solid var(--tilde-accent);
+}
+
+.tilde-proof {
+  gap: 0.7rem;
+  padding: 0.9rem 1.75rem;
+  color: var(--tilde-muted);
+  background: rgba(109,92,255,0.04);
+  border-top: 1px solid var(--tilde-line);
+}
+
+.tilde-proof > span {
+  color: var(--tilde-success);
+}
+
+.tilde-proof code {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--sl-font-mono);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tilde-proof small {
+  margin-left: auto;
+  color: var(--tilde-faint);
+}
+
+/* ── Sections ── */
+.tilde-speed {
+  padding: var(--tilde-space-6) max(1.5rem, calc((100vw - 70rem) / 2));
+  background: var(--tilde-white);
+  border-block: 1px solid var(--tilde-line);
+}
+
+.tilde-speed-heading {
+  display: grid;
+  grid-template-columns: 0.55fr 1.35fr 1fr;
+  gap: var(--tilde-space-4);
+  align-items: start;
+  margin-bottom: var(--tilde-space-5);
+}
+
+.tilde-speed-heading h2 {
+  max-width: 13ch;
+  font-size: clamp(2.5rem, 4.5vw, 4rem);
+  line-height: 1;
+}
+
+.tilde-speed-heading > p:last-child {
+  color: var(--tilde-muted);
+}
+
+.tilde-speed-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-block: 1px solid var(--tilde-line);
+}
+
+.tilde-speed-grid article {
+  padding: var(--tilde-space-4) var(--tilde-space-4) var(--tilde-space-4) 0;
+}
+
+.tilde-speed-grid article + article {
+  padding-left: var(--tilde-space-4);
+  border-left: 1px solid var(--tilde-line);
+}
+
+.tilde-speed-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tilde-speed-card-meta span {
+  color: var(--tilde-accent);
+  font-family: var(--sl-font-mono);
+  font-size: 0.7rem;
+}
+
+.tilde-speed-card-meta small {
+  padding: 0.22rem 0.45rem;
+  color: var(--tilde-faint);
+  font-family: var(--sl-font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--tilde-paper);
+  border: 1px solid var(--tilde-line);
+  border-radius: 999px;
+}
+
+.tilde-speed-grid h3 {
+  margin: var(--tilde-space-4) 0 var(--tilde-space-1);
+  font-size: 1.05rem;
+}
+
+.tilde-speed-grid p {
+  color: var(--tilde-muted);
+  font-size: 0.9rem;
+}
+
+/* ── Models ── */
+.tilde-models {
+  padding: var(--tilde-space-6) max(1.5rem, calc((100vw - 70rem) / 2));
+  background: var(--tilde-white);
+  border-block: 1px solid var(--tilde-line);
+}
+
+.tilde-models-heading {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: var(--tilde-space-4);
+  align-items: end;
+  margin-bottom: var(--tilde-space-4);
+}
+
+.tilde-models-heading h2 {
+  margin-top: 0.45rem;
+  font-size: clamp(2.7rem, 5vw, 4.6rem);
+  line-height: 1;
+}
+
+.tilde-models-heading > p {
+  max-width: 30rem;
+  color: var(--tilde-muted);
+}
+
+.tilde-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--tilde-line);
+  border-radius: 0.65rem;
+}
+
+.tilde-provider-grid article {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  min-width: 0;
+  padding: 1.35rem;
+}
+
+.tilde-provider-grid article > div {
+  min-width: 0;
+}
+
+.tilde-provider-grid article + article {
+  border-left: 1px solid var(--tilde-line);
+}
+
+.tilde-provider-logo {
+  flex: 0 0 2rem;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  background: var(--tilde-accent-soft);
+  border: 1px solid rgba(109,92,255,0.15);
+  border-radius: 0.4rem;
+  color: var(--tilde-accent);
+  font-family: var(--sl-font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tilde-provider-grid strong,
+.tilde-provider-grid small {
+  display: block;
+}
+
+.tilde-provider-grid strong {
+  color: var(--tilde-ink);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.tilde-provider-grid small {
+  margin-top: 0.15rem;
+  color: var(--tilde-faint);
+  font-size: 0.68rem;
+}
+
+.tilde-home .tilde-model-note {
+  max-width: 46rem;
+  margin-top: var(--tilde-space-3);
+  color: var(--tilde-faint);
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+/* ── Intro ── */
+.tilde-intro {
+  width: min(100% - 3rem, 57rem);
+  margin-inline: auto;
+  padding: var(--tilde-space-6) 0;
+  text-align: center;
+}
+
+.tilde-intro h2 {
+  margin: var(--tilde-space-2) 0 var(--tilde-space-3);
+  font-size: clamp(2.7rem, 5.5vw, 5rem);
+  line-height: 1;
+}
+
+.tilde-intro > p:last-child {
+  max-width: 43rem;
+  margin-inline: auto;
+  color: var(--tilde-muted);
+  font-size: 1.05rem;
+}
+
+/* ── Principles ── */
+.tilde-principles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: min(100% - 3rem, 70rem);
+  margin: 0 auto var(--tilde-space-6);
+  border-block: 1px solid var(--tilde-line);
+}
+
+.tilde-principles article {
+  padding: var(--tilde-space-4) var(--tilde-space-4) var(--tilde-space-4) 0;
+}
+
+.tilde-principles article + article {
+  padding-left: var(--tilde-space-4);
+  border-left: 1px solid var(--tilde-line);
+}
+
+.tilde-principles article > span {
+  color: var(--tilde-faint);
+  font-family: var(--sl-font-mono);
+  font-size: 0.68rem;
+}
+
+.tilde-principles h3 {
+  margin: var(--tilde-space-4) 0 var(--tilde-space-1);
+  font-size: 1.05rem;
+}
+
+.tilde-principles p {
+  color: var(--tilde-muted);
+  font-size: 0.9rem;
+}
+
+/* ── Orchestration (dark) ── */
+.tilde-orchestration {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: var(--tilde-space-6);
+  align-items: center;
+  padding: var(--tilde-space-6) max(1.5rem, calc((100vw - 70rem) / 2));
+  background: #0f0f12;
+  border-block: 1px solid var(--tilde-line);
+}
+
+.tilde-orchestration :is(h2, h3) {
+  color: var(--tilde-ink);
+}
+
+.tilde-orchestration .tilde-label {
+  color: var(--tilde-accent);
+}
+
+.tilde-orchestration h2 {
+  margin: var(--tilde-space-2) 0 var(--tilde-space-3);
+  font-size: clamp(2.8rem, 5vw, 4.7rem);
+  line-height: 1;
+}
+
+.tilde-orchestration-copy > p:not(.tilde-label) {
+  margin-bottom: var(--tilde-space-3);
+  color: var(--tilde-muted);
+}
+
+.tilde-orchestration .tilde-text-link {
+  color: var(--tilde-ink);
+  border-bottom-color: var(--tilde-faint);
+}
+
+.tilde-agents {
+  padding: 0.8rem 1.5rem 0;
+  background: var(--tilde-white);
+  border-radius: 0.55rem;
+}
+
+.tilde-coordinator-row,
+.tilde-agent-row {
+  display: grid;
+  grid-template-columns: 3.25rem 1fr auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.15rem 0;
+  border-bottom: 1px solid var(--tilde-line);
+}
+
+.tilde-coordinator-row span,
+.tilde-agent-row span {
+  color: var(--tilde-faint);
+  font-family: var(--sl-font-mono);
+  font-size: 0.75rem;
+}
+
+.tilde-coordinator-row strong,
+.tilde-agent-row strong {
+  color: var(--tilde-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.tilde-coordinator-row small,
+.tilde-agent-row small {
+  color: var(--tilde-faint);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.tilde-agent-row {
+  margin-left: 1.5rem;
+}
+
+.tilde-agent-row small.complete {
+  color: var(--tilde-success);
+}
+
+.tilde-agent-row small.working::before {
+  content: '';
+  display: inline-block;
+  width: 0.38rem;
+  height: 0.38rem;
+  margin-right: 0.4rem;
+  background: var(--tilde-accent);
+  border-radius: 50%;
+  animation: tilde-pulse 2.2s ease-in-out infinite;
+}
+
+.tilde-agents > p {
+  padding: 1rem 0;
+  color: var(--tilde-faint);
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+/* ── Foundation ── */
+.tilde-foundation {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: var(--tilde-space-6);
+  width: min(100% - 3rem, 70rem);
+  margin-inline: auto;
+  padding: var(--tilde-space-6) 0;
+}
+
+.tilde-foundation h2 {
+  margin-top: 0.8rem;
+  font-size: clamp(2.7rem, 5vw, 4.6rem);
+  line-height: 1;
+}
+
+.tilde-foundation dl {
+  border-top: 1px solid var(--tilde-line);
+}
+
+.tilde-foundation dl > div {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr;
+  gap: 2rem;
+  padding: 1.35rem 0;
+  border-bottom: 1px solid var(--tilde-line);
+}
+
+.tilde-foundation dt {
+  color: var(--tilde-ink);
+  font-weight: 650;
+}
+
+.tilde-foundation dd {
+  color: var(--tilde-muted);
+}
+
+/* ── Final ── */
+.tilde-final {
+  padding: var(--tilde-space-6) 1.5rem;
+  text-align: center;
+  background: var(--tilde-white);
+  border-top: 1px solid var(--tilde-line);
+}
+
+.tilde-final h2 {
+  margin: 0.8rem 0 1rem;
+  font-size: clamp(3rem, 6.5vw, 5.7rem);
+  line-height: 1;
+}
+
+.tilde-final > p:not(.tilde-label) {
+  color: var(--tilde-muted);
+}
+
+.tilde-final code {
+  color: var(--tilde-ink);
+  font-family: var(--sl-font-mono);
+  font-size: 0.88em;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.tilde-final .tilde-actions {
+  justify-content: center;
+}
+
+/* ── Responsive ── */
+@media (max-width: 64rem) {
+  .tilde-product-heading,
+  .tilde-models-heading,
+  .tilde-speed-heading,
+  .tilde-orchestration,
+  .tilde-foundation {
+    grid-template-columns: 1fr;
+  }
+
+  .tilde-product-heading,
+  .tilde-models-heading,
+  .tilde-speed-heading {
+    gap: 1rem;
+  }
+
+  .tilde-speed-heading > p:last-child {
+    max-width: 36rem;
+  }
+
+  .tilde-orchestration-copy {
+    max-width: 36rem;
+  }
+
+  .tilde-agents {
+    max-width: 42rem;
+    width: 100%;
+  }
+}
+
+@media (max-width: 50rem) {
+  .tilde-home {
+    --tilde-space-6: 4rem;
+  }
+
+  .tilde-principles {
+    grid-template-columns: 1fr;
+  }
+
+  .tilde-speed-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tilde-provider-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .tilde-provider-grid article:nth-child(3) {
+    border-left: 0;
+  }
+
+  .tilde-provider-grid article:nth-child(n + 3) {
+    border-top: 1px solid var(--tilde-line);
+  }
+
+  .tilde-principles article,
+  .tilde-principles article + article {
+    padding: 2rem 0;
+    border-left: 0;
+  }
+
+  .tilde-principles article + article {
+    border-top: 1px solid var(--tilde-line);
+  }
+
+  .tilde-speed-grid article,
+  .tilde-speed-grid article + article {
+    padding: 2rem 0;
+    border-left: 0;
+  }
+
+  .tilde-speed-grid article + article {
+    border-top: 1px solid var(--tilde-line);
+  }
+
+  .tilde-principles h3 {
+    margin-top: 1.5rem;
+  }
+
+  .tilde-speed-grid h3 {
+    margin-top: 1.5rem;
+  }
+}
+
+@media (max-width: 38rem) {
+  .tilde-hero,
+  .tilde-intro,
+  .tilde-principles,
+  .tilde-foundation {
+    width: min(100% - 2rem, 70rem);
+  }
+
+  .tilde-hero {
+    padding-top: 2.5rem;
+  }
+
+  .tilde-hero-workflow {
+    margin-top: 2.75rem;
+  }
+
+  .tilde-hero h1 {
+    font-size: clamp(2.9rem, 13vw, 4rem);
+  }
+
+  .tilde-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .tilde-hero .tilde-actions,
+  .tilde-final .tilde-actions {
+    align-items: center;
+  }
+
+  .tilde-actions .tilde-button {
+    width: 100%;
+  }
+
+  .tilde-product,
+  .tilde-models,
+  .tilde-orchestration {
+    padding-inline: 1rem;
+  }
+
+  .tilde-provider-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tilde-provider-grid article + article {
+    border-top: 1px solid var(--tilde-line);
+    border-left: 0;
+  }
+
+  .tilde-request,
+  .tilde-plan,
+  .tilde-proof {
+    padding-inline: 1rem;
+  }
+
+  .tilde-agent {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .tilde-coordinator-row,
+  .tilde-agent-row {
+    grid-template-columns: 2rem 1fr;
+  }
+
+  .tilde-coordinator-row small,
+  .tilde-agent-row small {
+    grid-column: 2;
+  }
+
+  .tilde-agent-row {
+    margin-left: 0.75rem;
+  }
+
+  .tilde-foundation dl > div {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tilde-home *,
+  .tilde-home *::before,
+  .tilde-home *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

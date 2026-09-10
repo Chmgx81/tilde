@@ -1,0 +1,88 @@
+---
+type WorkflowItem = {
+  label: string;
+  detail: string;
+  status?: 'complete' | 'active' | 'done';
+};
+
+type AgentRow = {
+  number: string;
+  label: string;
+  status: string;
+  statusClass?: string;
+};
+
+type Props = {
+  variant: 'hero' | 'product' | 'agents';
+  project?: string;
+  title?: string;
+  progress?: string;
+  mode?: string;
+  request?: string;
+  items?: WorkflowItem[];
+  agent?: {
+    label: string;
+    detail: string;
+    elapsed?: string;
+  };
+  proof?: {
+    command: string;
+    elapsed: string;
+  };
+  footer?: string[];
+  coordinator?: {
+    owner: string;
+    task: string;
+    status: string;
+  };
+  rows?: AgentRow[];
+  note?: string;
+};
+
+const props = Astro.props as Props;
+---
+
+{props.variant === 'product' && (
+  <div class="tilde-workflow tilde-card" role="group" aria-label="Example tilde workflow">
+    <div class="tilde-workflow-top">
+      <span>{props.project}</span>
+      <span class="tilde-mode"><i class="tilde-status-dot"></i> {props.mode}</span>
+    </div>
+    <div class="tilde-request">
+      <span aria-hidden="true">›</span>
+      <p>{props.request}</p>
+    </div>
+    <div class="tilde-plan">
+      <div class="tilde-plan-meta">
+        <span>Plan</span>
+        <span>{props.progress}</span>
+      </div>
+      <ol>
+        {props.items?.map((item) => (
+          <li
+            class={item.status === 'done' ? 'done' : item.status === 'active' ? 'active' : undefined}
+            aria-current={item.status === 'active' ? 'step' : undefined}
+          >
+            <span class="tilde-check" aria-hidden="true">{item.status === 'done' ? '✓' : item.status === 'active' ? <i class="tilde-status-dot"></i> : ''}</span>
+            <div>
+              <strong>{item.label}</strong>{item.detail && <small>{item.detail}</small>}
+              <span class="sr-only">{item.status === 'done' ? 'complete' : item.status === 'active' ? 'in progress' : 'pending'}</span>
+              {item.status === 'active' && props.agent && (
+                <div class="tilde-agent"><span>{props.agent.label}</span><span>{props.agent.detail}</span></div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+    {props.proof && <div class="tilde-proof"><span>✓</span><code>{props.proof.command}</code><small>{props.proof.elapsed}</small></div>}
+  </div>
+)}
+
+{props.variant === 'agents' && (
+  <div class="tilde-agents" role="group" aria-label="Example delegated work">
+    {props.coordinator && <div class="tilde-coordinator-row"><span>{props.coordinator.owner}</span><strong>{props.coordinator.task}</strong><small>{props.coordinator.status}</small></div>}
+    {props.rows?.map((row) => <div class="tilde-agent-row"><span>{row.number}</span><strong>{row.label}</strong><small class={row.statusClass}>{row.status}</small></div>)}
+    {props.note && <p>{props.note}</p>}
+  </div>
+)}

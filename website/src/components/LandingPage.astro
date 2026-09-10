@@ -1,0 +1,229 @@
+---
+import DemoWorkflow from './DemoWorkflow.astro';
+
+const installCommand = 'curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh';
+
+const providers = [
+  { name: 'Ollama', detail: 'Local models', slug: 'ollama' },
+  { name: 'Anthropic', detail: 'Claude models', slug: 'anthropic' },
+  { name: 'OpenAI', detail: 'GPT models', slug: 'openai' },
+  { name: 'Gemini', detail: 'Google models', slug: 'gemini' },
+  { name: 'OpenRouter', detail: 'Live catalogue', slug: 'openrouter' },
+  { name: 'MCP', detail: 'Extension tools', slug: 'mcp' },
+];
+
+const productWorkflow = {
+  variant: 'product' as const,
+  project: '~/payments-api · main',
+  mode: 'working',
+  request: 'Fix the double-charge bug in checkout',
+  progress: '2 of 9',
+  items: [
+    { label: 'Create the issue', detail: 'Created GitHub issue #210', status: 'done' as const },
+    { label: 'Create isolated branch', detail: 'Running git worktree add', status: 'done' as const },
+    { label: 'Trace and fix the bugs', detail: 'Reading checkout/handler.go', status: 'active' as const },
+    { label: 'Review the diff', detail: '' },
+    { label: 'Run focused tests', detail: '' },
+    { label: 'Open the pull request', detail: '' },
+    { label: 'Watch CI and code review', detail: '' },
+    { label: 'Address feedback', detail: '' },
+    { label: 'Merge the change', detail: '' },
+  ],
+  agent: { label: 'tool', detail: 'creating a clean workspace for the fix' },
+};
+
+const agentWorkflow = {
+  variant: 'agents' as const,
+  coordinator: { owner: 'tilde', task: 'Harden webhook verification', status: 'coordinator' },
+  rows: [
+    { number: '01', label: 'Trace request path', status: 'complete', statusClass: 'complete' },
+    { number: '02', label: 'Check failure modes', status: 'working', statusClass: 'working' },
+    { number: '03', label: 'Review test coverage', status: 'queued' },
+  ],
+  note: 'Depth, fan-out, runtime, and agent count stay capped.',
+};
+---
+
+<div class="tilde-home not-content">
+  <section class="tilde-hero" aria-labelledby="tilde-title">
+    <div class="tilde-hero-copy">
+      <p class="tilde-eyebrow">Fast · Sandbox-first · Open source</p>
+      <h1 id="tilde-title">Built for real engineering.</h1>
+      <p class="tilde-hero-lede">
+        tilde turns complex repository work into a visible workflow. Delegate focused tasks to subagents
+        and keep tools, tests, reviews, and delivery moving in one terminal.
+      </p>
+      <div class="tilde-actions">
+        <a class="tilde-button tilde-button-primary" href="/docs/install/">Install tilde</a>
+        <a class="tilde-text-link" href="https://github.com/Chmgx81/tilde">View on GitHub <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="tilde-install" role="group" aria-label="Install command">
+        <code>{installCommand}</code>
+        <button type="button" data-copy-install data-command={installCommand} aria-label="Copy install command">
+          <svg class="copy-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="6" width="10" height="10" rx="2"></rect><path d="M13 6V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1"></path></svg>
+          <svg class="check-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-9"></path></svg>
+        </button>
+        <span class="tilde-copy-status" data-copy-status aria-live="polite"></span>
+      </div>
+    </div>
+    <div class="tilde-hero-workflow">
+      <DemoWorkflow {...productWorkflow} />
+    </div>
+  </section>
+
+  <section class="tilde-speed" aria-labelledby="speed-title">
+    <div class="tilde-speed-heading">
+      <p class="tilde-label">Built for speed</p>
+      <h2 id="speed-title">Less waiting. More useful work in motion.</h2>
+      <p>
+        tilde coordinates visible workflows and focused subagents. Independent reads, searches, and
+        inspection subagents run concurrently while writes stay serial.
+      </p>
+    </div>
+    <div class="tilde-speed-grid">
+      <article>
+        <div class="tilde-speed-card-meta"><span>01</span><small>Available now</small></div>
+        <h3>Sandbox-first execution</h3>
+        <p>Every shell call runs under bubblewrap on Linux — network denied, filesystem scoped. A compromised agent can't exfiltrate or destroy.</p>
+      </article>
+      <article>
+        <div class="tilde-speed-card-meta"><span>02</span><small>Available now</small></div>
+        <h3>Explicit approvals</h3>
+        <p>You see the exact command, the reason, and choose [y]es, [n]o, or [a]lways-this-session. Nothing runs without your say.</p>
+      </article>
+      <article>
+        <div class="tilde-speed-card-meta"><span>03</span><small>Available now</small></div>
+        <h3>Workflow-native</h3>
+        <p>See the plan, active work, tool activity, tests, and delegated tasks without reading a wall of chat.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="tilde-models" aria-labelledby="models-title">
+    <div class="tilde-models-heading">
+      <div>
+        <p class="tilde-label">Providers and models</p>
+        <h2 id="models-title">Use the best model for the job.</h2>
+      </div>
+      <p>
+        Connect Ollama, OpenAI, Anthropic, Gemini, or OpenRouter. Switch models for the active provider
+        from the terminal without changing how tilde works.
+      </p>
+    </div>
+    <div class="tilde-provider-grid" aria-label="Supported model providers">
+      {providers.map((provider) => (
+        <article>
+          <div class={`tilde-provider-logo tilde-provider-${provider.slug}`}>{provider.name[0]}</div>
+          <div><strong>{provider.name}</strong><small>{provider.detail}</small></div>
+        </article>
+      ))}
+    </div>
+    <p class="tilde-model-note">
+      Model availability and names come from provider APIs and can change. tilde passes your configured
+      model ID to the active provider.
+    </p>
+  </section>
+
+  <section class="tilde-intro" aria-labelledby="difference-title">
+    <p class="tilde-label">From issue to merge</p>
+    <h2 id="difference-title">Follow the work from issue to merge.</h2>
+    <p>
+      tilde can inspect the issue, isolate the work, change the code, run tests, delegate review,
+      open the pull request, and respond to feedback. The workflow stays visible from start to finish.
+    </p>
+  </section>
+
+  <section class="tilde-principles" aria-label="tilde principles">
+    <article>
+      <span>01</span>
+      <h3>Works in the real repository</h3>
+      <p>Start with the code, git state, project instructions, and tools your team already uses.</p>
+    </article>
+    <article>
+      <span>02</span>
+      <h3>Proves the change</h3>
+      <p>Keep tests, builds, diff review, CI, and feedback inside the same visible workflow.</p>
+    </article>
+    <article>
+      <span>03</span>
+      <h3>Follows your rules</h3>
+      <p>Load AGENTS.md, reusable skills, and optional tool confirmations for the way your team works.</p>
+    </article>
+  </section>
+
+  <section class="tilde-orchestration" aria-labelledby="orchestration-title">
+    <div class="tilde-orchestration-copy">
+      <p class="tilde-label">Focused delegation</p>
+      <h2 id="orchestration-title">One coordinator. Focused workers.</h2>
+      <p>
+        tilde can start fresh subagents on focused parts of a task and return their findings to one
+        coordinator. You can see who owns each part while runtime limits keep the work bounded.
+      </p>
+      <a class="tilde-text-link" href="/docs/reference/guides/agent-loop/">How the agent loop works <span aria-hidden="true">→</span></a>
+    </div>
+    <DemoWorkflow {...agentWorkflow} />
+  </section>
+
+  <section class="tilde-foundation" aria-labelledby="foundation-title">
+    <div>
+      <p class="tilde-label">The foundation</p>
+      <h2 id="foundation-title">One Go binary. No runtime or plugin stack.</h2>
+    </div>
+    <dl>
+      <div><dt>Built-in tools</dt><dd>Read, search, edit, write, and run shell commands without adding plugins.</dd></div>
+      <div><dt>Local sessions</dt><dd>Resume or search past work from session files stored on your disk.</dd></div>
+      <div><dt>Open source</dt><dd>Read the code that runs commands and edits files in your repository.</dd></div>
+      <div><dt>No telemetry</dt><dd>tilde does not send product analytics from your machine.</dd></div>
+    </dl>
+  </section>
+
+  <section class="tilde-final" aria-labelledby="final-title">
+    <p class="tilde-label">tilde Harness</p>
+    <h2 id="final-title">Try tilde in a real repository.</h2>
+    <p>Install the binary, connect a model provider, and run <code>tilde</code>.</p>
+    <div class="tilde-actions">
+      <a class="tilde-button tilde-button-primary" href="/docs/install/">Install tilde</a>
+      <a class="tilde-text-link" href="/docs/quick-start/">Read the quick start <span aria-hidden="true">→</span></a>
+    </div>
+  </section>
+</div>
+
+<script>
+  const button = document.querySelector('[data-copy-install]');
+  const copyStatus = document.querySelector('[data-copy-status]');
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.append(input);
+      input.select();
+      const copied = document.execCommand('copy');
+      input.remove();
+      return copied;
+    }
+  };
+
+  button?.addEventListener('click', async () => {
+    const command = button.getAttribute('data-command') ?? '';
+    if (await copyText(command)) {
+      button.classList.add('copied');
+      button.setAttribute('aria-label', 'Install command copied');
+      if (copyStatus) copyStatus.textContent = 'Install command copied.';
+      window.setTimeout(() => {
+        button.classList.remove('copied');
+        button.setAttribute('aria-label', 'Copy install command');
+        if (copyStatus) copyStatus.textContent = '';
+      }, 1800);
+    } else {
+      button.setAttribute('aria-label', 'Copy failed. Select the command manually.');
+      if (copyStatus) copyStatus.textContent = 'Copy failed. Select the command manually.';
+    }
+  });
+</script>
