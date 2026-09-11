@@ -42,7 +42,7 @@ const props = Astro.props as Props;
 {props.variant === 'product' && (
   <div class="tilde-workflow tilde-card" role="group" aria-label="Example tilde workflow">
     <div class="tilde-window-bar" aria-hidden="true">
-      <span></span><span></span><span></span>
+      <span class="tilde-window-mark">~</span>
       <em>tilde · plan · build · test · ship</em>
     </div>
     <div class="tilde-workflow-top">
@@ -81,6 +81,9 @@ const props = Astro.props as Props;
       </ol>
     </div>
     {props.proof && <div class="tilde-proof"><span aria-hidden="true">✓</span><code>{props.proof.command}</code><small>{props.proof.elapsed}</small></div>}
+    <div class="tilde-statusbar" aria-hidden="true">
+      <span>qwen3.8-4b:16k</span><span>·</span><span>bwrap</span><span>·</span><span>$0.38</span>
+    </div>
   </div>
 )}
 

@@ -52,6 +52,12 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   `Available now` badges are removed.
 - Tablet mechanics grid: the third card now closes the row full-width
   instead of sitting as a half-width orphan.
+- Hero preview speaks the product's own language: `~` session mark with
+  a left-aligned title instead of macOS dots, session density (finished
+  and pending steps recede around the active one), and a TUI status
+  strip (model, sandbox, session cost). The ask tier is a real inset
+  card with breathing room instead of rails borrowing its neighbors'
+  dividers.
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
   comes from the project's Node.js Version setting); `/docs` redirects to
