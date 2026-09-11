@@ -69,11 +69,10 @@
 }
 
 /* Header brand lockup — the mark at icon scale beside the wordmark.
-   The asset is a single pixel-tilde at 4.216:1 (1130×268), so 1.5rem
-   tall renders ~6.3rem wide. Any narrower box crops mid-stroke and
-   reads as noise at icon size — the full glyph must show uncropped. */
+   The white asset is trimmed to the glyph (44×10, 4.4:1), so 1rem height
+   renders a compact 16×70px icon with no transparent padding. */
 .site-title img {
-  height: 1.5rem;
+  height: 1rem;
   width: auto;
 }
 
