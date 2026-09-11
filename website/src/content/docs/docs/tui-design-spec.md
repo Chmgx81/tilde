@@ -1,5 +1,8 @@
-# tilde — TUI Design Specification
-
+---
+title: "tilde — TUI Design Specification"
+description: "> The interaction and presentation contract for tilde's terminal UI."
+editUrl: false
+---
 > The interaction and presentation contract for tilde's terminal UI.
 
 Status: living specification. Entries marked `DONE` describe implemented

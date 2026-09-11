@@ -8,12 +8,13 @@ export default defineConfig({
     starlight({
       title: 'tilde',
       description: 'A security-first terminal coding agent built for real engineering.',
+      logo: { src: './src/assets/tilde-mark.png', alt: 'tilde — the tilde mark' },
       favicon: '/favicon.svg',
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/Chmgx81/tilde' }],
       editLink: {
         baseUrl: 'https://github.com/Chmgx81/tilde/edit/main/website/',
       },
-      customCss: ['./src/styles/custom.css'],
+      customCss: ['./src/styles/fonts.css', './src/styles/custom.css'],
       pagination: false,
       sidebar: [
         {

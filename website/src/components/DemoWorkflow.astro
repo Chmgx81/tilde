@@ -20,6 +20,7 @@ type Props = {
   request?: string;
   items?: WorkflowItem[];
   agent?: {
+    glyph: string;
     label: string;
     detail: string;
   };
@@ -28,7 +29,6 @@ type Props = {
     elapsed: string;
   };
   coordinator?: {
-    owner: string;
     task: string;
     status: string;
   };
@@ -46,7 +46,7 @@ const props = Astro.props as Props;
       <span class="tilde-mode"><i class="tilde-status-dot"></i> {props.mode}</span>
     </div>
     <div class="tilde-request">
-      <span aria-hidden="true">›</span>
+      <span aria-hidden="true">→</span>
       <p>{props.request}</p>
     </div>
     <div class="tilde-plan">
@@ -60,26 +60,42 @@ const props = Astro.props as Props;
             class={item.status === 'done' ? 'done' : item.status === 'active' ? 'active' : undefined}
             aria-current={item.status === 'active' ? 'step' : undefined}
           >
-            <span class="tilde-check" aria-hidden="true">{item.status === 'done' ? '✓' : item.status === 'active' ? <i class="tilde-status-dot"></i> : ''}</span>
+            <span class="tilde-check" aria-hidden="true">{item.status === 'done' ? '✓' : item.status === 'active' ? <i class="tilde-status-dot"></i> : '○'}</span>
             <div>
               <strong>{item.label}</strong>{item.detail && <small>{item.detail}</small>}
               <span class="sr-only">{item.status === 'done' ? 'complete' : item.status === 'active' ? 'in progress' : 'pending'}</span>
               {item.status === 'active' && props.agent && (
-                <div class="tilde-agent"><span>{props.agent.label}</span><span>{props.agent.detail}</span></div>
+                <div class="tilde-agent">
+                  <span class="tilde-agent-glyph" aria-hidden="true">{props.agent.glyph}</span>
+                  <span>{props.agent.label}</span>
+                  <span>{props.agent.detail}</span>
+                </div>
               )}
             </div>
           </li>
         ))}
       </ol>
     </div>
-    {props.proof && <div class="tilde-proof"><span>✓</span><code>{props.proof.command}</code><small>{props.proof.elapsed}</small></div>}
+    {props.proof && <div class="tilde-proof"><span aria-hidden="true">✓</span><code>{props.proof.command}</code><small>{props.proof.elapsed}</small></div>}
   </div>
 )}
 
 {props.variant === 'agents' && (
   <div class="tilde-agents" role="group" aria-label="Example delegated work">
-    {props.coordinator && <div class="tilde-coordinator-row"><span>{props.coordinator.owner}</span><strong>{props.coordinator.task}</strong><small>{props.coordinator.status}</small></div>}
-    {props.rows?.map((row) => <div class="tilde-agent-row"><span>{row.number}</span><strong>{row.label}</strong><small class={row.statusClass}>{row.status}</small></div>)}
+    {props.coordinator && (
+      <div class="tilde-coordinator-row">
+        <span class="tilde-row-glyph" aria-hidden="true">●</span>
+        <strong>{props.coordinator.task}</strong>
+        <small>{props.coordinator.status}</small>
+      </div>
+    )}
+    {props.rows?.map((row) => (
+      <div class="tilde-agent-row">
+        <span class="tilde-row-glyph" aria-hidden="true">{row.number}</span>
+        <strong>{row.label}</strong>
+        <span class={`tilde-row-status ${row.statusClass ?? ''}`}><i class="tilde-status-glyph" aria-hidden="true">{row.status === 'complete' ? '✓' : row.status === 'working' ? '⋯' : '○'}</i>{row.status}</span>
+      </div>
+    ))}
     {props.note && <p>{props.note}</p>}
   </div>
 )}

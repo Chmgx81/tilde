@@ -29,12 +29,13 @@ const productWorkflow = {
     { label: 'Address feedback', detail: '' },
     { label: 'Merge the change', detail: '' },
   ],
-  agent: { label: 'tool', detail: 'creating a clean workspace for the fix' },
+  agent: { glyph: '⎿', label: 'work', detail: 'creating a clean workspace for the fix' },
+  proof: { command: 'go test ./... — 47 passed', elapsed: '12.4s' },
 };
 
 const agentWorkflow = {
   variant: 'agents' as const,
-  coordinator: { owner: 'tilde', task: 'Harden webhook verification', status: 'coordinator' },
+  coordinator: { task: 'Harden webhook verification', status: 'coordinator' },
   rows: [
     { number: '01', label: 'Trace request path', status: 'complete', statusClass: 'complete' },
     { number: '02', label: 'Check failure modes', status: 'working', statusClass: 'working' },
@@ -42,21 +43,45 @@ const agentWorkflow = {
   ],
   note: 'Depth, fan-out, runtime, and agent count stay capped.',
 };
----
 
+const tiers = [
+  {
+    slug: 'denied',
+    glyph: '✗',
+    name: 'deny',
+    sub: 'never runs',
+    desc: 'Blocked paths and patterns are hard limits that hold in every mode, including --yes. A denied action cannot be approved around.',
+  },
+  {
+    slug: 'ask',
+    glyph: '⚠',
+    name: 'ask',
+    sub: 'you decide',
+    desc: 'The literal command appears with the reason for it — never a paraphrase. Answer y to run it once, n to refuse, or a for the rest of the session.',
+  },
+  {
+    slug: 'allow',
+    glyph: '✓',
+    name: 'allow',
+    sub: 'safe by default',
+    desc: 'Reads, searches, and scoped edits inside the sandbox. The work that can move fast because it cannot hurt the repository or leave the machine.',
+  },
+];
+---
 <div class="tilde-home not-content">
   <section class="tilde-hero" aria-labelledby="tilde-title">
     <div class="tilde-hero-copy">
-      <p class="tilde-eyebrow">Fast · Sandbox-first · Open source</p>
-      <h1 id="tilde-title">Built for real engineering.</h1>
+      <p class="tilde-eyebrow">A terminal coding agent · Open source</p>
+      <h1 id="tilde-title">Built for <em>real</em> engineering.</h1>
       <p class="tilde-hero-lede">
-        tilde turns complex repo work into a visible workflow — delegate, test, review, and ship from one terminal.
+        tilde turns complex repo work into a visible workflow — plan, build, test, and ship from one terminal, with every risky step waiting for your say-so.
       </p>
       <div class="tilde-actions">
         <a class="tilde-button tilde-button-primary" href="https://github.com/Chmgx81/tilde">Install tilde</a>
         <a class="tilde-text-link" href="https://github.com/Chmgx81/tilde">View on GitHub <span aria-hidden="true">↗</span></a>
       </div>
       <div class="tilde-install" role="group" aria-label="Install command">
+        <span class="tilde-prompt" aria-hidden="true">~</span>
         <code>{installCommand}</code>
         <button type="button" data-copy-install data-command={installCommand} aria-label="Copy install command">
           <svg class="copy-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="6" width="10" height="10" rx="2"></rect><path d="M13 6V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1"></path></svg>
@@ -72,6 +97,7 @@ const agentWorkflow = {
 
   <section class="tilde-speed reveal" aria-labelledby="speed-title">
     <div class="tilde-speed-heading">
+      <p class="tilde-label">Mechanics</p>
       <h2 id="speed-title">Less waiting. More useful work in motion.</h2>
       <p>
         tilde coordinates visible workflows and focused subagents. Independent reads, searches, and
@@ -97,8 +123,30 @@ const agentWorkflow = {
     </div>
   </section>
 
+  <section class="tilde-permissions reveal" aria-labelledby="permissions-title">
+    <div class="tilde-permissions-head">
+      <p class="tilde-label">Permissions</p>
+      <h2 id="permissions-title">Every action lands on the ladder.</h2>
+      <p>
+        deny, ask, or allow — three tiers evaluated in order, with deny winning in every mode. Asks
+        show the literal command and its reason; you answer with one key.
+      </p>
+    </div>
+    <div class="tilde-tier-table" role="table" aria-label="tilde permission tiers">
+      <div class="tilde-tier-head" aria-hidden="true"><span></span><span>Tier</span><span>What it means</span></div>
+      {tiers.map((tier) => (
+        <div class={`tilde-tier ${tier.slug}`}>
+          <span class="tilde-tier-glyph" aria-hidden="true">{tier.glyph}</span>
+          <span class="tilde-tier-name">{tier.name}<small>{tier.sub}</small></span>
+          <p class="tilde-tier-desc">{tier.desc}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
   <section class="tilde-models reveal" aria-labelledby="models-title">
     <div class="tilde-models-heading">
+      <p class="tilde-label">Models</p>
       <h2 id="models-title">Use the best model for the job.</h2>
       <p>
         Connect Ollama, OpenAI, Anthropic, Gemini, OpenRouter, or OpenCode. Switch models for the active provider
@@ -108,7 +156,7 @@ const agentWorkflow = {
     <div class="tilde-provider-grid" aria-label="Supported model providers">
       {providers.map((provider) => (
         <article>
-          <div class={`tilde-provider-logo tilde-provider-${provider.slug}`}>{provider.name[0]}</div>
+          <div class={`tilde-provider-logo tilde-provider-${provider.slug}`} aria-hidden="true">{provider.name[0]}</div>
           <div><strong>{provider.name}</strong><small>{provider.detail}</small></div>
         </article>
       ))}
@@ -118,7 +166,6 @@ const agentWorkflow = {
       model ID to the active provider.
     </p>
   </section>
-
   <section class="tilde-intro reveal" aria-labelledby="difference-title">
     <h2 id="difference-title">Follow the work from issue to merge.</h2>
     <p>
@@ -160,7 +207,7 @@ const agentWorkflow = {
 
   <section class="tilde-foundation reveal" aria-labelledby="foundation-title">
     <div>
-        <h2 id="foundation-title">One Go binary. No runtime to install.</h2>
+      <h2 id="foundation-title">One Go binary. No runtime to install.</h2>
     </div>
     <dl>
       <div><dt>Built-in tools</dt><dd>Read, search, edit, write, and run shell commands without adding plugins.</dd></div>

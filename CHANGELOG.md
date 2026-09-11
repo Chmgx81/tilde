@@ -5,6 +5,13 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
 
 ## v0.10.0 (unreleased)
 
+- Website redesigned to the product's own design language: the TUI spec
+  token palette (amber/cyan/semantic glyphs on the blue-gray `#0D1117`
+  surface), self-hosted Newsreader/Inter/JetBrains Mono, spec-glyph
+  workflow demos, a deny/ask/allow permission-ladder section, and a
+  WCAG-AA-verified dark docs theme. The pixel-tilde banner is now the
+  site mark: header logo, wordmark pairing, and amber-on-dark favicon.
+
 - `--version` and the TUI now include the short source revision for VCS
   builds (for example, `v0.9.0+g5f94724`), while release comparisons still
   use the stable release tag.
