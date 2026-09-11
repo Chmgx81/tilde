@@ -69,10 +69,13 @@
 }
 
 /* Header brand lockup — the wave mark at icon scale beside the wordmark,
-   not Starlight's banner scale (40px tall ≈ 169px wide for this mark). */
+   not Starlight's banner scale (40px tall ≈ 169px wide for this mark).
+   The mark is 4.2:1, so the box crops the long tail: only the curl shows. */
 .site-title img {
   height: 1.5rem;
-  width: auto;
+  width: 3.25rem;
+  object-fit: cover;
+  object-position: 0 50%;
 }
 
 .site-title {
@@ -182,7 +185,7 @@ body:has(.tilde-home) {
   background: #0d1117;
 }
 
-body:has(.tilde-home) .header {
+body:has(.tilde-home) header.header {
   position: absolute;
   inset-inline: 0;
   color: #e6e6e6;
