@@ -18,6 +18,9 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   deploy from inside `website/`. Pushes to `main` touching `website/`,
   `docs/`, or `vercel.json` deploy
   automatically via GitHub Actions.
+- CI's `build-test` job checks out full history so version tests see the
+  release tags: a shallow checkout made `BuildVersion()` report a bare
+  SHA instead of `v0.9.1+…` and fail `internal/update` tests.
 
 - `--version` and the TUI now include the short source revision for VCS
   builds (for example, `v0.9.0+g5f94724`), while release comparisons still

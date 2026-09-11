@@ -16,6 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so BuildVersion()'s `git describe --tags` sees the
+          # release tags; a shallow checkout makes it report a bare SHA and
+          # fails the version tests in internal/update.
+          fetch-depth: 0
       - name: Install sandbox dependency
         run: sudo apt-get update && sudo apt-get install -y bubblewrap
       - uses: actions/setup-go@v5
