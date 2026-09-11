@@ -1092,7 +1092,7 @@ func TestBuildModeListsAllTools(t *testing.T) {
 
 func TestPlanPromptDemandsNumberedPlan(t *testing.T) {
 	p := systemPrompt([]string{"read_file"}, mode.Plan)
-	for _, want := range []string{"NOT available", "numbered", "supersedes"} {
+	for _, want := range []string{"NOT available", "numbered", "supersedes", "never paste full file contents", "short numbered outline", "at most 3 paths", "never duplicated"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("Plan prompt must contain %q", want)
 		}

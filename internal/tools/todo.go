@@ -37,7 +37,7 @@ func (m *TodoManager) Snapshot() []TodoItem {
 func (t *TodoWrite) Name() string { return "todo_write" }
 
 func (t *TodoWrite) Description() string {
-	return "Serial session todo list: add, done, list, clear. In-memory only."
+	return "Serial session todo list: add, done, list, clear. In-memory only. Add revises, never duplicates: re-adding open text is a no-op."
 }
 func (t *TodoWrite) Schema() map[string]any {
 	op := map[string]any{"type": "string", "enum": []string{"add", "done", "list", "clear"}}
@@ -57,8 +57,18 @@ func (t *TodoWrite) Exec(_ context.Context, args map[string]any) (string, error)
 		if text == "" {
 			return "", fmt.Errorf("op \"add\" needs \"text\" as a string")
 		}
-		m.next++
-		m.items = append(m.items, TodoItem{ID: m.next, Text: text})
+		norm := strings.TrimSpace(text)
+		duplicate := false
+		for _, it := range m.items {
+			if !it.Done && strings.EqualFold(strings.TrimSpace(it.Text), norm) {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			m.next++
+			m.items = append(m.items, TodoItem{ID: m.next, Text: text})
+		}
 	case "done":
 		id := optInt(args, "id", 0)
 		i := -1

@@ -5,6 +5,13 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
 
 ## v0.10.0 (unreleased)
 
+- Plan mode no longer dumps artifacts into chat: the Plan prompt requires a
+  short numbered outline (full detail lives in the `save_plan` file), and
+  `todo_write add` revises instead of duplicating identical open text.
+- Plan hardening round 2: compact outline budget (3-5 short sections, at
+  most 3 file paths), same-batch identical tool calls dispatch once and
+  share the result with a dedup marker, and mode-gate denials state
+  explicitly that nothing was changed.
 - Website redesigned to the product's own design language: the TUI spec
   token palette (amber/cyan/semantic glyphs on the blue-gray `#0D1117`
   surface), self-hosted Newsreader/Inter/JetBrains Mono, spec-glyph

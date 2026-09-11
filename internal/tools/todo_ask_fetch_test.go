@@ -31,6 +31,20 @@ func TestTodoWriteAddListDone(t *testing.T) {
 	}
 }
 
+func TestTodoWriteDedupesIdenticalOpenAdd(t *testing.T) {
+	m := &TodoManager{}
+	tw := &TodoWrite{Mgr: m}
+	if _, err := tw.Exec(context.Background(), map[string]any{"op": "add", "text": "Build landing page"}); err != nil {
+		t.Fatalf("first add: %v", err)
+	}
+	if _, err := tw.Exec(context.Background(), map[string]any{"op": "add", "text": "  build LANDING page  "}); err != nil {
+		t.Fatalf("duplicate add: %v", err)
+	}
+	if got := len(m.Snapshot()); got != 1 {
+		t.Fatalf("duplicate open text must not add a second row, got %d items", got)
+	}
+}
+
 func TestAskUserNilDenies(t *testing.T) {
 	a := &Ask{}
 	out, err := a.Exec(context.Background(), map[string]any{"question": "proceed?"})

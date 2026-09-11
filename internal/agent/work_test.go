@@ -52,7 +52,10 @@ func TestFlushBatchBoundsParallelism(t *testing.T) {
 	loop := &Loop{Reg: reg, Cfg: Config{MaxIters: 3, DoomRepeats: 3, Mode: mode.Build}}
 	var batch []provider.ToolCall
 	for i := 0; i < 24; i++ {
-		batch = append(batch, provider.ToolCall{ID: fmt.Sprint(i), Name: "grep", Args: map[string]any{"pattern": "x"}})
+		// Distinct args per call: identical inputs are deduplicated
+		// to one dispatch (see TestFlushBatchDedupesIdenticalCalls),
+		// so the parallelism bound needs 24 unique calls.
+		batch = append(batch, provider.ToolCall{ID: fmt.Sprint(i), Name: "grep", Args: map[string]any{"pattern": fmt.Sprint(i)}})
 	}
 	if err := loop.flushBatch(context.Background(), batch, func(Event) {}); err != nil {
 		t.Fatal(err)
@@ -62,6 +65,57 @@ func TestFlushBatchBoundsParallelism(t *testing.T) {
 	} else if p < 2 {
 		t.Fatalf("expected some parallelism, peak=%d", p)
 	}
+}
+
+func TestFlushBatchDedupesIdenticalCalls(t *testing.T) {
+	var calls int64
+	reg := tools.NewRegistry()
+	reg.Register(&countProbe{calls: &calls})
+	loop := &Loop{Reg: reg, Cfg: Config{MaxIters: 3, DoomRepeats: 3, Mode: mode.Build}}
+	var batch []provider.ToolCall
+	for i := 0; i < 6; i++ {
+		batch = append(batch, provider.ToolCall{ID: fmt.Sprint(i), Name: "grep", Args: map[string]any{"pattern": "x"}})
+	}
+	var results []string
+	emit := func(e Event) {
+		if e.Kind == "tool_result" {
+			results = append(results, e.Text)
+		}
+	}
+	if err := loop.flushBatch(context.Background(), batch, emit); err != nil {
+		t.Fatal(err)
+	}
+	if got := atomic.LoadInt64(&calls); got != 1 {
+		t.Fatalf("6 identical calls must dispatch once, dispatched %d", got)
+	}
+	if len(results) != 6 {
+		t.Fatalf("every call still needs its own result, got %d", len(results))
+	}
+	for i, r := range results {
+		if !strings.Contains(r, "ok") {
+			t.Fatalf("result %d missing shared output: %q", i, r)
+		}
+		if i > 0 && !strings.Contains(r, "deduped") {
+			t.Fatalf("duplicate result %d must carry the dedup marker: %q", i, r)
+		}
+	}
+}
+
+// countProbe is a ParallelSafe-named tool ("grep") that counts Exec calls.
+type countProbe struct {
+	calls *int64
+}
+
+func (p *countProbe) Name() string        { return "grep" }
+func (p *countProbe) Description() string { return "test probe" }
+func (p *countProbe) Schema() map[string]any {
+	return map[string]any{"type": "object",
+		"properties": map[string]any{"pattern": map[string]any{"type": "string"}},
+		"required":   []string{"pattern"}}
+}
+func (p *countProbe) Exec(_ context.Context, _ map[string]any) (string, error) {
+	atomic.AddInt64(p.calls, 1)
+	return "ok", nil
 }
 
 func TestFlushBatchDefaultParallel(t *testing.T) {

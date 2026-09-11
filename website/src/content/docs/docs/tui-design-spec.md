@@ -474,8 +474,13 @@ toast on the transition itself:
   and it does not reprint the whole list unchanged just to bold the newly
   active item. Two consecutive `● Update Todos` blocks with only the
   checkbox states and bold target differing is expected and correct; a
-  block that repeats with *no* state change at all is a bug (see §2.20 for
-  the general "don't re-post what didn't change" rule this falls under).
+   block that repeats with *no* state change at all is a bug (see §2.20 for
+   the general "don't re-post what didn't change" rule this falls under).
+- **Outline, not dump:** the plan presentation under the todos is a compact
+  outline (3-5 short sections, file paths only to disambiguate, at most 3),
+  never full file contents or large code pastes — full detail lives in the
+  `save_plan` file (Plan.md §6), because the mode gate constrains tool
+  calls, not prose.
 
 ### 2.10 Tool-Call / Action Timeline
 
@@ -510,7 +515,7 @@ anything else, so its consistency matters more than its cleverness.
   are ask-tier *and* Plan-blocked like any other mutation:
   `spawn_work` / `apply_work` / `discard_work` (isolated worktree sessions; `/apply [path]` + `/discard [path]` dispatch with the pending path, fail loud with none),
   `memory` save/forget and `remember` index (op-aware gating).
-  `● todo_write` (serial checklist: `add|done|list|clear`); `● ask_user` (routes to the host AskUser callback, nil/unwired or denied reads as denied, propose a safe default); `● web_fetch` (http(s) GET only, 30s timeout, 5MB hard cap, needs `TILDE_ALLOW_NET=1`, denied otherwise without retry; allowed in Plan since it mutates no repo state).
+  `● todo_write` (serial checklist: `add|done|list|clear`; `add` revises, never duplicates — re-adding identical open text is a no-op); `● ask_user` (routes to the host AskUser callback, nil/unwired or denied reads as denied, propose a safe default); `● web_fetch` (http(s) GET only, 30s timeout, 5MB hard cap, needs `TILDE_ALLOW_NET=1`, denied otherwise without retry; allowed in Plan since it mutates no repo state).
 - Result (`⎿`) is optional and only appears when there's something worth
   reporting beyond "it ran", a diff stat, a test summary, an error. A silent
   success with nothing worth surfacing gets no `⎿` line at all; don't manufacture

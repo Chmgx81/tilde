@@ -230,7 +230,9 @@ be bypassed by it:
   model doesn't even see the mutating tools in Plan mode: they are
   withheld from the tool list (writer-child whitelists excepted), so Plan
   turns plan instead of collecting denials. The gate stays as the backstop,
-  and every 2nd denial injects a plan reminder into context.
+  and every 2nd denial injects a plan reminder into context. Denials state
+  explicitly that nothing was changed, so retries can't drift on the
+  assumption an edit landed.
 - **Sandboxing is OS-level, always on, on Linux.** bwrap wraps every shell
   call: filesystem access limited to the project dir, network egress denied
   by default. This holds even if `policies.yaml` is missing or misconfigured
@@ -248,9 +250,13 @@ the full list lives in `policies.yaml` under `ask:`.
 
 **Plan files.** In Plan mode the model persists numbered plans via the
 `save_plan` tool to `.tilde/plans/<slug>.md` (title + content; overwrite
-allowed so revisions update the same file). Approval stays the existing
+allowed so revisions update the same file). Chat carries only a short
+outline — compact, 3-5 sections, at most 3 file paths, never full file
+contents or large code dumps (gates constrain tool calls, not prose, so
+the shape rule lives in the prompt). Approval stays the existing
 Tab-to-Build handoff, no new approval surface. Build reads the plan back
-with `read_file`.
+with `read_file`. `todo_write add` revises instead of duplicating
+identical open text.
 
 **Verify fan-out.** For risky changes the model re-checks via parallel
 read-only explore subagents before closing: one reviews the working-tree
@@ -629,7 +635,7 @@ As of v0.9+:
 | Auto-compaction (80% threshold, JSONL log) | DONE |
 | OS-level sandboxing (bwrap, net egress denied) | DONE |
 | Git worktree isolation | DONE |
-| Doom-loop guard → Plan handoff | DONE |
+| Doom-loop guard → Plan handoff | DONE, consecutive identical tool+args (doomAt 3, read-only nudges ×2 then handoff); same-batch identical calls dispatch once with shared dedup-marked result |
 | Tool-call repair layer | DONE, Phase 3 |
 | Read tool's three ceilings | DONE, Phase 3 |
 | Honest shell exit codes / untrusted fencing | DONE, Phase 3 |
@@ -678,7 +684,7 @@ As of v0.9+:
 | Browser screenshots | DONE, `web_shot` via headless Firefox viewport PNG (ask, Plan-OK, SSRF-gated); PNGs are human-review artifacts, no vision pipeline yet |
 | IDE stdio bridge | DONE, `tilde ide-bridge` line-JSON (initialize/health/session.create/chat/history), approvals deny-by-default, sessions per-process |
 | Sandbox image | DONE, `sandbox.Containerfile` (fedora-minimal, agent uid, no secrets) + `docs/sandbox-image.md` with digest-pin workflow |
-| Plan files (`save_plan`) | DONE, Plan persists numbered plans to `.tilde/plans/<slug>.md` (overwrite revises); Plan-visible + allow-tier, Tab-to-Build approval unchanged, Build reads back via `read_file` |
+| Plan files (`save_plan`) | DONE, Plan persists numbered plans to `.tilde/plans/<slug>.md` (overwrite revises); Plan-visible + allow-tier, Tab-to-Build approval unchanged, Build reads back via `read_file`; chat shows only a short outline, never full-file dumps |
 | Critic self-review (`/critic`) | DONE, deterministic offline rubric over the working-tree diff (0-100, threshold 80, bounded findings); fail-loud empty-diff message |
 | Worktree TUI (`/apply`/`/discard`) | DONE, pending-session apply (keep) / discard (remove) via registry tools, fail-loud with none, bounded transcript |
 | TUI golden snapshots | DONE, `golden_test.go` pins help/palette/critic header + finding shapes (whitespace-tolerant) |
@@ -694,7 +700,7 @@ As of v0.9+:
 | Cost meter | DONE, TUI status bar shows session $ (hidden when unpriced, $0.0000 when known-free) |
 | Loop-level audit | DONE, mode-gate/policy/user denials audited (previously only dispatched calls were) |
 | Headless export | DONE, `tilde --export <id> [--out]` (cwd-contained, 0600, conflict guards) |
-| Plan banner + todos | DONE, banner at start/demotion, Update Todos block from manager state |
+| Plan banner + todos | DONE, banner at start/demotion, Update Todos block from manager state; `todo_write add` dedupes identical open text (revision, not duplication) |
 | Subagent view | DONE, ⋮ running / │ [done\|failed] completion rows, per-row model |
 
 ---

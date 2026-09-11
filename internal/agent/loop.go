@@ -233,7 +233,7 @@ func (l *Loop) denyReminder(denials int) string {
 		return ""
 	}
 	if l.GetMode() == mode.Plan {
-		return "Reminder: this session is in Plan (read-only) mode — mutating tools are unavailable, not merely gated. Stop attempting them; research with read-only tools, persist the numbered plan with save_plan, and present it instead."
+		return "Reminder: this session is in Plan (read-only) mode — mutating tools are unavailable, not merely gated. Stop attempting them; research with read-only tools, persist the numbered plan with save_plan, and present a short outline instead (no full-file dumps into chat)."
 	}
 	return "Reminder: that call was denied by a deny-tier rule — it will never succeed on retry. Change the approach or propose an alternative instead of re-issuing denied calls."
 }
@@ -274,7 +274,7 @@ func systemPrompt(toolNames []string, m mode.Mode) string {
 	b.WriteString("For approval-gated calls, include a concise user-facing reason when the tool schema supports a reason field. The reason is explanatory only and never changes policy or authorization.\n")
 	if m == mode.Plan {
 		b.WriteString("MODE: Plan (read-only exploration). write_file, edit_file, shell_command and other mutating tools are NOT available in this mode — do not attempt them, and do not work around this with reads that write (no heredocs, no redirection, no patches). ")
-		b.WriteString("Research with read-only tools, persist the numbered plan with save_plan, then present it and stop: approval is the user's Tab-to-Build handoff, never this tool. This read-only rule supersedes any other instructions.\n")
+		b.WriteString("Research with read-only tools, persist the numbered plan with save_plan, then present only a short numbered outline in chat and stop: never paste full file contents or large code/HTML dumps into chat (full detail lives in the saved plan file). Keep the outline compact — 3-5 short sections with short bullets, name files only to disambiguate (at most 3 paths), no symbol-by-symbol lists. Keep the todo list revised, never duplicated — do not re-add the same text. Approval is the user's Tab-to-Build handoff, never this tool. This read-only rule supersedes any other instructions.\n")
 	}
 	if m == mode.Build {
 		b.WriteString("MODE: Build (supervised implementation). Check .tilde/plans/ with read_file first when a plan was approved, then implement it. Mutating tools are available but ask-tier calls pause for user approval — batch independent calls together, make each one count, and keep momentum after approvals instead of re-asking by re-issuing. Pair every status update with tool calls: never a text-only turn while work remains. For risky changes re-check via parallel read-only explore subagents (one reviews the working-tree diff, one checks test coverage) before closing. Deny-tier blocks are final: change the approach, don't retry them.\n")
@@ -472,7 +472,7 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 			// status/log stay read-only. PlanAllow whitelists writer-child
 			// writes past this gate; the registry gate re-checks below.
 			if err := l.GetMode().AllowedCall(tc.Name, tc.Args); err != nil && !l.planAllowed(tc.Name) {
-				out := err.Error() + " Do not retry this call."
+				out := err.Error() + " Nothing was changed. Do not retry this call."
 				l.Reg.AuditDecision(tc.Name, "deny", tc.Args, "blocked by mode gate: "+err.Error())
 				emit(Event{Kind: "tool_result", Text: out})
 				l.AppendMsg(provider.Message{Role: "user", Content: "Tool " + tc.Name + " result: " + out})
@@ -645,23 +645,42 @@ func (l *Loop) flushParallel() int {
 // flushBatch runs pending read-only calls concurrently and processes
 // results strictly in request order: timeline, log, and context all read
 // as if serial, at a fraction of the wall time.
+//
+// Same-batch dedup: identical name+args issued in one turn dispatch
+// once; duplicates share the first result with a marker. The batch
+// holds ParallelSafe (read-only) calls only, so same input means same
+// output — no execution facts are lost, and a 24× repeated grep costs
+// one dispatch instead of 24.
 func (l *Loop) flushBatch(ctx context.Context, batch []provider.ToolCall, emit func(Event)) error {
 	if len(batch) == 0 {
 		return nil
 	}
+	uniq := make([]int, 0, len(batch)) // batch indices of first occurrences
+	rep := make([]int, len(batch))     // batch idx -> position in uniq
+	seen := make(map[string]int, len(batch))
+	for i, tc := range batch {
+		if p, ok := seen[fingerprint(tc.Name, tc.Args)]; ok {
+			rep[i] = p
+			continue
+		}
+		seen[fingerprint(tc.Name, tc.Args)] = len(uniq)
+		rep[i] = len(uniq)
+		uniq = append(uniq, i)
+	}
 	type res struct {
 		out string
 	}
-	outs := make([]res, len(batch))
-	started := make([]bool, len(batch))   // worker dispatched (may still be running)
-	completed := make([]bool, len(batch)) // Dispatch returned; outs[i] is final
+	outs := make([]res, len(uniq))
+	started := make([]bool, len(uniq))   // worker dispatched (may still be running)
+	completed := make([]bool, len(uniq)) // Dispatch returned; outs[i] is final
 	var wg sync.WaitGroup
 	var mu sync.Mutex // guards outs/started/completed so a cancelled wait can read them safely
 	// Semaphore: at most flushParallel Dispatch calls in flight — one
 	// goroutine per call with no bound burns FDs on wide turns.
 	sem := make(chan struct{}, l.flushParallel())
 	acquireFailed := false
-	for i, tc := range batch {
+	for u, bi := range uniq {
+		tc := batch[bi]
 		select {
 		case sem <- struct{}{}:
 		case <-ctx.Done():
@@ -671,18 +690,18 @@ func (l *Loop) flushBatch(ctx context.Context, batch []provider.ToolCall, emit f
 			break
 		}
 		wg.Add(1)
-		go func(i int, tc provider.ToolCall) {
+		go func(u int, tc provider.ToolCall) {
 			defer wg.Done()
 			defer func() { <-sem }()
 			mu.Lock()
-			started[i] = true
+			started[u] = true
 			mu.Unlock()
 			out := l.Reg.Dispatch(ctx, tc.Name, tc.Args)
 			mu.Lock()
-			outs[i].out = out
-			completed[i] = true
+			outs[u].out = out
+			completed[u] = true
 			mu.Unlock()
-		}(i, tc)
+		}(u, tc)
 	}
 	// Cancellable wait: on ctx.Done return what is collected so far
 	// instead of hanging a cancelled turn. Results still process
@@ -710,7 +729,8 @@ func (l *Loop) flushBatch(ctx context.Context, batch []provider.ToolCall, emit f
 		wg.Wait() // done already closed; no-op barrier before ordered read
 	}
 	for i, tc := range batch {
-		if !wasStarted[i] {
+		u := rep[i] // unique position sharing this call's input
+		if !wasStarted[u] {
 			// Never dispatched (cancellation won the semaphore race):
 			// emitting an empty result would fabricate tool output the
 			// model then reasons over. Skip it entirely.
@@ -718,8 +738,13 @@ func (l *Loop) flushBatch(ctx context.Context, batch []provider.ToolCall, emit f
 		}
 		emit(Event{Kind: "tool_call", Text: tc.Name + " " + shortArgs(tc.Args)})
 		l.appendLog("tool_call", map[string]any{"name": tc.Name, "args": tc.Args}, emit)
-		out := got[i].out
-		if cancelled && !wasCompleted[i] {
+		out := got[u].out
+		if uniq[u] != i {
+			// Duplicate of an identical call dispatched once this
+			// batch: share the result honestly instead of executing.
+			out = "[deduped: identical call in this batch, shared result]\n" + out
+		}
+		if cancelled && !wasCompleted[u] {
 			// Dispatched but killed mid-flight: say so honestly instead
 			// of presenting a truncated/empty string as the real result,
 			// and keep it out of the model context.
