@@ -33,7 +33,7 @@ main.go (composition root) -> internal/* (flat packages)
 
 Keep the composition root small, prefer explicit interfaces at external boundaries, and add tests at the boundary whenever a new integration is introduced.
 
-- Trust denies by default; tool output is scrubbed — see `docs/Plan.md`.
+- Trust denies by default; tool output is scrubbed, see `docs/Plan.md`.
 Behavioral spec: see `docs/Plan.md` (source of truth for behavior).
 Presentation spec: see `docs/tui-design-spec.md` (source of truth
 for TUI/UX). This file intentionally duplicates neither; follow

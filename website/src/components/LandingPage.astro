@@ -1,5 +1,6 @@
 ---
 import DemoWorkflow from './DemoWorkflow.astro';
+import ProviderIcon from './ProviderIcon.astro';
 
 const installCommand = 'curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh';
 
@@ -25,14 +26,14 @@ const finalSteps = [
 ];
 
 const installSpecs = [
-  { term: 'Binary', desc: 'tilde — one static Go binary' },
-  { term: 'Platform', desc: 'linux · macos — amd64 / arm64' },
-  { term: 'Runtime', desc: 'none — nothing to install' },
+  { term: 'Binary', desc: 'tilde · one static Go binary' },
+  { term: 'Platform', desc: 'linux · macos · amd64 / arm64' },
+  { term: 'Runtime', desc: 'none. Nothing to install.' },
   { term: 'Models', desc: 'ollama local by default, or your api key' },
 ];
 
 const flowSteps = [
-  { index: '01', name: 'Issue', desc: 'Create the issue — start from the code as it is.' },
+  { index: '01', name: 'Issue', desc: 'Create the issue, starting from the code as it is.' },
   { index: '02', name: 'Plan', desc: 'Trace the work and isolate it in a clean branch.' },
   { index: '03', name: 'Implement', desc: 'Change code, run focused tests, prove the fix.' },
   { index: '04', name: 'Review', desc: 'Open the pull request and answer feedback.' },
@@ -57,7 +58,7 @@ const productWorkflow = {
     { label: 'Merge the change', detail: '' },
   ],
   agent: { glyph: '⎿', label: 'work', detail: 'creating a clean workspace for the fix' },
-  proof: { command: 'go test ./... — 47 passed', elapsed: '12.4s' },
+  proof: { command: 'go test ./... · 47 passed', elapsed: '12.4s' },
 };
 
 const agentWorkflow = {
@@ -84,7 +85,7 @@ const tiers = [
     glyph: '⚠',
     name: 'ask',
     sub: 'you decide',
-    desc: 'The literal command appears with the reason for it — never a paraphrase. Answer y to run it once, n to refuse, or a for the rest of the session.',
+    desc: 'The literal command appears with the reason for it, never a paraphrase. Answer y to run it once, n to refuse, or a for the rest of the session.',
   },
   {
     slug: 'allow',
@@ -110,7 +111,7 @@ const tiers = [
       />
       <h1 id="tilde-title">Built for <em>real</em> engineering.</h1>
       <p class="tilde-hero-lede">
-        tilde turns complex repo work into a visible workflow — plan, build, test, and ship from one terminal, with every risky step waiting for your say-so.
+        tilde turns complex repo work into a visible workflow: plan, build, test, and ship from one terminal, with every risky step waiting for your say-so.
       </p>
       <div class="tilde-actions">
         <a class="tilde-button tilde-button-primary" href="https://github.com/Chmgx81/tilde">Install tilde</a>
@@ -142,17 +143,17 @@ const tiers = [
     </div>
     <div class="tilde-speed-grid">
       <article>
-        <div class="tilde-speed-card-meta"><span>01</span><small>Available now</small></div>
+        <div class="tilde-speed-card-meta"><span>01</span></div>
         <h3>Sandbox-first execution</h3>
-        <p>Every shell call runs under bubblewrap on Linux — network denied, filesystem scoped. A compromised agent can't exfiltrate or destroy.</p>
+        <p>Every shell call runs under bubblewrap on Linux: network denied, filesystem scoped. A compromised agent can't exfiltrate or destroy.</p>
       </article>
       <article>
-        <div class="tilde-speed-card-meta"><span>02</span><small>Available now</small></div>
+        <div class="tilde-speed-card-meta"><span>02</span></div>
         <h3>Explicit approvals</h3>
         <p>You see the exact command, the reason, and choose [y]es, [n]o, or [a]lways-this-session. Nothing runs without your say.</p>
       </article>
       <article>
-        <div class="tilde-speed-card-meta"><span>03</span><small>Available now</small></div>
+        <div class="tilde-speed-card-meta"><span>03</span></div>
         <h3>Workflow-native</h3>
         <p>See the plan, active work, tool activity, tests, and delegated tasks without reading a wall of chat.</p>
       </article>
@@ -164,7 +165,7 @@ const tiers = [
       <p class="tilde-label">Permissions</p>
       <h2 id="permissions-title">Every action lands on the ladder.</h2>
       <p>
-        deny, ask, or allow — three tiers evaluated in order, with deny winning in every mode. Asks
+        deny, ask, or allow: three tiers evaluated in order, with deny winning in every mode. Asks
         show the literal command and its reason; you answer with one key.
       </p>
     </div>
@@ -192,7 +193,7 @@ const tiers = [
     <div class="tilde-provider-grid" role="list" aria-label="Supported model providers">
       {providers.map((provider) => (
         <article role="listitem" class:list={[{ 'is-active': provider.active }]}>
-          <div class={`tilde-provider-logo tilde-provider-${provider.slug}`} aria-hidden="true">{provider.name[0]}</div>
+          <div class={`tilde-provider-logo tilde-provider-${provider.slug}`} aria-hidden="true"><ProviderIcon slug={provider.slug} /></div>
           <div>
             <strong>{provider.name}{provider.active && <span class="tilde-provider-active" title="Default provider">●</span>}</strong>
             <code>{provider.model}</code>
@@ -210,7 +211,7 @@ const tiers = [
     <h2 id="difference-title">Follow the work from issue to merge.</h2>
     <p>
       tilde inspects the issue, isolates the work, changes code, runs tests, opens the pull request,
-      and responds to feedback — all in one visible workflow.
+      and responds to feedback, all in one visible workflow.
     </p>
   </section>
 
@@ -232,7 +233,7 @@ const tiers = [
       <h2 id="orchestration-title">One coordinator. Focused workers.</h2>
       <p>
         tilde starts fresh subagents on focused parts of a task and returns their findings to one
-        coordinator — ownership visible, runtime bounded.
+        coordinator, ownership visible, runtime bounded.
       </p>
       <a class="tilde-text-link" href="/docs/architecture/">How the agent loop works <span aria-hidden="true">→</span></a>
     </div>
@@ -247,7 +248,7 @@ const tiers = [
     <div class="tilde-terminal" role="group" aria-label="Install tilde">
       <div class="tilde-terminal-bar" aria-hidden="true">
         <span></span><span></span><span></span>
-        <em>terminal — install tilde</em>
+        <em>terminal · install tilde</em>
       </div>
       {installSteps.map((step) => (
         <div class="tilde-terminal-line">
@@ -282,7 +283,7 @@ const tiers = [
   <section class="tilde-final reveal" aria-labelledby="final-title">
     <p class="tilde-label">tilde Harness</p>
     <h2 id="final-title">Try tilde in a real repository.</h2>
-    <p>Install the binary, connect a model provider, and run <code>tilde</code> — three commands from a working setup.</p>
+    <p>Install the binary, connect a model provider, and run <code>tilde</code>, three commands from a working setup.</p>
     <div class="tilde-actions">
       <a class="tilde-button tilde-button-primary" href="https://github.com/Chmgx81/tilde">Install tilde</a>
       <a class="tilde-text-link" href="/docs/plan/">Read the build plan <span aria-hidden="true">→</span></a>
@@ -290,7 +291,7 @@ const tiers = [
     <div class="tilde-terminal tilde-final-terminal" role="group" aria-label="Run tilde">
       <div class="tilde-terminal-bar" aria-hidden="true">
         <span></span><span></span><span></span>
-        <em>terminal — run tilde</em>
+        <em>terminal · run tilde</em>
       </div>
       {finalSteps.map((step) => (
         <div class="tilde-terminal-line">

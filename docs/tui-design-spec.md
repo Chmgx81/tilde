@@ -1,4 +1,4 @@
-# tilde — TUI Design Specification
+# tilde: TUI Design Specification
 
 > The interaction and presentation contract for tilde's terminal UI.
 
@@ -34,18 +34,18 @@ Three things everything below is optimized for, in order:
    token, not a shortcut.
 
 A terminal has no font size, no drop shadows, no whitespace-as-luxury. Hierarchy
-here is built entirely from five levers — **color, weight, glyph, indentation,
-and blank-line rhythm** — used consistently enough that the user stops noticing
+here is built entirely from five levers, **color, weight, glyph, indentation, 
+and blank-line rhythm**, used consistently enough that the user stops noticing
 them individually and starts reading meaning directly.
 
 ---
 
 ## 1. Design System Foundations
 
-### 1.1 Color — semantic, not decorative
+### 1.1 Color: semantic, not decorative
 
 Every color is a *token with one meaning*. Never pick a color because it "looks
-good" in a given spot — pick the token for the meaning, and let the palette be
+good" in a given spot, pick the token for the meaning, and let the palette be
 what it is.
 
 | Token | Hex | Meaning | Used for |
@@ -55,7 +55,7 @@ what it is.
 | `fg-muted` | `#A7B2C4` | Secondary text | Timestamps, paths, meta |
 | `fg-dim` | `#758198` | Tertiary / disabled | Compacted markers, hints |
 | `accent-plan` | `#E5A00D` (amber) | Read-only / caution | Plan mode banner, warnings |
-| `accent-build` | `#E6E6E6` (neutral) | Normal editing state | Build mode — deliberately *unmarked* |
+| `accent-build` | `#E6E6E6` (neutral) | Normal editing state | Build mode, deliberately *unmarked* |
 | `accent-auto` | `#4FC3F7` (cyan) | Autonomous progression | Auto mode banner, background tasks |
 | `accent-select` | `#7E22CE` (magenta) | Active selection / focus | Picker highlight, active tab |
 | `success` | `#4CAF50` (green) | Completed, passed, approved | Done checkmarks, passed tests |
@@ -66,10 +66,10 @@ what it is.
 **Contrast note on `accent-select` (2026-09-06, resolved 2026-09-09):** the original `#C792EA` was
 flagged in review as untested for contrast. It reads fine as text/border
 color against `bg`, but `accent-select` is also used as a **background fill**
-for a selected row (§1.6) with `fg` (`#E6E6E6`) text drawn on top of it — a
+for a selected row (§1.6) with `fg` (`#E6E6E6`) text drawn on top of it, a
 light magenta behind near-white text is exactly the pairing that fails a
 contrast check. Darkened first to `#A855D9`, which still measured only
-3.39:1 as a fill behind `fg` (computed WCAG relative-luminance) — so
+3.39:1 as a fill behind `fg` (computed WCAG relative-luminance), so
 darkened again to `#7E22CE` (5.60:1 vs `fg`), which clears WCAG AA for
 the fill use. The token is fill-only in code (picker selected rows);
 its *meaning* remains what's load-bearing, not the specific value.
@@ -79,10 +79,10 @@ borders.** Everything else (success/danger/muted) appears as *text or glyph*
 color inside an otherwise neutrally-bordered block. Two accent borders never
 appear on screen at once outside of the mode-transition animation (§3.8).
 
-### 1.2 Glyphs — the left gutter is the API
+### 1.2 Glyphs: the left gutter is the API
 
 Every line that represents an event starts, after indentation, with exactly one
-glyph. The glyph is the fastest thing the eye parses — treat this table as fixed
+glyph. The glyph is the fastest thing the eye parses, treat this table as fixed
 vocabulary, not a style choice per screen.
 
 | Glyph | Meaning | Color |
@@ -93,36 +93,36 @@ vocabulary, not a style choice per screen.
 | `⎿` | Sub-detail of the line directly above (nested, same event) | `fg-dim` |
 | `✓` | Success / done | `success` |
 | `✗` | Failed | `danger` |
-| `□` | Todo — unchecked | `fg-muted` |
-| `☑` | Todo — checked | `success` |
+| `□` | Todo, unchecked | `fg-muted` |
+| `☑` | Todo, checked | `success` |
 | `⚠` | Needs approval / risk flag | `accent-plan` (amber) or `danger`, by tier |
 | `!` | Shell-mode prefix | `fg-muted` |
 | `/` | Command-mode prefix | `fg-muted` |
 | `@` | File-reference prefix | `fg-muted` |
 | `⋯` | In-progress (replaces a braille spinner frame in static renders) | `fg-muted` |
 | `◆` | Reasoning / "thought" marker (§2.20) | `fg-dim` |
-| `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠿` | Waiting spinner frames — the pre-response thinking row only (§2.20) | `fg-dim` |
+| `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠿` | Waiting spinner frames, the pre-response thinking row only (§2.20) | `fg-dim` |
 | `◇` | Model thinking trace actually emitted by the backend (§2.10) | `fg-dim` |
 
 Rule: **one glyph, one column.** Glyphs never wrap to a second line and never
 share a line with a second glyph. `⎿` is the only glyph that implies
-indentation by itself — every other nested line indents explicitly (§1.3) even
+indentation by itself, every other nested line indents explicitly (§1.3) even
 if it also starts with a glyph.
 
 ### 1.3 Spacing, indentation, and the gutter
 
-- **Base unit = 1 line vertically, 2 columns horizontally.** No half-measures —
+- **Base unit = 1 line vertically, 2 columns horizontally.** No half-measures, 
   every indent level is exactly 2 columns deeper than its parent.
 - **Left gutter is a fixed column 0.** Top-level events (agent turns, user
   input, mode banners) always start at column 0. Nothing is centered. A
-  terminal has no visual weight to "center against" — centering only reads as
+  terminal has no visual weight to "center against", centering only reads as
   misalignment here, not balance.
 - **Wide-terminal exception (2026-09-07):** past 120 columns the frame holds
   a centered content column instead of stretching full-bleed (a full-width
   status gap on an ultrawide reads as broken, not spacious). Only the column
-  is centered — content inside stays left-aligned on the gutter above, so the
+  is centered, content inside stays left-aligned on the gutter above, so the
   edge stays straight. Narrow terminals are unaffected.
-- **One blank line between turns**, zero blank lines within a turn — except the
+- **One blank line between turns**: zero blank lines within a turn, except the
   one blank row after the user query, which separates the question from
   whatever answers it (tools or prose), and one blank row *before* every
   query after the session's first (2026-09-07), which separates the new
@@ -131,11 +131,11 @@ if it also starts with a glyph.
   user input. This is the single most important rhythm rule in the whole spec:
   it's the only whitespace signal the user needs to know where one exchange
   ends and the next begins.
-- **No blank line between an action and its `⎿` sub-detail** — they are one
+- **No blank line between an action and its `⎿` sub-detail**: they are one
   visual unit.
 - **Padding inside bordered boxes (composer, prompts, panels) is 1 line
   vertical, 1 column horizontal**, applied via Lip Gloss `Padding(0,1)` /
-  `Padding(1,1)` depending on single- vs multi-line content. Never 0 — text
+  `Padding(1,1)` depending on single- vs multi-line content. Never 0, text
   touching a border reads as a bug, not as density.
 
 ### 1.4 Hierarchy without font size
@@ -143,25 +143,25 @@ if it also starts with a glyph.
 Primary vs. secondary information is distinguished by, in order of how strongly
 each reads:
 
-1. **Color intensity** — `fg` for the thing that matters right now, `fg-muted`
+1. **Color intensity**: `fg` for the thing that matters right now, `fg-muted`
    for context, `fg-dim` for stuff that's technically still there but resolved
    (compacted history, past todo items).
-2. **Weight** — bold *only* for: the active todo item, file paths in a diff
+2. **Weight**: bold *only* for: the active todo item, file paths in a diff
    header, and command names in the help overlay. Bold is not a general
    emphasis tool; overusing it collapses the hierarchy it's supposed to create.
-3. **Indentation** — deeper = more specific / more nested, never "less
+3. **Indentation**: deeper = more specific / more nested, never "less
    important." A `⎿` detail is not lower-priority than its parent, it's just
    more granular.
-4. **Glyph choice** — `●` outranks `○` outranks nothing. A line with no glyph
+4. **Glyph choice**: `●` outranks `○` outranks nothing. A line with no glyph
    (plain prose, e.g. agent explanation text) sits *above* all glyph'd lines in
-   the reading order — prose is the headline, actions are the supporting log.
+   the reading order, prose is the headline, actions are the supporting log.
 
 ### 1.5 Alignment
 
 - **Status bar splits left/right, nothing centered.** Left = where/what
   (directory, branch, mode). Right = how much (context %, model, shortcuts).
   This mirrors the reference tools reviewed (Kimi Code, Copilot CLI) and is
-  worth keeping only because it's already a learned convention — don't invent
+  worth keeping only because it's already a learned convention, don't invent
   a third zone.
 - **The composer border is always full available width.** Content inside it is
   left-aligned; the mode glyph, if shown inside the border, is right-aligned
@@ -170,17 +170,17 @@ each reads:
   single caution signal. Masked credential entry may use amber as a security
   focus state.
   ("Available width" is the centered content column past 120 terminal
-  columns — see §1.3 wide-terminal exception.)
+  columns, see §1.3 wide-terminal exception.)
 - **Diffs align on the gutter, not the code.** Line numbers and `+`/`-` markers
   form a fixed-width left column; code starts at the same column regardless of
   indentation depth in the source file.
 
-### 1.6 Rhythm and consistency — the enforceable rules
+### 1.6 Rhythm and consistency: the enforceable rules
 
 If a future screen doesn't fit one of these, that's a sign to update this
 document, not to make a silent exception:
 
-- Every event line: `[indent][glyph] [Label] [detail]` — never
+- Every event line: `[indent][glyph] [Label] [detail]`, never
   `[Label][glyph]` or a glyph with no following space.
 - Every actionable list (todos, skill picker, session picker, file picker):
   selected row uses `accent-select` background or left-bar, never inverts the
@@ -190,7 +190,7 @@ document, not to make a silent exception:
 - Every mode banner: exactly one line, exactly the mode name plus one
   descriptor word ("Plan · read-only"), never a paragraph.
 - Timestamps, token counts, and percentages are always `fg-muted`, right-aligned
-  where they share a line with something more important — they support, they
+  where they share a line with something more important, they support, they
   never lead.
 
 ---
@@ -199,7 +199,7 @@ document, not to make a silent exception:
 
 ### 2.1 Splash / Welcome
 
-Shown once per new session start (not on resume — see §2.13).
+Shown once per new session start (not on resume, see §2.13).
 
 ```
                      ~/dev/tilde · tilde v0.9.1
@@ -218,23 +218,23 @@ Shown once per new session start (not on resume — see §2.13).
 
 Notes:
 - **Centered title (2026-09-07):** the context header is the one centered
-  line in the UI — a title, not a log event, so the §1.3 gutter rule yields
+  line in the UI, a title, not a log event, so the §1.3 gutter rule yields
   for it. Overlong paths fall back to the plain left form, never truncated.
 - **Trimmed to what exists nowhere else (2026-09-06):** the splash keeps
   only the Budget ceiling and the Sandbox enforcement state. Model and
   Mode repeat on the ever-present status bar below the composer, so
   printing them again in the splash doubled two signals for zero new
-  information — the `Budget: … Sandbox: …` line is space-between (Budget
-  docks left, Sandbox docks right, gap computed from the live width —
+  information, the `Budget: … Sandbox: …` line is space-between (Budget
+  docks left, Sandbox docks right, gap computed from the live width, 
   never a fixed pad, which stranded Sandbox mid-line on wide screens).
 - The safety notice renders inside a neutral `border-idle` box (same
-  RoundedBorder family as composer/confirm/handoff) — allowed per §1.1
+  RoundedBorder family as composer/confirm/handoff), allowed per §1.1
   because the splash is neither a mode nor a risk signal, so it takes no
   color from either system. Title is plain `fg` text: no glyph, no bold
-  (§§1.2/1.4). The box is width-adaptive — rebuilt to the terminal width
+  (§§1.2/1.4). The box is width-adaptive, rebuilt to the terminal width
   on resize while the session is still fresh (transcript untouched); once
   events land it freezes as ordinary scrollback like every other line.
-- The splash transcript ends on the Budget/Sandbox block — the composer,
+- The splash transcript ends on the Budget/Sandbox block, the composer, 
   status bar, and hint bar are chrome rendered below the viewport, never
   transcript lines (echoing their wording as transcript content would
   double-render them on the first frame).
@@ -242,20 +242,20 @@ Notes:
   and composer without forcing a history reader to the live tail. Follow-tail
   remains enabled only when the user was already at the bottom; fresh splash
   content is the one deliberate exception and is rebuilt to the new width.
-- The safety notice is **prose, not a glyph'd line** — it's the one place a
+- The safety notice is **prose, not a glyph'd line**, it's the one place a
   full paragraph outranks the log format, because it's read exactly once and
   needs to be read as language, not scanned as a status line.
 - Session always **starts in Plan mode** regardless of last session's ending
-  mode — this is a deliberate safety default, not an oversight.
+  mode, this is a deliberate safety default, not an oversight.
 - The hint bar at the bottom is present on *every* screen where the composer
-  is focused — it is the one piece of chrome that never changes position or
+  is focused, it is the one piece of chrome that never changes position or
   wording, so it becomes muscle memory. It is centered in the frame (the
-  footer's quiet closer, like the splash title — not gutter-aligned), and
+  footer's quiet closer, like the splash title, not gutter-aligned), and
   hard-cuts with an ellipsis past the frame edge on narrow screens.
 - **Correction (2026-09-06), retained as history:** an earlier draft of
   this mockup showed `Mode:  ○ Plan`, reusing the `○` glyph from the todo
   table (§1.2, where it means "pending / not started"). Plan mode is fully
-  active, not pending — that was a genuine glyph collision in the spec
+  active, not pending, that was a genuine glyph collision in the spec
   itself, and the kind of thing §1.2's "one glyph, one meaning, everywhere"
   rule exists to catch. Superseded by the trim above: the splash no longer
   shows a Mode field at all (the §2.2 status bar is its home); Mode there
@@ -273,10 +273,10 @@ up through history.
 - Left: mode word (color = mode-accent, bold) → cwd (`fg-muted`) → git branch +
   dirty-file count (`fg-dim`).
 - Right: active model (`fg-muted`) → context usage as a percentage *and* raw
-  count (`fg-muted`, turns `accent-plan` colored text — not border — past 80%,
+  count (`fg-muted`, turns `accent-plan` colored text, not border, past 80%, 
   see §2.11). Budget ceiling auto-sizes to the catalog window when known unless `--budget` / `TILDE_BUDGET` was set explicit (§2.24). A session cost readout
   (` $0.0012`, `fg-muted`, hidden when the model has no catalog price) trails
-  the context segment — display only, computed from live token totals, never
+  the context segment, display only, computed from live token totals, never
   width-breaking before the drop order below applies.
 - This line never wraps. If the terminal is too narrow, drop the raw token
   count before dropping anything else; drop the branch dirty-count before the
@@ -287,13 +287,13 @@ up through history.
   approval decision. The first frame may omit the branch for one render while
   the background result is pending.
 - One blank spacer separates the composer box from the status bar (2026-09-07)
-  — the three footer elements read as distinct bands, not one cramped block.
+, the three footer elements read as distinct bands, not one cramped block.
   The viewport gives up exactly one row for it, so the frame still lands on
   the terminal height.
 
 ### 2.3 Composer
 
-Three visual states, one per mode — border color is the *only* thing that
+Three visual states, one per mode, border color is the *only* thing that
 changes; box shape, padding, and hint text position stay identical so the eye
 isn't relearning layout every time it switches.
 
@@ -314,18 +314,18 @@ Auto (cyan border):
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-- Placeholder text changes per mode (subtle but real — it's a second signal
+- Placeholder text changes per mode (subtle but real, it's a second signal
   reinforcing the border color for colorblind-safe redundancy).
 - A leading `!` arms shell mode: the bang stays in the box (always typeable)
-  and a one-line `! run as shell command` hint shows beneath the composer —
+  and a one-line `! run as shell command` hint shows beneath the composer, 
   same slot and manners as the `/` and `@` dropdowns. A placeholder could
   never carry this signal (placeholders only show on an empty box).
 - On `/`, `@`, or `!` as the first character, the composer border does **not**
-  change — those are sub-modes of input, not agent modes, and conflating their
+  change, those are sub-modes of input, not agent modes, and conflating their
   color with the Plan/Build/Auto system would break the one-signal-one-meaning
   rule.
 - A large text paste into the composer collapses to a placeholder rather
-  than rendering inline — see §2.21 for the exact threshold, shape, and
+  than rendering inline, see §2.21 for the exact threshold, shape, and
   deletion behavior.
 
 ### 2.4 Slash Command Palette (`/`)
@@ -359,7 +359,7 @@ Inline dropdown directly beneath the composer, replacing nothing above it.
 - First (highlighted) row = best fuzzy match as the user types, using
   `accent-select` on the row background, not just the text.
 - Descriptions are always `fg-muted`, always right of a fixed-width column so
-  they align regardless of command name length — pad the command column to the
+  they align regardless of command name length, pad the command column to the
   longest command name currently in the filtered list, not a hardcoded width.
 - `/vim` is deferred (no vim keybinding mode exists yet), so it is documented
   here as deferred rather than listed as available.
@@ -375,14 +375,14 @@ Inline dropdown directly beneath the composer, replacing nothing above it.
     docs/config.md
 ```
 
-- Respects `.gitignore` — this is non-negotiable; a fuzzy picker that surfaces
+- Respects `.gitignore`, this is non-negotiable; a fuzzy picker that surfaces
   `node_modules/` results has failed at its one job.
 - Matched characters within each path are bolded (`fg`, bold) against the
-  unmatched portion (`fg-muted`) — the only place in the whole spec where bold
+  unmatched portion (`fg-muted`), the only place in the whole spec where bold
   is used for something other than the three cases listed in §1.4, because
   fuzzy-match highlighting is functionally a fourth, narrow case of "this part
   is the reason this row is here."
-- Selecting inserts the path as plain text at the cursor — the chip-token treatment is deferred.
+- Selecting inserts the path as plain text at the cursor, the chip-token treatment is deferred.
 
 ### 2.6 Shell Escape (`!`)
 
@@ -392,7 +392,7 @@ Inline dropdown directly beneath the composer, replacing nothing above it.
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-- Border stays the current mode's color — shell escape is a convenience, not a
+- Border stays the current mode's color, shell escape is a convenience, not a
   mode change, and running a raw command still passes through the same
   sandbox/confirm tier as a model-issued shell call. The UI must never imply
   "user typed it directly" means "unsandboxed."
@@ -407,14 +407,14 @@ Inline dropdown directly beneath the composer, replacing nothing above it.
   ↑↓ select · enter load · / search · esc cancel
 ```
 
-- Source tag (`project` / `user`) always right-aligned, always `fg-dim` — it's
+- Source tag (`project` / `user`) always right-aligned, always `fg-dim`, it's
   provenance metadata, lowest priority information on the row.
-- Project skills load only with `--skills-project` / `TILDE_SKILLS_PROJECT=1` (same opt-in as hooks) or a `tilde trust` / `untrust [dir]` record (`~/.tilde/trusted.json`, `0600`, CLI-only — not a `/` command); otherwise the picker shows user skills only with a stderr notice.
+- Project skills load only with `--skills-project` / `TILDE_SKILLS_PROJECT=1` (same opt-in as hooks) or a `tilde trust` / `untrust [dir]` record (`~/.tilde/trusted.json`, `0600`, CLI-only, not a `/` command); otherwise the picker shows user skills only with a stderr notice.
 - Loading a skill posts a single `●` event into the transcript ("Loaded skill:
   code-review") so it's part of the auditable history, not a silent context
   injection.
 - This picker is the entry point into the fuller plugin/extension browser
-  once MCP and a marketplace exist — see §2.17.
+  once MCP and a marketplace exist, see §2.17.
 
 ### 2.8 Mode System (Tab to cycle)
 
@@ -427,10 +427,10 @@ toast on the transition itself:
 
 - Toast appears for one render frame equivalent (~600ms in an animated
   terminal, or simply the next full redraw in a plain one) then collapses back
-  into the status bar — it should register as an event, not linger as chrome.
+  into the status bar, it should register as an event, not linger as chrome.
 - Automatic demotions (confused-task drop back to Plan) use the **same toast
   shape** but amber, with a one-line reason: `⏵ Mode: Build → Plan (3 failed
-  edits to the same file — reassessing)`. Consistency here matters more than
+  edits to the same file, reassessing)`. Consistency here matters more than
   anywhere else in the spec: a silent, unexplained mode change is the single
   fastest way to erode trust in an autonomy feature.
 - Full behavioral spec (promotion/demotion triggers, `--mode` flag parity)
@@ -456,17 +456,17 @@ toast on the transition itself:
 ```
 
 - The banner is the **only** full-width bordered element that appears
-  mid-transcript rather than only at the composer — it needs to interrupt the
+  mid-transcript rather than only at the composer, it needs to interrupt the
   scan pattern on purpose, because "nothing will change right now" is exactly
   the reassurance a cautious user is scanning for. It is live mode chrome: it
   is removed immediately when Tab or `/mode` leaves Plan and restored when the
   session re-enters Plan, so the transcript never claims Build/Auto is still
   read-only.
-- Todo list uses `☑`/`□` per §1.2, never a percentage bar — a coding agent's
+- Todo list uses `☑`/`□` per §1.2, never a percentage bar, a coding agent's
   progress isn't linear enough for a percentage to be honest.
 - **Revision, not duplication (2026-09-06):** when the todo list changes
   (an item completes, a new one is discovered), the agent posts a *new*
-  `● Update Todos` block reflecting the full current state — it does not
+  `● Update Todos` block reflecting the full current state, it does not
   edit the previous block in place (Bubble Tea's transcript is append-only)
   and it does not reprint the whole list unchanged just to bold the newly
   active item. Two consecutive `● Update Todos` blocks with only the
@@ -476,7 +476,7 @@ toast on the transition itself:
 
 ### 2.10 Tool-Call / Action Timeline
 
-The backbone of the whole transcript — this is what's on screen more than
+The backbone of the whole transcript, this is what's on screen more than
 anything else, so its consistency matters more than its cleverness.
 
 ```
@@ -493,23 +493,23 @@ anything else, so its consistency matters more than its cleverness.
 ```
 
 - Verb (`Listed`, `Read`, `Grep`, `Write`, `Edit`, `Run`) is a fixed-width column,
-  left-aligned, always `fg` — it's the one piece of the line allowed to be
+  left-aligned, always `fg`, it's the one piece of the line allowed to be
   full brightness besides the glyph, because it answers "what kind of thing
   just happened" at a glance.
 - `Write` (new-file creation) and `Edit` (existing-file change) are always
-  two distinct verbs, never collapsed into one "Edit" label — knowing
+  two distinct verbs, never collapsed into one "Edit" label, knowing
   whether a file is being created versus modified is exactly the kind of
   thing a user scanning the gutter needs the verb column to answer without
   reading the `⎿` line underneath.
 - Target/argument follows in `fg-muted`.
 - New tools keep their raw names (outside the six-verb vocabulary above).
-  Most are ask-tier and Plan-allowed — except the mutating writers, which
+  Most are ask-tier and Plan-allowed, except the mutating writers, which
   are ask-tier *and* Plan-blocked like any other mutation:
   `spawn_work` / `apply_work` / `discard_work` (isolated worktree sessions; `/apply [path]` + `/discard [path]` dispatch with the pending path, fail loud with none),
   `memory` save/forget and `remember` index (op-aware gating).
-  `● todo_write` (serial checklist: `add|done|list|clear`); `● ask_user` (routes to the host AskUser callback — nil/unwired or denied reads as denied, propose a safe default); `● web_fetch` (http(s) GET only, 30s timeout, 5MB hard cap, needs `TILDE_ALLOW_NET=1` — denied otherwise without retry; allowed in Plan since it mutates no repo state).
+  `● todo_write` (serial checklist: `add|done|list|clear`); `● ask_user` (routes to the host AskUser callback, nil/unwired or denied reads as denied, propose a safe default); `● web_fetch` (http(s) GET only, 30s timeout, 5MB hard cap, needs `TILDE_ALLOW_NET=1`, denied otherwise without retry; allowed in Plan since it mutates no repo state).
 - Result (`⎿`) is optional and only appears when there's something worth
-  reporting beyond "it ran" — a diff stat, a test summary, an error. A silent
+  reporting beyond "it ran", a diff stat, a test summary, an error. A silent
   success with nothing worth surfacing gets no `⎿` line at all; don't manufacture
   one just for rhythm's sake.
 - Tool output is secret-scrubbed centrally (`<<REDACTED:name>>`); reads of sensitive paths (`.env`, `*.pem`, `id_*`, …) carry a warn-notice instead of raw content (same discipline as the §2.22 export rule).
@@ -517,39 +517,39 @@ anything else, so its consistency matters more than its cleverness.
   lines · Ctrl+O to expand` affordance. `Ctrl+O` replaces that one preview
   with the complete result; output is never silently discarded, and the
   session log remains the authoritative full record.
-- Final `✓ Done` (or `✗ Failed`) closes the group — this is the only place
+- Final `✓ Done` (or `✗ Failed`) closes the group, this is the only place
   `✓`/`✗` appear outside of individual test/check results, reserved for "this
   whole unit of work is over."
 - **Conditional receipt (2026-09-07):** `✓ Done` renders only when the turn
   dispatched at least one tool call. A pure chat reply (prose in, prose out,
-  no tools) ends without it — a receipt for nothing is clutter, not rhythm.
+  no tools) ends without it, a receipt for nothing is clutter, not rhythm.
 - **Grouping same-kind actions under one bullet (2026-09-06):** when the
   agent fires a run of same-kind, low-signal actions back to back (e.g. a
   batch of read-only lookups before it says anything), collapse them under
   one parent `●` line naming the kinds and a count, with each individual
-  action nested one level as a plain (glyph-less) line — see §2.20 for the
+  action nested one level as a plain (glyph-less) line, see §2.20 for the
   exact shape and when this does/doesn't apply. This is a presentation
   grouping only: the session log still records each action as its own
   event; nothing about the underlying tool-call ledger changes.
   Implemented 2026-09-07 as static rendering (no expand/collapse toggle:
   `Tab` cycles modes and `Space` types, and there is no focus model to
-  hang a toggle on — a toggle key would hijack both). Only runs of 2+
+  hang a toggle on, a toggle key would hijack both). Only runs of 2+
   groupable (read-only) pairs group; a lone pair renders exactly as an
   ungrouped call + result. Results keep their full rendering, indented
   under the parent.
 - **Post-turn receipt (2026-09-07):** a successful agent turn closes with
   `◆ Thought for 3.4s · 38 tok/s` (`fg-dim`, single line, after `✓ Done`
   when one rendered). Wall time is measured turn start → done; the rate
-  uses provider-reported output tokens and is omitted when unknown —
+  uses provider-reported output tokens and is omitted when unknown, 
   never invented. Shell escapes (no generation) stay receipt-free.
 - **Model thinking traces (2026-09-07):** when the backend exposes model
   reasoning (Anthropic `thinking`, Ollama thinking models,
   OpenAI-compatible `reasoning_content`), it renders dim under `◇` ahead
-  of the reply — first line carries the glyph, the rest indent, blank
+  of the reply, first line carries the glyph, the rest indent, blank
   runs collapse, long traces clamp with a log pointer. It is display +
   session-log only: never mixed into prose, never fed back as context,
   never restored into context on resume (scrollback only).
-  `redacted_thinking` stays skipped — opaque ciphertext, nothing to show.
+  `redacted_thinking` stays skipped, opaque ciphertext, nothing to show.
 
 ### 2.11 Diff Rendering
 
@@ -564,9 +564,9 @@ anything else, so its consistency matters more than its cleverness.
 ```
 
 - File path header: bold, `fg`, own line, thin rule beneath it (`─`) rather
-  than a box — a diff is dense enough without adding a border around it too.
+  than a box, a diff is dense enough without adding a border around it too.
 - Line numbers right-aligned in a fixed 4-column gutter; `+`/`-` immediately
-  after, then one space, then code — code always starts at the same column
+  after, then one space, then code, code always starts at the same column
   whether the line is context, addition, or removal.
 - Additions: `success` green text, no background fill. Removals: `danger` red
   text, no background fill. Full-line background highlighting reads as
@@ -574,7 +574,7 @@ anything else, so its consistency matters more than its cleverness.
   not just here.
 - Reviewed against Grok Build's inline-diff-in-source view: Grok colors
   additions/removals directly inside the surrounding function body rather
-  than a separate hunk block. Deliberately not adopted — tilde's edits are
+  than a separate hunk block. Deliberately not adopted, tilde's edits are
   frequently non-contiguous within a file, and a fixed hunk block with its
   own header keeps the "which file, which lines" answer unambiguous even
   when several files are touched in one turn. Full-file inline coloring is
@@ -582,7 +582,7 @@ anything else, so its consistency matters more than its cleverness.
 
 **New-file writes (`write_file` creating a file that didn't exist) are not
 rendered as a diff.** A file where every line is an addition gets no real
-benefit from the two-column `+`/gutter treatment above — it's just the file,
+benefit from the two-column `+`/gutter treatment above, it's just the file, 
 tinted green, with a redundant `+` on every line. Instead:
 
 ```
@@ -598,19 +598,19 @@ tinted green, with a redundant `+` on every line. Instead:
 ```
 
 - Header states `(new file, N lines)` in place of the edit header's bare
-  path — this is the one piece of information a diff header doesn't need to
+  path, this is the one piece of information a diff header doesn't need to
   carry (an edit's line count is implicit in the `⎿ +N -N` stat) but a
   write's does, since there's no separate stat line to get it from.
-- Content renders in plain `fg`, not `success` green — green is reserved for
+- Content renders in plain `fg`, not `success` green, green is reserved for
   *changes relative to something*, and a new file has nothing to be relative
   to. Coloring the whole body green would also silently break the "additions
   are green" rule the moment the user later edits this same file and sees
   real green-highlighted additions inside a still-green-tinted file.
-- Files over the same length ceiling as `read_file` (§4 of Plan.md — 2,000
+- Files over the same length ceiling as `read_file` (§4 of Plan.md, 2,000
   lines / 128KB) truncate with the identical resume-offset notice used for
   reads, rather than dumping an unbounded new file into the transcript.
 - The line-number gutter still applies (fixed-width, right-aligned, same
-  column as the edit diff) — the only things that change for a write are the
+  column as the edit diff), the only things that change for a write are the
   header wording and the removal of the `+`/`-` marker column, since every
   line is unambiguously new.
 
@@ -637,7 +637,7 @@ panel exists in code; policy denials currently render as an inline
 `✗ denied by policy: …` transcript line, not a bordered panel.
 ```
 
-- The exact command or action is shown verbatim, never summarized — a
+- The exact command or action is shown verbatim, never summarized, a
   paraphrased confirm prompt ("run a cleanup command") defeats the entire
   purpose of asking.
 - The explanation and controls are separated by a blank row. Approval keys
@@ -649,7 +649,7 @@ panel exists in code; policy denials currently render as an inline
   never changes policy or authorization. If the tool request supplies no
   reason, the UI uses the truthful policy fallback rather than inventing model
   rationale.
-- Default focused option is always the safe one (`n` / deny) — Enter with no
+- Default focused option is always the safe one (`n` / deny), Enter with no
   other input denies. This is a deliberate one-way door: it is much cheaper to
   make the user press one extra key to allow something than to make a
   destructive action one accidental Enter away.
@@ -657,7 +657,7 @@ panel exists in code; policy denials currently render as an inline
   the EXACT literal shell command, this session only, dies with the
   process. Deny-tier shapes can never be listed, and any args change
   re-prompts. A pattern-based always-approve remains deliberately
-  deferred — the two-key gate stays the default per the deny-by-default
+  deferred, the two-key gate stays the default per the deny-by-default
   posture.
 
 ### 2.13 Compaction Indicator
@@ -674,11 +674,11 @@ Compaction event (inline, transcript):
 ```
 
 - The ambient warning is color-only (the percentage text turns `accent-plan`)
-  — no popup, no interruption. Compaction is routine housekeeping, not an
+, no popup, no interruption. Compaction is routine housekeeping, not an
   incident, and the UI shouldn't treat it with the same visual weight as a
   confirm prompt or a mode demotion.
 - The compaction marker line is always `fg-dim` and always collapsed to one
-  line — it's a receipt, not a summary the user is meant to read in place. The
+  line, it's a receipt, not a summary the user is meant to read in place. The
   full pre-compaction log remains in the session file per Plan.md §7
   (Phase 1: mode system + auto-compaction);
   the transcript marker exists purely so a scrollback read never has an
@@ -700,10 +700,10 @@ Shown on `tilde --resume` or `/sessions`.
 
 - Columns are fixed-width and aligned: id, relative time, directory, first
   user message (truncated with `…`, never wrapped). Same fixed-width-column
-  discipline as the skill picker and slash palette — one list-row pattern for
+  discipline as the skill picker and slash palette, one list-row pattern for
   the whole app, not a bespoke layout per picker.
 - Resuming restores the mode the session was in *unless* that mode was Build
-  or Auto, in which case it restores into Plan with a one-line notice —
+  or Auto, in which case it restores into Plan with a one-line notice, 
   matching the "sessions always open cautious" rule from §2.1.
 
 ### 2.15 Error / Doom-Loop Handoff
@@ -716,19 +716,19 @@ Shown on `tilde --resume` or `/sessions`.
  └────────────────────────────────────────────────────────────────────────┘
 ```
 
-- Red-bordered — this is the one panel that uses `danger` as a border color
+- Red-bordered, this is the one panel that uses `danger` as a border color
   rather than a risk-prompt, because it represents a state the system itself
   judged as failed, not a decision pending the user's input.
 - Always states three things and nothing more: what got stuck, what the
   system did about it (revert to Plan), and reassurance that nothing was lost.
-  This is the panel most likely to be read while the user is frustrated — it
+  This is the panel most likely to be read while the user is frustrated, it
   is not the place for a stack trace by default (offer it via a keypress,
   don't dump it inline).
 
 ### 2.16 Help Overlay (`/help` or `?`)
 
 Full-screen (or large modal) overlay, dismissible with `esc`, laid out as a
-plain two-column keybinding table — no glyphs, no color beyond `fg`/`fg-muted`,
+plain two-column keybinding table, no glyphs, no color beyond `fg`/`fg-muted`,
 because this is a reference screen, not a log, and shouldn't compete with the
 timeline vocabulary it's explaining.
 
@@ -798,7 +798,7 @@ timeline vocabulary it's explaining.
 ### 2.17 Plugin / Extension Marketplace (`/plugins`, `/marketplace`)
 
 The fuller browser the skill picker (§2.7) opens into once skills and MCP
-servers both exist. A tabbed row-list, not five separate features — every
+servers both exist. A tabbed row-list, not five separate features, every
 tab filters the same underlying registry (project-, user-, and
 marketplace-sourced items) by kind.
 
@@ -822,17 +822,17 @@ marketplace-sourced items) by kind.
   row layout is shared across every kind so a future remote source does not
   require a UI redesign.
 - `[install]` renders in `accent-select` and is interactive; `[installed]`
-  renders in `success` and is inert — the color alone tells you a row's
+  renders in `success` and is inert, the color alone tells you a row's
   state without reading the word, same principle as the todo checkboxes
   in §2.9.
 - Same fixed-width-column discipline as every other list in this spec
-  (§2.4, §2.7, §2.14) — one list-row pattern for the whole app.
+  (§2.4, §2.7, §2.14), one list-row pattern for the whole app.
 
 ### 2.18 Structured Multi-Question Prompts
 
 For the rare case where tilde genuinely needs more than one independent
-piece of information before it can proceed — first-run setup, or a task
-with several unrelated unknowns — one radio-style picker beats a chain of
+piece of information before it can proceed, first-run setup, or a task
+with several unrelated unknowns, one radio-style picker beats a chain of
 separate prompts:
 
 ```
@@ -849,23 +849,23 @@ separate prompts:
 
 - A different surface from the confirm prompt (§2.12): this never gates a
   destructive action, only gathers information, so it never borrows the
-  amber/red risk borders — plain `fg`/`fg-muted` throughout, because
+  amber/red risk borders, plain `fg`/`fg-muted` throughout, because
   there's no risk being weighed.
 - One option is always "type your own answer" (off the numbered list, key
   `z`), so the preset list is never a hard ceiling on what the user can say.
-- The `[turn: Ns, ↓Nk]` figure top-right — elapsed time and tokens spent so
-  far, in `fg-dim` — is worth using anywhere tilde is waiting mid-turn on
+- The `[turn: Ns, ↓Nk]` figure top-right, elapsed time and tokens spent so
+  far, in `fg-dim`, is worth using anywhere tilde is waiting mid-turn on
   the user: it costs nothing and answers "is it still doing something"
   without being asked.
 - Reach for this rarely. The ordinary path for "the agent needs one
-  clarification" is a plain question in the transcript, not a picker — this
+  clarification" is a plain question in the transcript, not a picker, this
   surface is for 2+ genuinely independent unknowns at once, not a substitute
   for normal conversation.
 
 ### 2.19 Subagent / Parallel Exploration View
 
 Deferred behind multi-agent orchestration (explicitly out of v0.1 scope,
-Plan.md §8) — specified now because it's a direct extension of the
+Plan.md §8), specified now because it's a direct extension of the
 tool-call timeline (§2.10), not a new visual language, and shouldn't invent
 a competing vocabulary when it eventually ships.
 
@@ -886,16 +886,16 @@ a competing vocabulary when it eventually ships.
 
 - `⋮` (dim vertical ellipsis) marks a still-running subagent; a left `│`
   rule replaces it once a batch finishes issuing and results start
-  returning, with `[done]` right-aligned in `success` — the same
+  returning, with `[done]` right-aligned in `success`, the same
   right-aligned-status convention as `[installed]` in §2.17.
 - Each row names the subagent's own task, its type (`explore`/`general`),
-  and which model it ran on — the one place per-row model attribution
+  and which model it ran on, the one place per-row model attribution
   matters, since a parallel batch can legitimately mix models for cost or
   speed reasons.
 - The parent's own synthesis (the plain-prose summary at the bottom) always
-  sits below the finished batch, never interleaved with it — prose still
+  sits below the finished batch, never interleaved with it, prose still
   outranks glyph'd lines, per §1.4.
-- Do not build the feature behind this early — it's specified purely so
+- Do not build the feature behind this early, it's specified purely so
   that whenever subagents do ship, the visual language is already decided.
 
 ### 2.20 Thinking Indicator + Action Grouping (added 2026-09-06)
@@ -905,7 +905,7 @@ GitHub Copilot CLI, and Grok Build against tilde's live build: both tools
 visibly compress a chatty turn into fewer, denser lines rather than
 printing one line per micro-action, and both surface how long the model
 spent reasoning before it acted. Neither changes tilde's underlying event
-model (the session log still records one entry per real action) — both
+model (the session log still records one entry per real action), both
 are transcript-rendering rules only.
 
 **Thinking indicator.** When the model's reasoning step for a turn takes
@@ -917,11 +917,11 @@ dim line before the first action of that turn:
 ● Read                 internal/middleware/auth.ts
 ```
 
-- `◆`, `fg-dim`, never bold, never expandable in v0.1 — this is a receipt
+- `◆`, `fg-dim`, never bold, never expandable in v0.1, this is a receipt
   ("it was reasoning, not stalled"), not a transcript of the reasoning
   itself. Surfacing the actual chain-of-thought is a separate, larger
   product decision this spec doesn't take a position on.
-- Skip the line entirely below the floor — a 1.5 line for every single
+- Skip the line entirely below the floor, a 1.5 line for every single
   turn is noise, not signal, and trains the eye to stop reading it.
 - **Pre-response, the wait itself animates (added 2026-09-10).** Between
   turn start and the first stream delta, one dim row spins in place:
@@ -930,7 +930,7 @@ dim line before the first action of that turn:
   plus elapsed time reads as work. Contract:
   - **Frames:** the ten-cell braille cycle
     `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠿` at ~8fps (`120ms` tick), `fg-dim`, same
-    glyph family as `◆`/`◇`/`○` — text, never color-only, and still
+    glyph family as `◆`/`◇`/`○`, text, never color-only, and still
     meaningful with all styling stripped.
   - **Rewrite, never append:** the tick rewrites its own transcript row
     in place. Scrollback grows by exactly one row per wait no matter how
@@ -940,14 +940,14 @@ dim line before the first action of that turn:
     (or the turn ends), the loop dies silently instead of rewriting the
     wrong row.
   - **No residue:** the row is removed when streaming starts and when
-    the turn completes — the wait leaves zero transcript rows behind.
+    the turn completes, the wait leaves zero transcript rows behind.
     The post-hoc `◆ Thought for Ns` receipt (above) is the only record.
   - **Cancel-safe:** quitting or cancelling mid-wait kills the tick with
     the turn; no orphaned animation outlives the session intent.
 
 **Live reasoning microcopy (while the wait is happening, not after).**
 The post-hoc receipt above only helps in scrollback. While the model is
-still reasoning — turn running, transcript quiet — the status bar's
+still reasoning, turn running, transcript quiet, the status bar's
 `Working Ns` flips to a rotating verb so the wait itself reads as progress
 (dynamic microcopy, Nielsen visibility-of-status; a changing line makes a
 long wait feel shorter than a frozen one):
@@ -958,12 +958,12 @@ long wait feel shorter than a frozen one):
 
 - Verbs cycle in a **fresh random order each turn** (`Reading`,
   `Mapping`, `Tracing`, `Probing`, `Weighing`, `Drafting`), one step
-  every 2s — each verb names something the agent actually does (reads
+  every 2s, each verb names something the agent actually does (reads
   files, maps structure, traces calls, probes, weighs options, drafts
   the plan), in tilde's terse voice rather than borrowed whimsy. The
   order is a shuffled deck (Fisher–Yates at turn start), so a verb never
-  repeats within a cycle — a repeat would read as frozen, the exact
-  failure this feature exists to prevent — while the fixed 2s cadence
+  repeats within a cycle, a repeat would read as frozen, the exact
+  failure this feature exists to prevent, while the fixed 2s cadence
   never varies (irregular timing reads as stutter). Randomness lives
   only in the shuffle; picking stays a pure function of order + elapsed,
   so tests inject a fixed order and stay deterministic.
@@ -972,16 +972,16 @@ long wait feel shorter than a frozen one):
   and a competing verb line would be noise. First new transcript activity
   flips it straight back to `Working Ns`.
 - `◆` + verb + elapsed in `fg-dim`, never bold; `· Esc×2 cancels` stays
-  put in `fg-muted` — the cancel affordance is never rotated away.
+  put in `fg-muted`, the cancel affordance is never rotated away.
 - Never while a confirm prompt is open: that wait is on the *user*, not
   the model, and labeling it reasoning would be dishonest.
-- Transient chrome only — it lives in the status bar and leaves zero
+- Transient chrome only, it lives in the status bar and leaves zero
   transcript residue when the wait ends. Headless output is unaffected
   (no status bar there to rotate).
 - Live cadence (2026-09-07): a 2s tick re-renders while a turn runs, so
   the counter and verb visibly advance through quiet waits instead of
   freezing between messages. The tick re-arms only while running and
-  dies silently at done — no perpetual loop, no headless effect.
+  dies silently at done, no perpetual loop, no headless effect.
 
 **Action grouping.** When the agent runs a burst of same-kind, low-signal
 actions before saying anything or taking a riskier action, collapse them
@@ -999,7 +999,7 @@ under one parent line instead of one `●` per action:
   order they occurred) plus the total count (`● Listed, Read ×4`), in the
   same fixed verb-column position a single action would use.
 - Nested lines are plain text, `fg-muted`, indented one level, **no
-  glyph** — this is the one place §1.2's "every event line gets a glyph"
+  glyph**, this is the one place §1.2's "every event line gets a glyph"
   rule is deliberately relaxed, because the parent line already carries
   the glyph for the whole group and repeating it four times adds ink
   without adding meaning. Worthwhile results still render indented
@@ -1009,21 +1009,21 @@ under one parent line instead of one `●` per action:
   read-only tools) run back-to-back with no intervening prose or
   risk-gated action.
   An `Edit`, `Run`, or anything that produced a `⎿` result worth reporting
-  (§2.10) always breaks the group and starts its own `●` line — grouping
+  (§2.10) always breaks the group and starts its own `●` line, grouping
   exists to reduce noise from lookups, never to bury something the user
   should actually notice.
-- A group of one is just a normal single action line — don't wrap a
+- A group of one is just a normal single action line, don't wrap a
   solitary `Read` in group styling to "stay consistent." The rule triggers
   on 2+ consecutive qualifying actions, not on principle.
 
 ### 2.21 Large Paste, File, and Image Handling (added 2026-09-06)
 
 Sourced from current practice across the field (Claude Code, Codex CLI,
-Cursor CLI, Copilot CLI) — this was a real gap: the spec had no answer for
+Cursor CLI, Copilot CLI), this was a real gap: the spec had no answer for
 "what happens when the user pastes 400 lines, or a screenshot, into the
 composer."
 
-**Large text paste — collapse to a placeholder, not inline content.**
+**Large text paste, collapse to a placeholder, not inline content.**
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -1032,46 +1032,46 @@ composer."
 ```
 
 - Threshold triggers on **either** a line count or a character count,
-  whichever is hit first (matching the converged field default — roughly
+  whichever is hit first (matching the converged field default, roughly
   4+ lines or ~1,000 characters); a two-line paste stays inline, a
   40-line traceback collapses.
 - The placeholder is `fg-dim`, `[Pasted text #N +M lines]`, numbered
   per-paste within the turn (a second large paste in the same composer
-  entry becomes `#2`) — this is the same placeholder shape converged on
+  entry becomes `#2`), this is the same placeholder shape converged on
   by every reference tool reviewed, not a bespoke tilde format, since a
   user switching tools shouldn't have to relearn what the bracket means.
 - **Deletable as one unit.** Backspace immediately after a placeholder
   removes the whole placeholder (and discards the stored content with
-  it) in one keystroke, never character-by-character — the placeholder is
+  it) in one keystroke, never character-by-character, the placeholder is
   a token, not abbreviated text, and must behave like one.
 - The full pasted content is stored off-screen (keyed to the placeholder)
-  and substituted back in at submission time — the model always receives
+  and substituted back in at submission time, the model always receives
   the real content in full; only the composer's on-screen rendering is
   collapsed.
 - Once submitted, the transcript's user-turn line renders the placeholder
   form too (`→ [Pasted text #1 +214 lines]  fix this stack trace`), never
-  the raw pasted body — a 200-line paste dominating the scrollback is
+  the raw pasted body, a 200-line paste dominating the scrollback is
   exactly the noise §2.20's action-grouping section exists to avoid
   elsewhere, and the same principle applies to user input.
-- **Collapse is display-only, never copy-only.** Every copy path —
-  drag-select release, `/copy`, `/copy n` — expands submitted tokens
+- **Collapse is display-only, never copy-only.** Every copy path, 
+  drag-select release, `/copy`, `/copy n`, expands submitted tokens
   back to their stored bodies (bodies are retained keyed to the echo's
   transcript line, so token renumbering across turns cannot cross-wire).
   The transcript is a summary view; a copy of it is not. Token text
   never leaks into the clipboard.
 - **No silent hard floor.** `TILDE_PASTE_LINES` governs the line threshold
-  (default 4, `0` disables collapsing entirely) — the env-var convention
+  (default 4, `0` disables collapsing entirely), the env-var convention
   matches `TILDE_BUDGET` and friends, and a bad value falls back to the
   default rather than breaking input. This is a
   direct, deliberate response to real friction reported against the
-  reference tools reviewed — voice-dictation and editor-composed prompts
+  reference tools reviewed, voice-dictation and editor-composed prompts
   legitimately want to see what they pasted before sending, and a
   hardcoded, non-configurable threshold was the single most common
   complaint found across those tools' own issue trackers. Don't repeat
   that mistake by hardcoding tilde's threshold.
 - **Submit-time rules (2026-09-07):** tokens resolve to bodies for
   execution, history, and the session log; the transcript echo keeps the
-  placeholder form. A token destroyed mid-edit strands its body — submit
+  placeholder form. A token destroyed mid-edit strands its body, submit
   announces the drop instead of silently sending a shorter turn. The
   16,000-char input cap binds the expanded payload with the standing
   truncation notice.
@@ -1079,11 +1079,11 @@ composer."
 **File attachment (`@` or drag-in).** Already covered by fuzzy file
 reference (§2.5) for in-repo files. A path dropped or typed that resolves
 outside the fuzzy index (an arbitrary file, not necessarily tracked) still
-renders as a plain `@path` token, not a placeholder — file attachment and
+renders as a plain `@path` token, not a placeholder, file attachment and
 large-text-paste are different mechanisms and shouldn't share a visual
 form, since one names a location and the other embeds content.
 
-**Image paste.** tilde runs in a raw terminal, not a GUI shell — most
+**Image paste.** tilde runs in a raw terminal, not a GUI shell, most
 terminals have no clipboard-image escape sequence, and tilde's local
 model default (a text/tool-call model, not a vision model) has nowhere to
 send image bytes even if it did. Given that real constraint, tilde does
@@ -1099,12 +1099,12 @@ wired in for this specific purpose). Instead:
 
 - The documented path is: save the image to a file (screenshot tool,
   `pngpaste`/`wl-paste` piped to a file, etc.) and reference it with `@`
-  like any other file — §2.5's fuzzy picker surfaces image files the same
+  like any other file, §2.5's fuzzy picker surfaces image files the same
   as source files. This is slower than a direct clipboard paste, and the
   spec says so plainly rather than implying a capability that isn't there.
 - If the active model is vision-capable (a future Provider, not the local
   default), `@`-referencing an image file sends the actual image bytes,
-  not a text dump of the path — the tool-registry layer decides this per
+  not a text dump of the path, the tool-registry layer decides this per
   provider capability, not the TUI.
 - A `!`-shell-escape'd clipboard-to-file helper (documented, not built
   into the core binary) is the pragmatic bridge for users who want
@@ -1118,7 +1118,7 @@ purely to carry a session from one agent's native format to another's
 (reading Claude Code's, Codex's, or OpenCode's own JSONL/SQLite stores and
 converting between them), because raw session logs are agent-specific and
 don't mean anything outside the tool that wrote them. tilde's own JSONL
-log (Plan.md §2) is no different — it's an internal replay format, not
+log (Plan.md §2) is no different, it's an internal replay format, not
 something another agent (or another *person*) can usefully read cold.
 
 **`/export` (and `tilde --export <session-id>`) writes a portable brief,
@@ -1131,7 +1131,7 @@ not the raw log.**
   ⎿ 1 file, 3.1 KB — goal, decisions, files touched, next steps
 ```
 
-- Output is **markdown with YAML frontmatter** — readable, diffable, and
+- Output is **markdown with YAML frontmatter**, readable, diffable, and
   committable, deliberately not JSON or JSONL. The point of an export is
   a human (or another agent's own summarization step) can read it cold;
   a machine-only format defeats that.
@@ -1140,7 +1140,7 @@ not the raw log.**
   `mode_at_export`, `files_touched` (a plain list of paths). Body is
   four fixed sections in this order: **Goal** (the original user request,
   verbatim), **Decisions & constraints** (anything the agent or user
-  explicitly settled on mid-session — not restated reasoning), **Files
+  explicitly settled on mid-session, not restated reasoning), **Files
   touched** (path + one-line description of what changed, not a diff dump),
   **Open / next steps** (what wasn't finished). This mirrors the
   "distilled brief, not full transcript" shape converged on by the
@@ -1148,14 +1148,14 @@ not the raw log.**
   exactly the wrong shape to hand to a *different* model with a different
   context budget and no shared history.
 - Never includes secrets or credential-shaped content encountered during
-  the session — the same untrusted/sensitive-content discipline the tool
+  the session, the same untrusted/sensitive-content discipline the tool
   contract already applies to shell output (Plan.md §4) applies here:
   an export is something the user may paste into another tool's chat box
   or commit to a repo, so it gets the same caution as any other
   externally-facing artifact.
 - **Import is deliberately out of scope for v0.1.** tilde can produce a
-  brief another agent (or a human) can read and resume from manually —
-  pasting it as the opening message of a new session elsewhere — but
+  brief another agent (or a human) can read and resume from manually, 
+  pasting it as the opening message of a new session elsewhere, but
   tilde does not parse *other* agents' native session formats itself.
   Building bidirectional format support for every other tool's JSONL/DB
   shape is a maintenance burden with a fast-moving target (the reference
@@ -1164,16 +1164,16 @@ not the raw log.**
   Revisit only if there's a concrete need to resume a *foreign* session
   inside tilde, not just to hand tilde's own sessions elsewhere.
 - The export event itself posts as a normal `●` line in the timeline
-  (per §2.10's rules — verb, target, an optional `⎿` result) so it's part
+  (per §2.10's rules, verb, target, an optional `⎿` result) so it's part
   of the same auditable history as everything else, not a side-channel
   action.
 
 ### 2.23 Provider, Config, and System Error States (added 2026-09-06)
 
-The spec so far covers two failure classes well — the agent getting stuck
+The spec so far covers two failure classes well, the agent getting stuck
 (§2.15's doom-loop handoff) and a single tool call failing (Plan.md §4's
 per-tool contract). It had no answer for a third, real class: **the
-infrastructure underneath the agent loop failing** — the model provider
+infrastructure underneath the agent loop failing**, the model provider
 itself, the config on disk, or tilde's own process. A frozen terminal with
 no visible state and no way to interrupt is the single most-cited
 complaint against weaker agent CLIs in current field reviews; this section
@@ -1186,11 +1186,11 @@ exists so tilde is never that tool.
 ```
 
 - Rendered as a single `fg-dim` transcript line, same visual weight as a
-  compaction marker (§2.13) — this is expected, recoverable infrastructure
+  compaction marker (§2.13), this is expected, recoverable infrastructure
   noise, not an incident, and shouldn't compete visually with a confirm
   prompt or handoff panel.
 - Retries use exponential backoff with jitter, and **honor a `Retry-After`
-  header when the provider sends one** rather than guessing — a 429 with
+  header when the provider sends one** rather than guessing, a 429 with
   an explicit wait time ignored by the client is a real, cited failure
   mode in current provider integrations, and there's no excuse to repeat
   it when the information is already on the wire.
@@ -1207,7 +1207,7 @@ exists so tilde is never that tool.
 ```
 
 - **The composer, Esc Esc, and scroll always remain responsive during a
-  retry loop.** A stalled provider must never freeze the TUI — this is
+  retry loop.** A stalled provider must never freeze the TUI, this is
   the single most important guarantee in this whole section, since a
   frozen-looking terminal is functionally indistinguishable from a crash
   to the person staring at it. Double-Esc during a retry cycle cancels the
@@ -1221,7 +1221,7 @@ exists so tilde is never that tool.
 
 A malformed `policies.yaml`, a missing model binary, or bwrap being
 unavailable on Linux are all things tilde can know about before ever
-drawing a frame — so it does, and refuses to start into a broken state
+drawing a frame, so it does, and refuses to start into a broken state
 silently:
 
 ```
@@ -1229,14 +1229,14 @@ tilde: policies.yaml line 14: invalid tier "mabye" (expected deny/ask/allow/allo
        refusing to start — fix the policy file and try again.
 ```
 
-- Plain stderr text, no TUI chrome — there's no session to render a
+- Plain stderr text, no TUI chrome, there's no session to render a
   glyph'd line into yet. Exit code is non-zero and specific (see the
   headless table below), never a bare `1` for every distinct startup
   failure, so scripted invocations can distinguish "bad config" from
   "sandbox unavailable" from "no model reachable" without parsing prose.
 - **Fail closed, always.** A config problem never falls back to a
   permissive default silently (e.g. treating an unparseable policy tier
-  as `allow`) — Plan.md §6's "deny always wins" principle extends to the
+  as `allow`), Plan.md §6's "deny always wins" principle extends to the
   parser itself: an error in the file is not evidence the rule doesn't
   apply, it's evidence the file needs fixing first.
 
@@ -1244,11 +1244,11 @@ tilde: policies.yaml line 14: invalid tier "mabye" (expected deny/ask/allow/allo
 kill, terminal closed) rather than the agent or a tool failing:
 
 - The JSONL session log is append-only and fsynced per entry (Plan.md
-  §2), so a crash loses at most the in-flight, unwritten turn — never the
+  §2), so a crash loses at most the in-flight, unwritten turn, never the
   session history up to that point. Resuming (§2.14) picks up exactly
   where the log left off.
 - Next launch in the same project, if an unclosed session is found,
-  offers to resume it rather than silently starting fresh — a crashed
+  offers to resume it rather than silently starting fresh, a crashed
   session shouldn't be harder to find than a normally-ended one.
 - A caught panic writes one line to the session log naming what happened
   before the process exits, so a resumed session's history has an honest
@@ -1257,39 +1257,39 @@ kill, terminal closed) rather than the agent or a tool failing:
   itself, not just its tools).
 
 **MCP server / hook failure isolation.** An MCP server crashing or a hook
-script erroring never takes down the session — per-server/per-hook
+script erroring never takes down the session, per-server/per-hook
 failure is caught and reported as a normal `✗` timeline line (its tools
 simply become unavailable for the rest of the session, or the hook is
 skipped for that one call), exactly matching the per-server isolation
 already built in Plan.md's Phase 6. This section just makes explicit that
 the *same* isolation guarantee is a UI promise, not only a backend one.
 
-### 2.24 Cloud Provider Onboarding — /login, Model Catalog, First-Run
+### 2.24 Cloud Provider Onboarding: /login, Model Catalog, First-Run
       Guidance (added 2026-09-08)
 
 §2.23 names the failure modes for the model provider underneath the loop,
-but its auth-failure remedy was "edit policies.yaml" — a documentation
+but its auth-failure remedy was "edit policies.yaml", a documentation
 exercise, not a fix. A user whose PC has no GPU for local models had no
 onboardable path to cloud models at all: env vars they must know to set,
 model IDs they must guess from provider docs. This section is sourced from
 current field practice (pi's provider/auth architecture and cline CLI's
 `auth` command, reviewed 2026-09-08): the converged shape is **one command,
-a shipped catalog, and command-shaped remedies** — onboarding a cloud key
+a shipped catalog, and command-shaped remedies**, onboarding a cloud key
 must never require reading tilde's docs.
 
 **Credentials ladder (unambiguous, no silent fallback).**
 
-0. `--api-key` flag — this process only, wins outright.
-1. Stored credential from `/login` — `~/.tilde/credentials.enc.json` (AES-GCM
+0. `--api-key` flag, this process only, wins outright.
+1. Stored credential from `/login`, `~/.tilde/credentials.enc.json` (AES-GCM
    envelope; a legacy plaintext `credentials.json` is still read as a
    migration fallback), mode `0600`, one entry per provider.
-2. Ambient env var — `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (existing
+2. Ambient env var, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (existing
    behavior).
-3. Not configured — never guessed, never prompted for mid-turn.
+3. Not configured, never guessed, never prompted for mid-turn.
 
 A stored credential *owns* its provider: env vars are consulted only when
 nothing is stored, and a rejected stored key is never silently retried
-against an env key — auth errors name which source was in play. This is
+against an env key, auth errors name which source was in play. This is
 pi's resolution rule, adopted because "which key am I actually using?" is
 the single most common cloud-auth support question.
 
@@ -1312,7 +1312,7 @@ the single most common cloud-auth support question.
   bracketed paste enters the key field (never the underlying draft), Escape
   cancels and clears it, and resize updates its width with the content column.
 - **Keys are never echoed, never rendered into the transcript, and never
-  written to the session file** — the session stores only that a login
+  written to the session file**, the session stores only that a login
   happened. Status display shows the last four characters only.
 - A key is stored **only after validation**: a one-token request to the
   real endpoint. 401 → `✗ key rejected by openai — nothing was stored`;
@@ -1321,36 +1321,36 @@ the single most common cloud-auth support question.
   than an absent one). Success toasts `✓ openai configured — key ····9f2a
   stored in ~/.tilde/credentials.enc.json`.
 - `/login` and `/logout` are ordinary palette entries (§2.4); both work
-  mid-session — switching providers mid-conversation keeps the transcript
+  mid-session, switching providers mid-conversation keeps the transcript
   and the session file exactly as-is.
 
 **Model catalog (shipped, small, curated).**
 
 - Each provider ships a hand-curated catalog (~5 current models): model
   id, human name, context window, input/output price per million tokens.
-  Data lives in one Go table, dated like this section — at tilde's
+  Data lives in one Go table, dated like this section, at tilde's
   provider count a generation script (pi auto-generates from provider
   APIs) is maintenance overhead, not a win.
 - `/model <provider/…>` lists catalog entries in the §2.4 dropdown plus a
   trailing `custom…` row for raw model IDs (proxies, previews). A user
   never has to type a model ID blind. (v1: bare `/model` prints the
-  catalog as transcript rows with the live backend marked — same data,
+  catalog as transcript rows with the live backend marked, same data, 
   no picker state.)
 - Selecting a catalog model with no explicit `TILDE_BUDGET` auto-sizes
-  the budget from that model's context window — a 1M-window model should
+  the budget from that model's context window, a 1M-window model should
   not inherit a 32k assumption.
-- An unknown-model 404 surfaces a command-shaped remedy (`/model` —
+- An unknown-model 404 surfaces a command-shaped remedy (`/model`, 
   pick from the catalog) instead of the raw model name as terminal
   truth. Closest-id suggestion is a later refinement, not v1.
 
 **First-run guidance.**
 
-The welcome panel (§2.1) always carries the two runnable lines — local
-and cloud — so a user without a GPU sees the path on the very first
+The welcome panel (§2.1) always carries the two runnable lines, local
+and cloud, so a user without a GPU sees the path on the very first
 screen, never after a failure. Conditional display (only when no
 backend is reachable) was considered and rejected: reachability means
 a startup dial, which main deliberately skips (construction only, §2.23
-rule — a dead daemon surfaces as a provider error once the loop calls
+rule, a dead daemon surfaces as a provider error once the loop calls
 it). A static two-line panel is the whole v1.
 
 ```
@@ -1360,9 +1360,9 @@ it). A static two-line panel is the whole v1.
 
 Both lines are exact, runnable text; the provider list derives from the
 registry so it never goes stale. There is no `no model backend found`
-header — the guidance renders unconditionally on fresh splash (reachability
+header, the guidance renders unconditionally on fresh splash (reachability
 would need a startup dial, which main deliberately skips). The cloud line
-works because `/login` exists — guidance without the command behind it is
+works because `/login` exists, guidance without the command behind it is
 what §2.23's original auth message got wrong.
 
 **Error remedies become command-shaped (amends §2.23).**
@@ -1371,16 +1371,16 @@ what §2.23's original auth message got wrong.
 |---|---|---|
 | 401 | `key rejected` | `run /login <provider> to update the stored key` |
 | 403 | `not authorized` (org/billing) | same, plus `check billing on the provider console` |
-| 404 model | `model unavailable` | `/model` — pick from the catalog |
+| 404 model | `model unavailable` | `/model`, pick from the catalog |
 | 429 | `rate limited` | `Retry-After` honored (§2.23, unchanged) |
 | 5xx | `provider outage` | retry with backoff (§2.23, unchanged) |
 | conn refused :11434 | `ollama not reachable` | ``run `ollama serve` `` |
 
-§2.23's authentication-failure example is updated accordingly — its
+§2.23's authentication-failure example is updated accordingly, its
 remedy is now executable, not documentary.
 
 **Non-goals (deferred, stated so absence is a decision not an omission):**
-OAuth/subscription flows (pi-style device-code login — the status matrix
+OAuth/subscription flows (pi-style device-code login, the status matrix
 renders a `subscription` row marked `not yet`), OS keychain integration
 (keys live in an AES-GCM envelope beside the `0600` file, not a keychain;
 see the creds package), custom base-URL/proxy UI
@@ -1460,7 +1460,7 @@ second product:
 | Provider retry loop (§2.23) | Retries silently (initial try + 1 retry = 2 attempts, fail-fast auth, `Retry-After` honored); failures print once as `tilde [class]:`; unretryable errors print once and exit |
 
 Headless output drops all color/glyph styling by default when stdout isn't a
-TTY (standard `NO_COLOR`-style detection) — the glyph vocabulary in §1.2
+TTY (standard `NO_COLOR`-style detection), the glyph vocabulary in §1.2
 degrades to plain word labels (`[action]`, `[done]`) rather than
 disappearing silently. There is no `[failed]` label: failures surface as
 the event text itself (tool-result error lines, `ERROR (handoff…)`), and
@@ -1472,7 +1472,7 @@ Interactive TUI sessions honor `NO_COLOR` as well. Borders, mode state, risk,
 and completion remain understandable through their fixed glyph and layout
 vocabulary when color is unavailable.
 
-**Exit codes are classified, not a bare `1` for every failure** (§2.23) — a
+**Exit codes are classified, not a bare `1` for every failure** (§2.23), a
 script needs to tell "bad config" from "rate limited" from "agent got stuck"
 apart without parsing prose:
 
@@ -1489,19 +1489,19 @@ apart without parsing prose:
 
 ## 5. Implementation Status
 
-For tracking against this spec as of v0.6+ — update in place, don't append a
+For tracking against this spec as of v0.6+, update in place, don't append a
 new section per version:
 
 | Component | Status |
 |---|---|
-| Status bar | DONE (incl. session cost readout — ` $0.0012`, hidden when unpriced) |
+| Status bar | DONE (incl. session cost readout, ` $0.0012`, hidden when unpriced) |
 | Composer (3 mode states) | DONE |
 | Mode toast / Tab cycle | DONE |
 | Confirm / deny prompts | DONE (confirm-tier bordered panel + inline `✗ denied by policy` lines; red deny-tier panel deferred per §2.12) |
 | Compaction ambient + marker | DONE |
-| Tool-call timeline | DONE — fixed verb vocabulary (Read/Listed/Grep/Write/Edit/Run) + fixed-width column (2026-09-08); read-only success carries no result line, failures/notices still show, grep counts lift to the call line |
-| Diff rendering | DONE — edit diffs (`⎿ +N -M` + numbered hunk, 2026-09-08) and new-file write rendering (`+N (new file)` + plain numbered body, 2026-09-08); video-regression test replays glob/read/edit/re-read end to end |
-| Plan-mode banner + todos | DONE — live banner at session start and per Build→Plan demotion, removed on leaving Plan; `● Update Todos` block from live manager state with □/☑, active bold, unchanged-state suppression |
+| Tool-call timeline | DONE, fixed verb vocabulary (Read/Listed/Grep/Write/Edit/Run) + fixed-width column (2026-09-08); read-only success carries no result line, failures/notices still show, grep counts lift to the call line |
+| Diff rendering | DONE, edit diffs (`⎿ +N -M` + numbered hunk, 2026-09-08) and new-file write rendering (`+N (new file)` + plain numbered body, 2026-09-08); video-regression test replays glob/read/edit/re-read end to end |
+| Plan-mode banner + todos | DONE, live banner at session start and per Build→Plan demotion, removed on leaving Plan; `● Update Todos` block from live manager state with □/☑, active bold, unchanged-state suppression |
 | Handoff panel | DONE |
 | Splash screen | DONE |
 | Slash command palette | DONE |
@@ -1510,17 +1510,17 @@ new section per version:
 | Session resume list | DONE (picker UI exists) |
 | Help overlay | DONE |
 | Headless flag parity | DONE (`--mode`/`--model`/`--yes`/`--skill` all exist) |
-| Plugin/extension marketplace (§2.17) | DONE — unified local registry, compatible JSON/YAML catalogs, explicit install confirmation, path containment, manifest lockfile |
-| Structured multi-question prompts (§2.18) | TODO — no current trigger; spec ready for first-run setup |
-| Subagent exploration view (§2.19) | DONE (render-state) — `⋮ type · model` running rows, `│ task type · model [done|failed]` completions, prose synthesis below batch; no focus model, no toggles |
-| Thinking indicator (§2.20) | DONE — live rotating microcopy (2s tick while running) + post-turn `◆ Thought for 3.4s · 38 tok/s` receipt on success (rate omitted when provider tokens unknown; shell escapes receipt-free) |
-| Action grouping (§2.20) | DONE — static parent (`● Listed, Read ×N`) + indented children for runs of 2+ batchable read-only calls; lone pairs render ungrouped; no toggle key; worthwhile results render indented under their call line |
-| Large-paste collapse (§2.21) | DONE — token + off-screen body, submit-time substitution, Backspace unit-delete, orphan notice, submit-time cap |
-| Mouse scroll + drag-select copy (2026-09-08) | DONE — cell-motion tracking, transcript-absolute drag-select with edge autoscroll, clipboard ladder + OSC 52 fallback, `Alt+M` passthrough |
-| Image/file paste path (§2.21) | TODO — `@`-reference of an existing image file works today via §2.5; no clipboard-to-file helper documented or built yet |
-| Cloud onboarding (§2.24) | DONE (v1) — registry + ladder (flag>stored 0600>env), masked /login with validate-before-store, /logout, /model provider switching + catalog listing, budget auto-size unless explicit, command-shaped 401/404 hints; openrouter (free shelf) + gemini (free tier) + opencode Zen (live-verified catalog, chat/completions-only discipline) first-class; splash cloud list derives from registry; deferred: OAuth, keychain, native clients, conditional reachability splash, closest-id 404 suggestion |
-| Session export (§2.22) | DONE — `/export [id]` palette + `tilde --export <id> [--out]` headless; distilled scrubbed brief (goal, files, direction, open steps; 0600, cwd-contained) |
-| Provider retry/backoff + classified errors (§2.23) | DONE — backoff + Retry-After + fail-fast auth; `provider.Classify` names every model error in the transcript and headless JSON |
-| Startup config validation, fail-closed (§2.23) | DONE — sandbox, provider, and policies refuse pre-TUI with file+line; unknown tiers and unknown tool names refuse (exit 2) |
-| Crash recovery / unclosed-session resume offer (§2.23) | DONE — panic writes a crash line; next launch hints, and auto-opens the picker when the unclosed session belongs to the cwd |
-| Classified exit codes (§2.23) | DONE — headless exits 0/2/3/4/5/1 per the §4 table (config/startup, provider-exhausted, handoff, deny-tier, other) |
+| Plugin/extension marketplace (§2.17) | DONE, unified local registry, compatible JSON/YAML catalogs, explicit install confirmation, path containment, manifest lockfile |
+| Structured multi-question prompts (§2.18) | TODO, no current trigger; spec ready for first-run setup |
+| Subagent exploration view (§2.19) | DONE (render-state), `⋮ type · model` running rows, `│ task type · model [done|failed]` completions, prose synthesis below batch; no focus model, no toggles |
+| Thinking indicator (§2.20) | DONE, live rotating microcopy (2s tick while running) + post-turn `◆ Thought for 3.4s · 38 tok/s` receipt on success (rate omitted when provider tokens unknown; shell escapes receipt-free) |
+| Action grouping (§2.20) | DONE, static parent (`● Listed, Read ×N`) + indented children for runs of 2+ batchable read-only calls; lone pairs render ungrouped; no toggle key; worthwhile results render indented under their call line |
+| Large-paste collapse (§2.21) | DONE, token + off-screen body, submit-time substitution, Backspace unit-delete, orphan notice, submit-time cap |
+| Mouse scroll + drag-select copy (2026-09-08) | DONE, cell-motion tracking, transcript-absolute drag-select with edge autoscroll, clipboard ladder + OSC 52 fallback, `Alt+M` passthrough |
+| Image/file paste path (§2.21) | TODO, `@`-reference of an existing image file works today via §2.5; no clipboard-to-file helper documented or built yet |
+| Cloud onboarding (§2.24) | DONE (v1), registry + ladder (flag>stored 0600>env), masked /login with validate-before-store, /logout, /model provider switching + catalog listing, budget auto-size unless explicit, command-shaped 401/404 hints; openrouter (free shelf) + gemini (free tier) + opencode Zen (live-verified catalog, chat/completions-only discipline) first-class; splash cloud list derives from registry; deferred: OAuth, keychain, native clients, conditional reachability splash, closest-id 404 suggestion |
+| Session export (§2.22) | DONE, `/export [id]` palette + `tilde --export <id> [--out]` headless; distilled scrubbed brief (goal, files, direction, open steps; 0600, cwd-contained) |
+| Provider retry/backoff + classified errors (§2.23) | DONE, backoff + Retry-After + fail-fast auth; `provider.Classify` names every model error in the transcript and headless JSON |
+| Startup config validation, fail-closed (§2.23) | DONE, sandbox, provider, and policies refuse pre-TUI with file+line; unknown tiers and unknown tool names refuse (exit 2) |
+| Crash recovery / unclosed-session resume offer (§2.23) | DONE, panic writes a crash line; next launch hints, and auto-opens the picker when the unclosed session belongs to the cwd |
+| Classified exit codes (§2.23) | DONE, headless exits 0/2/3/4/5/1 per the §4 table (config/startup, provider-exhausted, handoff, deny-tier, other) |

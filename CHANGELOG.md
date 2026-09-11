@@ -21,7 +21,7 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   preview, an issue→merge stepper, a coordinator delegation tree, a
   copyable install terminal with a binary/platform/runtime spec strip,
   selectable provider cards (Ollama marked default), and restrained
-  hover/reveal micro-interactions — all CSS-only, verified at
+  hover/reveal micro-interactions, all CSS-only, verified at
   375/768/1440px with no horizontal overflow.
 - Website refinement pass: deliberate type system (42–52px section
   headings, 16–17px body, 12px metadata floor), narrow/wide content
@@ -30,12 +30,26 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   active state, ringed issue→merge stepper with a mobile connector rail,
   coordinator org-chart (root pill, animated delegation bus, worker
   cards, vertical mobile rail), two-column install specs, and a redesigned
-  open final CTA closing on a run terminal — verified in-browser at
+  open final CTA closing on a run terminal, verified in-browser at
   desktop, tablet, and mobile widths.
 - Landing page now ends in a native footer (brand + tagline, Product and
   Resources link columns, © line, working back-to-top) in the site's
-  terminal styling — no new dependencies. The Starlight footer-hide rule
+  terminal styling, no new dependencies. The Starlight footer-hide rule
   is scoped so docs pages keep their own footer.
+- Product preview and ladder polish: ringed tier status badges, a
+  `working` mode pill and `2 of 9` counter pill echoing the live badge,
+  and staged row entrances (plan steps on load, ladder rows on scroll
+  into view) gated to `prefers-reduced-motion: no-preference`.
+- Provider cards now show real brand marks instead of letter
+  placeholders: monochrome community glyphs (Simple Icons, CC0) for
+  Ollama, Anthropic, Gemini, and OpenRouter, the OpenAI blossom from
+  Simple Icons 13.0.0 (later releases dropped it), and SST's own
+  opencode icon reduced to monochrome, all inlined as currentColor
+  SVGs with amber hover/active states.
+- Site copy drops em dashes across the landing page and the docs
+  sources (commas/colons instead; literal TUI strings, ASCII diagrams,
+  and code samples untouched), and the generic `live` and
+  `Available now` badges are removed.
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
   comes from the project's Node.js Version setting); `/docs` redirects to

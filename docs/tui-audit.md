@@ -26,38 +26,38 @@ terminal-environment coverage, not a visual redesign.
 
 ## Findings fixed
 
-### High — theme contrast
+### High: theme contrast
 
 The original palette assumed a dark terminal. Near-white primary text and
 light borders were unsafe on light terminal themes. Semantic colors now adapt
 to the detected background while preserving the same roles.
 
-### High — selected-row contrast
+### High: selected-row contrast
 
 Selected picker rows previously supplied a background but inherited the
 terminal foreground. Selected slash, file, session, skill, and marketplace
 rows now set an explicit foreground as well, so selection does not depend on
 terminal defaults.
 
-### High — full-screen overlay input leakage
+### High: full-screen overlay input leakage
 
 Marketplace was rendered as a full-screen surface but mouse wheel and drag
 events could still reach the transcript underneath. Marketplace now owns mouse
 events like the other overlays.
 
-### Medium — input discoverability
+### Medium: input discoverability
 
 The persistent hint bar did not state how to submit a prompt. It now exposes
 `Enter send`, and the help view includes Enter explicitly.
 
-### Medium — small terminal overflow
+### Medium: small terminal overflow
 
 Long root names and sandbox diagnostics could exceed the available width at the
 floor. The splash now provides a compact truthful card below 32 columns,
 hard-cuts the header and status row safely, and has a regression test for
 20/24/31-column frames.
 
-### Medium — splash copy wrapping and first-run density
+### Medium: splash copy wrapping and first-run density
 
 The first-run card used hand-authored line breaks, so a wider terminal still
 showed a narrow text island and could split `/login <provider>` as `pro-` /
@@ -65,7 +65,7 @@ showed a narrow text island and could split `/login <provider>` as `pro-` /
 width, and the empty-skills receipt is concise enough to remain useful above
 the footer on a normal terminal.
 
-### High — dark-theme guidance contrast
+### High: dark-theme guidance contrast
 
 The screenshot review found Bubble's default ANSI-gray placeholder and tilde's
 previous dim token were too faint for reliable reading on dark terminals.
@@ -73,7 +73,7 @@ Secondary text, hints, metadata, idle borders, and the composer placeholder
 now use contrast-safe semantic colors while preserving the primary/secondary
 hierarchy. Typed content and safety-critical text remain brighter.
 
-### High — approval surface separation
+### High: approval surface separation
 
 The approval screenshot showed transcript text bleeding through the bordered
 card and the reason running directly into the decision keys. Approval panels
@@ -81,7 +81,7 @@ now use an opaque adaptive background, a dedicated `Actions` section, a blank
 separator row, and semantic highlighting for approve, deny, reason, and
 session-approval keys.
 
-### High — long-output containment
+### High: long-output containment
 
 Long command results previously remained visible up to a high global cap and
 could dominate the viewport. Tool results now show a compact 12-line preview
@@ -124,7 +124,7 @@ prose is provisional until the response completes; if streaming fails, the
 preview is removed before the non-streaming retry, so partial text cannot be
 duplicated. Hidden `<think>` blocks are filtered from live deltas. The receipt
 is deliberately non-expandable and does not expose chain-of-thought. Approval
-waits suppress the reasoning indicator because the user—not the model—is the
+waits suppress the reasoning indicator because the user, not the model, is the
 blocked party.
 
 ### Output and transcript
@@ -139,9 +139,9 @@ including expansion of collapsed paste bodies.
 Help, sessions, skills, marketplace, login, and approval surfaces have clear
 escape paths and keyboard ownership. The marketplace uses one registry with
 tabs rather than separate concepts. Empty states are actionable everywhere:
-slash ("no command matches — type / to browse"), marketplace ("no matching
-items"), skills ("no skills match — backspace to clear the filter"), and @
-("○ no files match — esc to dismiss"). Verified 2026-09-10; no open gap.
+slash ("no command matches, type / to browse"), marketplace ("no matching
+items"), skills ("no skills match, backspace to clear the filter"), and @
+("○ no files match, esc to dismiss"). Verified 2026-09-10; no open gap.
 
 ### Color, contrast, and meaning
 

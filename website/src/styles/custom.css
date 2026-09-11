@@ -799,30 +799,6 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   letter-spacing: 0.06em;
 }
 
-.tilde-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.6rem;
-  color: var(--tilde-cyan);
-  font-family: var(--tilde-font-mono);
-  font-size: 0.68rem;
-  font-style: normal;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  border: 1px solid rgba(79, 195, 247, 0.35);
-  border-radius: 999px;
-}
-
-.tilde-live::before {
-  content: '';
-  width: 0.35rem;
-  height: 0.35rem;
-  background: var(--tilde-cyan);
-  border-radius: 50%;
-  animation: tilde-pulse 2.2s ease-in-out infinite;
-}
-
 .tilde-workflow-top,
 .tilde-plan-meta,
 .tilde-proof,
@@ -846,7 +822,13 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  padding: 0.25rem 0.7rem;
   color: var(--tilde-cyan); /* cyan = in-progress, per spec */
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(79, 195, 247, 0.35);
+  border-radius: 999px;
 }
 
 .tilde-mode i {
@@ -926,6 +908,12 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 
 .tilde-plan-meta > span:first-child {
   color: var(--tilde-amber); /* plan = amber, per spec */
+}
+
+.tilde-plan-meta > span:last-child {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--tilde-line);
+  border-radius: 999px;
 }
 
 .tilde-plan ol {
@@ -1129,26 +1117,6 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   font-size: 0.75rem;
 }
 
-.tilde-speed-card-meta small {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.6rem;
-  color: var(--tilde-faint);
-  font-family: var(--tilde-font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: var(--tilde-bg);
-  border: 1px solid var(--tilde-frame);
-  border-radius: 999px;
-}
-
-.tilde-speed-card-meta small::before {
-  content: '✓';
-  color: var(--tilde-green);
-}
-
 .tilde-speed-grid h3 {
   margin: var(--tilde-space-4) 0 var(--tilde-space-1);
   font-size: 1.15rem;
@@ -1238,22 +1206,31 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 .tilde-tier-glyph {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 1.3rem;
-  line-height: 1.4;
+  font-size: 1rem;
+  line-height: 1;
+  border: 1px solid var(--tilde-line);
+  border-radius: 50%;
 }
 
 .tilde-tier.denied .tilde-tier-glyph {
   color: var(--tilde-red);
+  border-color: rgba(244, 71, 71, 0.45);
 }
 
 .tilde-tier.ask .tilde-tier-glyph {
   color: var(--tilde-amber);
+  border-color: rgba(229, 160, 13, 0.45);
 }
 
 .tilde-tier.allow .tilde-tier-glyph {
   color: var(--tilde-green);
+  border-color: rgba(76, 175, 80, 0.45);
 }
 
 .tilde-tier-name {
@@ -1347,22 +1324,30 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-provider-logo {
   display: grid;
   flex: none;
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 2.75rem;
+  height: 2.75rem;
   place-items: center;
-  color: var(--tilde-muted);
-  font-family: var(--tilde-font-mono);
-  font-size: 0.95rem;
-  font-weight: 700;
-  background: var(--tilde-panel);
-  border: 1px solid var(--tilde-frame);
-  border-radius: 0.45rem;
-  transition: color 150ms ease, border-color 150ms ease;
+  color: var(--tilde-faint);
+  background: var(--tilde-panel-2);
+  border: 1px solid var(--tilde-line);
+  border-radius: 0.55rem;
+  transition: color 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.tilde-provider-logo svg {
+  width: 1.3rem;
+  height: 1.3rem;
 }
 
 .tilde-provider-grid article:hover .tilde-provider-logo {
   color: var(--tilde-amber);
-  border-color: var(--tilde-amber);
+  border-color: rgba(229, 160, 13, 0.5);
+}
+
+.tilde-provider-grid article.is-active .tilde-provider-logo {
+  color: var(--tilde-amber);
+  background: rgba(229, 160, 13, 0.08);
+  border-color: rgba(229, 160, 13, 0.55);
 }
 
 .tilde-provider-grid strong {
@@ -2074,6 +2059,43 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   opacity: 1;
   transform: none;
 }
+
+/* ── Staged entrances — plan steps and ladder rows arrive in sequence.
+   Motion-safe only: the reduced-motion guard below leaves them static. */
+
+@keyframes tilde-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tilde-plan li {
+    animation: tilde-row-in 450ms ease both;
+  }
+
+  .tilde-plan li:nth-child(1) { animation-delay: 0ms; }
+  .tilde-plan li:nth-child(2) { animation-delay: 60ms; }
+  .tilde-plan li:nth-child(3) { animation-delay: 120ms; }
+  .tilde-plan li:nth-child(4) { animation-delay: 180ms; }
+  .tilde-plan li:nth-child(5) { animation-delay: 240ms; }
+  .tilde-plan li:nth-child(6) { animation-delay: 300ms; }
+  .tilde-plan li:nth-child(7) { animation-delay: 360ms; }
+  .tilde-plan li:nth-child(8) { animation-delay: 420ms; }
+  .tilde-plan li:nth-child(9) { animation-delay: 480ms; }
+
+  .reveal.in .tilde-tier {
+    animation: tilde-row-in 500ms ease both;
+  }
+
+  .reveal.in .tilde-tier.ask { animation-delay: 120ms; }
+  .reveal.in .tilde-tier.allow { animation-delay: 240ms; }
+}
 /* ── Responsive ── */
 
 @media (max-width: 64rem) {
@@ -2211,10 +2233,6 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
     display: none;
   }
 
-  .tilde-window-bar .tilde-live {
-    margin-left: auto;
-  }
-
   .tilde-request,
   .tilde-plan,
   .tilde-proof {
@@ -2332,6 +2350,12 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
     grid-template-columns: 2rem 1fr;
     gap: 0.6rem 0.9rem;
     padding: 1.25rem 1.1rem;
+  }
+
+  .tilde-tier-glyph {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.85rem;
   }
 
   .tilde-tier-desc {

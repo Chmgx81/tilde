@@ -45,7 +45,7 @@ The binary ships starter plugins (`go-dev`, `git-hygiene`) that seed the
 Marketplace tab on a fresh machine. Their sources use the
 `embedded://plugin/<name>` scheme: local, reviewed, offline-installable.
 `plugin install`, `upgrade`, `verify`, and `--dry-run` all accept embedded
-sources (`tilde plugin install embedded://go-dev`) — they materialize to a
+sources (`tilde plugin install embedded://go-dev`), they materialize to a
 temp dir first, so validation, staging, lockfile pinning, and rollback run
 the exact same code as directory installs. Adding a starter means adding a
 dir under `internal/plugin/bundled/` with a `tilde-plugin.yaml`; it appears
@@ -99,7 +99,7 @@ source provenance, validate paths and manifests, and remain reversible where
 possible. Never install an extension solely because it appears in a catalog.
 
 Local MCP servers run as unsandboxed child processes with your user
-privileges and full environment — outside the bwrap sandbox by design
+privileges and full environment, outside the bwrap sandbox by design
 (they need real egress and binaries). Only start servers from sources you
 trust; project `.tilde/mcp.json` entries additionally need `--mcp-project`
 or a recorded trust.
