@@ -2155,6 +2155,11 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
     border-top: 1px solid var(--tilde-line);
   }
 
+  /* Three cards in two columns leaves an orphan: let it close the row. */
+  .tilde-speed-grid article:last-child {
+    grid-column: 1 / -1;
+  }
+
   .tilde-speed-grid h3 {
     margin-top: 1.5rem;
   }

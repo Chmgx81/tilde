@@ -50,6 +50,8 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   sources (commas/colons instead; literal TUI strings, ASCII diagrams,
   and code samples untouched), and the generic `live` and
   `Available now` badges are removed.
+- Tablet mechanics grid: the third card now closes the row full-width
+  instead of sitting as a half-width orphan.
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
   comes from the project's Node.js Version setting); `/docs` redirects to
