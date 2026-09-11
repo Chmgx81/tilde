@@ -1,4 +1,4 @@
-# tilde (~)
+<div align="center">
 
 ```text
    ▄▄▄▄▄▄▄
@@ -8,11 +8,25 @@
                  ▀▀▀▀▀▀▀
 ```
 
-> A security-first terminal coding agent for real repositories.
+# tilde (~)
+
+**A security-first terminal coding agent for real repositories.**
+
+[![Website](https://img.shields.io/badge/website-tilde%E2%80%94live-e5a00d)](https://tilde-wheat.vercel.app/)
+[![CI](https://github.com/Chmgx81/tilde/actions/workflows/ci.yml/badge.svg)](https://github.com/Chmgx81/tilde/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Release](https://img.shields.io/github/v/release/Chmgx81/tilde)](https://github.com/Chmgx81/tilde/releases)
+[![License](https://img.shields.io/github/license/Chmgx81/tilde)](./LICENSE)
+
+[Website](https://tilde-wheat.vercel.app/) · [Documentation](https://tilde-wheat.vercel.app/docs/readme/) · [Install](#quickstart) · [GitHub](https://github.com/Chmgx81/tilde)
+
+</div>
+
+---
 
 tilde is a local-first coding harness for software work that needs more than a chat window: repository inspection, controlled tool use, explicit approvals, resumable sessions, plugins, MCP servers, and scriptable output.
 
-It is built for engineers who want an agent that is useful in production codebases without giving up visibility or control.
+It is built for engineers who want an agent that is useful in production codebases without giving up visibility or control. Start on the [website](https://tilde-wheat.vercel.app/) for the tour, then install below.
 
 ## Why tilde
 
@@ -42,7 +56,7 @@ go build -o tilde .
 ./tilde
 ```
 
-Go 1.25 or newer and Linux with [bubblewrap](https://github.com/containers/bubblewrap) are required for the default sandbox. On macOS (where bwrap is unavailable) tilde refuses to start until you pass `--no-sandbox` / `TILDE_NO_SANDBOX=1` — shell tools then run unsandboxed, so prefer Linux for untrusted work. To use the local Ollama provider, install Ollama and make sure a model is available:
+Go 1.25 or newer and Linux with [bubblewrap](https://github.com/containers/bubblewrap) are required for the default sandbox. On macOS (where bwrap is unavailable) tilde refuses to start until you pass `--no-sandbox` / `TILDE_NO_SANDBOX=1`. Shell tools then run unsandboxed, so prefer Linux for untrusted work. To use the local Ollama provider, install Ollama and make sure a model is available:
 
 ```sh
 ollama pull qwen3.8-4b:16k
@@ -79,12 +93,12 @@ Use `./tilde --help` and the provider documentation in `docs/` for the exact opt
 
 ### Interactive controls
 
-- `Enter` — submit the prompt
-- `Esc` twice — cancel a running turn
-- `Ctrl+C` — clear a non-empty draft; quit when the composer is empty
-- `/` — open command/search input
-- `?` — show help
-- `q` — quit when no confirmation is active
+- `Enter`: submit the prompt
+- `Esc` twice: cancel a running turn
+- `Ctrl+C`: clear a non-empty draft; quit when the composer is empty
+- `/`: open command/search input
+- `?`: show help
+- `q`: quit when no confirmation is active
 
 Long waits show live status. Tool activity is rendered as a compact, auditable timeline rather than an opaque spinner.
 
@@ -168,7 +182,7 @@ Useful runtime controls include budget, timeout, task-slot, paste, and unattende
 The updater verifies the expected canonical repository, branch, and exact commit before applying changes. A dirty source tree is intentionally refused:
 
 ```text
-tilde: update: source tree ... has uncommitted changes — commit or stash them, then retry
+tilde: update: source tree ... has uncommitted changes, commit or stash them, then retry
 ```
 
 That message refers to the local checkout being updated, not the GitHub repository itself. Commit or stash local changes first, then retry. If you want to update from GitHub, ensure the local checkout's `origin` remote points to the intended repository URL.
@@ -207,8 +221,18 @@ CLI / TUI
 
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the detailed design, [docs/Plan.md](docs/Plan.md) for the delivery plan, and [docs/vision-design.md](docs/vision-design.md) for vision behavior.
 
+## Documentation
+
+- [Website](https://tilde-wheat.vercel.app/): product tour, permission model, providers, install.
+- [Documentation](https://tilde-wheat.vercel.app/docs/readme/): architecture, build plan, marketplace, sandbox image, TUI spec.
+- [Changelog](./CHANGELOG.md): shipped behavior by release.
+
 ## Project status
 
 tilde is under active development. The core harness, safety boundaries, extension lifecycle, marketplace model, and operational failure handling are implemented and tested. Integrations that depend on an external provider, browser, MCP server, or remote marketplace still require explicit configuration and trust.
 
 Contributions are welcome. Please include focused tests, security implications, and documentation updates with each change.
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

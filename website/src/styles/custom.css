@@ -788,51 +788,6 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   letter-spacing: 0.06em;
 }
 
-.tilde-workflow-top,
-.tilde-plan-meta,
-.tilde-proof,
-.tilde-agent {
-  display: flex;
-  align-items: center;
-}
-
-.tilde-workflow-top {
-  justify-content: space-between;
-  min-height: 3.25rem;
-  padding: 0 1.5rem;
-  color: var(--tilde-faint);
-  font-family: var(--tilde-font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.02em;
-  border-bottom: 1px solid var(--tilde-line);
-}
-
-.tilde-mode {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.25rem 0.7rem;
-  color: var(--tilde-cyan); /* cyan = in-progress, per spec */
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border: 1px solid rgba(79, 195, 247, 0.35);
-  border-radius: 999px;
-}
-
-.tilde-mode i {
-  flex: none;
-}
-
-.tilde-status-dot {
-  display: block;
-  width: 0.4rem;
-  height: 0.4rem;
-  background: var(--tilde-cyan);
-  border-radius: 50%;
-  animation: tilde-pulse 2.2s ease-in-out infinite;
-}
-
 @keyframes tilde-pulse {
   0%,
   100% {
@@ -859,7 +814,111 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   font-weight: 700;
 }
 
-/* Restrained terminal cursor after the active command. */
+/* Session chrome — mirrors the real TUI splash: header line, welcome
+   box, budget/sandbox row, and the mode banner with its legend tab. */
+.tilde-term-head {
+  padding: 0.9rem 1.75rem;
+  color: var(--tilde-faint);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-align: center;
+  border-bottom: 1px solid var(--tilde-line);
+}
+
+.tilde-welcome {
+  margin: 1.25rem 1.75rem 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--tilde-panel-2);
+  border: 1px solid var(--tilde-line);
+  border-radius: 0.5rem;
+}
+
+.tilde-welcome strong {
+  display: block;
+  color: var(--tilde-ink);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.tilde-welcome p {
+  margin-top: 0.6rem;
+  color: var(--tilde-muted);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+
+.tilde-budgetrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.75rem 0;
+  color: var(--tilde-muted);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.8rem;
+}
+
+.tilde-modebanner {
+  position: relative;
+  margin: 1.25rem 1.75rem 1.25rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid rgba(229, 160, 13, 0.5);
+  border-radius: 0.45rem;
+}
+
+.tilde-modebanner-tab {
+  position: absolute;
+  top: -0.62rem;
+  left: 1rem;
+  padding: 0 0.6rem;
+  color: var(--tilde-amber);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  background: var(--tilde-panel);
+}
+
+.tilde-modebanner p {
+  color: var(--tilde-ink);
+  font-size: 0.9rem;
+}
+
+.tilde-thought {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.6rem 1.75rem 0;
+  color: var(--tilde-faint);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.78rem;
+}
+
+.tilde-thought > span {
+  color: var(--tilde-dim);
+}
+
+/* Composer — the input box, with the real placeholder text. */
+.tilde-composer {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  margin: 1.25rem 1.75rem 0;
+  padding: 0.95rem 1.15rem;
+  color: var(--tilde-faint);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.85rem;
+  border: 1px solid var(--tilde-frame);
+  border-radius: 0.5rem;
+}
+
+.tilde-composer > span:first-child {
+  color: var(--tilde-amber);
+  font-weight: 700;
+}
 .tilde-cursor {
   display: inline-block;
   width: 0.55em;
@@ -880,191 +939,184 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   }
 }
 
-.tilde-plan {
-  padding: 1.5rem 1.75rem 1.25rem;
+/* ── Transcript todos — the real `● Update Todos` block (spec §2.9):
+   `☑` done (dim), `□` pending (muted), first unchecked bold. No
+   invented progress headers or detail sub-lines. ── */
+.tilde-todos {
+  padding: 1.25rem 1.75rem 0.5rem;
 }
 
-.tilde-plan-meta {
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-  color: var(--tilde-faint);
+.tilde-todos-head {
+  color: var(--tilde-ink);
   font-family: var(--tilde-font-mono);
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
-.tilde-plan-meta > span:first-child {
-  color: var(--tilde-amber); /* plan = amber, per spec */
+.tilde-todos-head > span {
+  color: var(--tilde-faint);
+  font-weight: 400;
 }
 
-.tilde-plan-meta > span:last-child {
-  padding: 0.2rem 0.6rem;
-  border: 1px solid var(--tilde-line);
-  border-radius: 999px;
-}
-
-.tilde-plan ol {
+.tilde-todos ol {
+  margin-top: 0.55rem;
   padding: 0;
   list-style: none;
 }
 
-.tilde-plan li {
-  display: grid;
-  grid-template-columns: 1.4rem 1fr;
+.tilde-todos li {
+  display: flex;
   gap: 0.7rem;
-  padding: 0.95rem 0.75rem;
-  margin-inline: -0.75rem;
-  border-bottom: 1px solid var(--tilde-line);
-  border-radius: 0.35rem;
-  align-items: start;
+  align-items: baseline;
+  padding: 0.42rem 0.6rem;
+  margin-inline: -0.6rem;
+  font-family: var(--tilde-font-mono);
+  font-size: 0.85rem;
+  border-radius: 0.3rem;
   transition: background 180ms ease;
 }
 
-.tilde-plan li:last-child {
-  border-bottom: 0;
-}
-
-.tilde-plan li:hover {
+.tilde-todos li:hover {
   background: rgba(167, 178, 196, 0.05);
 }
 
-/* Session density: finished and pending steps recede so the active
-   step owns the space, like a real session log. */
-.tilde-plan li.done {
-  padding-block: 0.8rem;
-}
-
-.tilde-plan li:not(.done):not(.active) {
-  padding-block: 0.65rem;
-}
-
-.tilde-plan li:not(.done):not(.active) strong {
-  font-size: 0.85rem;
-}
-
-.tilde-plan li.active {
-  background: rgba(79, 195, 247, 0.05);
-  box-shadow: inset 2px 0 0 var(--tilde-cyan);
-}
-
-/* Left gutter glyphs: ✓ done · dot in-progress · ○ pending. */
-.tilde-check {
-  display: grid;
-  width: 1.05rem;
-  height: 1.05rem;
-  margin-top: 1px;
-  place-items: center;
-  color: var(--tilde-faint);
-  font-family: var(--tilde-font-mono);
-  font-size: 0.78rem;
-}
-
-.tilde-plan .done .tilde-check {
-  color: var(--tilde-green);
-}
-
-.tilde-plan .active .tilde-check {
-  color: var(--tilde-cyan);
-}
-
-.tilde-plan strong {
-  display: block;
-  color: var(--tilde-ink);
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.tilde-plan li:not(.done):not(.active) strong {
+.tilde-tick {
+  flex: none;
   color: var(--tilde-faint);
 }
 
-.tilde-plan small {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--tilde-faint);
-  font-family: var(--tilde-font-mono);
-  font-size: 0.75rem;
-}
-
-/* Sub-detail row — `⎿` marks a child of the line above (spec §1.2). */
-.tilde-agent {
-  gap: 0.55rem;
-  align-items: baseline;
-  margin-top: 0.55rem;
-  padding: 0.45rem 0.7rem;
-  color: var(--tilde-faint);
-  font-family: var(--tilde-font-mono);
-  font-size: 0.68rem;
-  background: var(--tilde-panel-2);
-  border-left: 2px solid var(--tilde-amber);
-  border-radius: 0.25rem;
-}
-
-.tilde-agent .tilde-agent-glyph {
+.tilde-todos li.done {
   color: var(--tilde-dim);
 }
 
-.tilde-agent > span:nth-child(2) {
-  color: var(--tilde-muted);
-}
-
-/* Proof line — success green. */
-.tilde-proof {
-  gap: 0.7rem;
-  padding: 1rem 1.75rem;
-  color: var(--tilde-muted);
-  font-family: var(--tilde-font-mono);
-  background: rgba(76, 175, 80, 0.05);
-  border-top: 1px solid var(--tilde-line);
-}
-
-.tilde-proof > span {
+.tilde-todos li.done .tilde-tick {
   color: var(--tilde-green);
+}
+
+.tilde-todos li.pending {
+  color: var(--tilde-muted);
+}
+
+.tilde-todos li.active {
+  color: var(--tilde-ink);
   font-weight: 700;
 }
 
-.tilde-proof code {
+/* ── Tool timeline — the transcript backbone (spec §2.10): fixed verb
+   column in full brightness, muted target, `⎿` result lines, `✓ Done`
+   closing the group. ── */
+.tilde-timeline {
+  padding: 0.75rem 1.75rem 1rem;
+}
+
+.tilde-tool {
+  display: grid;
+  grid-template-columns: 1.2rem 4.2rem 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.32rem 0;
+  margin: 0;
+  font-family: var(--tilde-font-mono);
+  font-size: 0.85rem;
+}
+
+.tilde-tool .tilde-verb {
+  color: var(--tilde-faint);
+}
+
+.tilde-tool strong {
+  color: var(--tilde-ink);
+  font-weight: 600;
+}
+
+.tilde-tool code {
   min-width: 0;
   overflow: hidden;
   padding: 0;
-  font-size: 0.82rem;
+  color: var(--tilde-muted);
+  font-size: 0.85rem;
   text-overflow: ellipsis;
   white-space: nowrap;
   background: transparent;
   border: 0;
-  border-radius: 0;
 }
 
-.tilde-proof small {
-  margin-left: auto;
+.tilde-tool-result {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  margin: 0;
+  padding: 0.1rem 0 0.32rem 5.9rem;
+  font-family: var(--tilde-font-mono);
+  font-size: 0.8rem;
   color: var(--tilde-faint);
-  font-size: 0.75rem;
 }
 
-/* Status strip — model · sandbox · session cost, like the real TUI bar. */
+.tilde-tool-result code {
+  padding: 0;
+  font-size: 0.8rem;
+  background: transparent;
+  border: 0;
+}
+
+.tilde-done {
+  margin: 0.55rem 0 0;
+  font-family: var(--tilde-font-mono);
+  font-size: 0.85rem;
+  color: var(--tilde-ink);
+}
+
+.tilde-done > span {
+  color: var(--tilde-green);
+  font-weight: 700;
+}
+
+/* Status bar — the real split format (model.go): left is where/what
+   (mode · root · branch), right is how much (model · cost). Never wraps;
+   the left shortens with an ellipsis, like truncANSI. */
 .tilde-statusbar {
   display: flex;
+  gap: 1rem;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.65rem 1.75rem;
-  color: var(--tilde-faint);
+  justify-content: space-between;
+  padding: 0.7rem 1.75rem;
   font-family: var(--tilde-font-mono);
   font-size: 0.75rem;
-  letter-spacing: 0.04em;
+  white-space: nowrap;
   background: var(--tilde-panel-2);
   border-top: 1px solid var(--tilde-line);
-  border-radius: 0 0 0.75rem 0.75rem;
 }
 
-.tilde-statusbar span:first-child {
+.tilde-status-left {
+  min-width: 0;
+  overflow: hidden;
   color: var(--tilde-muted);
+  text-overflow: ellipsis;
 }
 
-.tilde-statusbar span:nth-child(even) {
-  color: var(--tilde-frame);
+.tilde-status-left strong {
+  color: var(--tilde-amber);
+  font-weight: 700;
+}
+
+.tilde-status-left span {
+  color: var(--tilde-dim);
+}
+
+.tilde-status-right {
+  flex: none;
+  color: var(--tilde-faint);
+}
+
+.tilde-hintbar {
+  padding: 0.7rem 1.75rem 1.25rem;
+  overflow-x: auto;
+  color: var(--tilde-dim);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  scrollbar-width: none;
 }
 /* ── Sections ── */
 
@@ -2103,19 +2155,19 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .tilde-plan li {
+  .tilde-todos li {
     animation: tilde-row-in 450ms ease both;
   }
 
-  .tilde-plan li:nth-child(1) { animation-delay: 0ms; }
-  .tilde-plan li:nth-child(2) { animation-delay: 60ms; }
-  .tilde-plan li:nth-child(3) { animation-delay: 120ms; }
-  .tilde-plan li:nth-child(4) { animation-delay: 180ms; }
-  .tilde-plan li:nth-child(5) { animation-delay: 240ms; }
-  .tilde-plan li:nth-child(6) { animation-delay: 300ms; }
-  .tilde-plan li:nth-child(7) { animation-delay: 360ms; }
-  .tilde-plan li:nth-child(8) { animation-delay: 420ms; }
-  .tilde-plan li:nth-child(9) { animation-delay: 480ms; }
+  .tilde-todos li:nth-child(1) { animation-delay: 0ms; }
+  .tilde-todos li:nth-child(2) { animation-delay: 60ms; }
+  .tilde-todos li:nth-child(3) { animation-delay: 120ms; }
+  .tilde-todos li:nth-child(4) { animation-delay: 180ms; }
+  .tilde-todos li:nth-child(5) { animation-delay: 240ms; }
+  .tilde-todos li:nth-child(6) { animation-delay: 300ms; }
+  .tilde-todos li:nth-child(7) { animation-delay: 360ms; }
+  .tilde-todos li:nth-child(8) { animation-delay: 420ms; }
+  .tilde-todos li:nth-child(9) { animation-delay: 480ms; }
 
   .reveal.in .tilde-tier {
     animation: tilde-row-in 500ms ease both;
@@ -2267,10 +2319,23 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   }
 
   .tilde-request,
-  .tilde-plan,
-  .tilde-proof,
+  .tilde-todos,
+  .tilde-timeline,
   .tilde-statusbar {
     padding-inline: 1rem;
+  }
+
+  .tilde-term-head,
+  .tilde-budgetrow,
+  .tilde-thought,
+  .tilde-hintbar {
+    padding-inline: 1rem;
+  }
+
+  .tilde-welcome,
+  .tilde-modebanner,
+  .tilde-composer {
+    margin-inline: 1rem;
   }
 
   .tilde-window-bar {

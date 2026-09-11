@@ -58,6 +58,12 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   strip (model, sandbox, session cost). The ask tier is a real inset
   card with breathing room instead of rails borrowing its neighbors'
   dividers.
+- Hero demo rebuilt as a faithful TUI transcript after comparing with
+  the real terminal: `● Update Todos` with `☑`/`□` states (no invented
+  `2 of 9` header or detail sub-lines), the verb-column tool timeline
+  with `⎿` result lines and a closing `✓ Done` (no jest-style proof
+  bar), and the real split status bar (`plan · ~/payments-api · main`
+  with model, cost). Every string now traces to the spec or the code.
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
   comes from the project's Node.js Version setting); `/docs` redirects to
