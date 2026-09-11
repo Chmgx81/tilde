@@ -96,7 +96,7 @@ const tiers = [
 ];
 ---
 <div class="tilde-home not-content">
-  <section class="tilde-hero" aria-labelledby="tilde-title">
+  <section class="tilde-hero" id="top" aria-labelledby="tilde-title">
     <div class="tilde-hero-copy">
       <p class="tilde-eyebrow">A terminal coding agent · Open source</p>
       <img
@@ -309,6 +309,33 @@ const tiers = [
       <span class="tilde-copy-status" data-copy-status aria-live="polite"></span>
     </div>
   </section>
+
+  <footer class="tilde-footer" aria-label="Footer">
+    <div class="tilde-footer-grid">
+      <div class="tilde-footer-brand">
+        <p><span class="tilde-prompt" aria-hidden="true">~</span> tilde</p>
+        <p>A security-first terminal coding agent. Open source, no telemetry.</p>
+      </div>
+      <nav aria-label="Product">
+        <p>Product</p>
+        <a href="/#product">Mechanics</a>
+        <a href="/#workflow">Permissions</a>
+        <a href="/#models">Models</a>
+        <a href="/#install">Install</a>
+      </nav>
+      <nav aria-label="Resources">
+        <p>Resources</p>
+        <a href="/docs/readme/">Overview</a>
+        <a href="/docs/architecture/">Architecture</a>
+        <a href="/docs/plan/">Build plan</a>
+        <a href="https://github.com/Chmgx81/tilde">GitHub</a>
+      </nav>
+    </div>
+    <div class="tilde-footer-base">
+      <p>© 2026 tilde</p>
+      <a class="tilde-footer-top" href="#top">Back to top <span aria-hidden="true">↑</span></a>
+    </div>
+  </footer>
 </div>
 
 <script>

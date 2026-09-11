@@ -181,7 +181,7 @@ body:has(.tilde-home) .content-panel:not(:has(.tilde-home)) {
   margin: 0;
 }
 
-.content-panel:has(.tilde-home) footer {
+.content-panel:has(.tilde-home) footer:not(.tilde-footer) {
   display: none;
 }
 
@@ -1961,6 +1961,107 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   text-align: left;
 }
 
+/* ── Footer — quiet terminal sign-off, landing only ── */
+
+.tilde-footer {
+  width: var(--tilde-container);
+  margin: 0 auto;
+  padding: var(--tilde-space-5) 0 var(--tilde-space-4);
+  border-top: 1px solid var(--tilde-line);
+}
+
+.tilde-footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: var(--tilde-space-4);
+}
+
+.tilde-footer-brand p:first-child {
+  color: var(--tilde-ink);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.tilde-footer-brand .tilde-prompt {
+  color: var(--tilde-amber);
+  font-weight: 700;
+}
+
+.tilde-footer-brand p:last-child {
+  margin-top: 0.6rem;
+  max-width: 24rem;
+  color: var(--tilde-faint);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.tilde-footer nav p {
+  color: var(--tilde-amber);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tilde-footer nav a {
+  display: block;
+  width: fit-content;
+  margin-top: 0.65rem;
+  color: var(--tilde-muted);
+  font-size: 0.92rem;
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
+.tilde-footer nav a:hover {
+  color: var(--tilde-ink);
+}
+
+.tilde-footer-base {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: var(--tilde-space-4);
+  padding-top: var(--tilde-space-3);
+  border-top: 1px solid var(--tilde-line);
+}
+
+.tilde-footer-base p {
+  color: var(--tilde-faint);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.tilde-footer-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--tilde-muted);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.8rem;
+  text-decoration: none;
+  transition: color 180ms ease, transform 180ms ease;
+}
+
+.tilde-footer-top:hover {
+  color: var(--tilde-ink);
+  transform: translateY(-2px);
+}
+
+/* Same Starlight cascade fix as the landing buttons above: docs link
+   styling outspecifies the footer link, so restate it. */
+.sl-markdown-content .tilde-home .tilde-footer-top {
+  color: var(--tilde-muted);
+}
+
+.sl-markdown-content .tilde-home .tilde-footer-top:hover {
+  color: var(--tilde-ink);
+}
+
 /* ── Scroll reveal ── */
 
 .reveal {
@@ -2206,6 +2307,12 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   /* Spec strip: single column. */
   .tilde-spec-strip {
     grid-template-columns: 1fr;
+  }
+
+  /* Footer: single column. */
+  .tilde-footer-grid {
+    grid-template-columns: 1fr;
+    gap: var(--tilde-space-3);
   }
 
   .tilde-terminal-line small {

@@ -32,6 +32,10 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   cards, vertical mobile rail), two-column install specs, and a redesigned
   open final CTA closing on a run terminal — verified in-browser at
   desktop, tablet, and mobile widths.
+- Landing page now ends in a native footer (brand + tagline, Product and
+  Resources link columns, © line, working back-to-top) in the site's
+  terminal styling — no new dependencies. The Starlight footer-hide rule
+  is scoped so docs pages keep their own footer.
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
   comes from the project's Node.js Version setting); `/docs` redirects to
