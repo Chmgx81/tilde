@@ -68,16 +68,23 @@
   letter-spacing: -0.02em;
 }
 
-/* Header brand lockup — the mark at icon scale beside the wordmark.
-   The white asset is trimmed to the glyph (44×10, 4.4:1), so 1rem height
-   renders a compact 16×70px icon with no transparent padding. */
+/* Header brand lockup — the transparent nav banner (240×64, 3.75:1)
+   beside the wordmark. Width-driven sizing preserves the aspect ratio:
+   ~140px on desktop, ~120px on small screens, never wider than the bar. */
 .site-title img {
-  height: 1rem;
-  width: auto;
+  width: 140px;
+  max-width: 36vw;
+  height: auto;
 }
 
 .site-title {
   gap: 0.6rem;
+}
+
+@media (max-width: 38rem) {
+  .site-title img {
+    width: 120px;
+  }
 }
 
 .header {
@@ -313,6 +320,30 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 
 .tilde-hero .tilde-eyebrow {
   margin-bottom: 1.1rem;
+}
+
+/* Hero brand mark — the transparent hero banner. Width-capped so it
+   scales down with its container: ~480px on desktop, ~416px on tablet,
+   full-width up to 320px on mobile. height:auto keeps it sharp and
+   undistorted; width:min(100%, …) means it can never overflow. */
+.tilde-hero-brand {
+  display: block;
+  width: min(100%, 30rem);
+  max-width: 30rem;
+  height: auto;
+  margin-bottom: 1.75rem;
+}
+
+@media (max-width: 64rem) {
+  .tilde-hero-brand {
+    max-width: 26rem;
+  }
+}
+
+@media (max-width: 38rem) {
+  .tilde-hero-brand {
+    max-width: 20rem;
+  }
 }
 
 .tilde-hero h1 {

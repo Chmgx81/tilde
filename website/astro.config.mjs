@@ -8,8 +8,15 @@ export default defineConfig({
     starlight({
       title: 'tilde',
       description: 'A security-first terminal coding agent built for real engineering.',
-      logo: { src: './src/assets/tilde-mark-white.png', alt: 'tilde — the tilde mark' },
-      favicon: '/favicon.ico',
+      logo: { src: './src/assets/banner_nav_logo.png', alt: 'tilde (~)' },
+      favicon: '/images/banner_favicon_32x32.png',
+      head: [
+        { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/images/banner_favicon_32x32.png' } },
+        { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/images/banner_favicon_48x48.png' } },
+        { tag: 'link', attrs: { rel: 'apple-touch-icon', sizes: '48x48', href: '/images/banner_favicon_48x48.png' } },
+        { tag: 'meta', attrs: { property: 'og:image', content: '/images/banner_hero_logo.png' } },
+        { tag: 'meta', attrs: { name: 'twitter:image', content: '/images/banner_hero_logo.png' } },
+      ],
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/Chmgx81/tilde' }],
       editLink: {
         baseUrl: 'https://github.com/Chmgx81/tilde/edit/main/website/',

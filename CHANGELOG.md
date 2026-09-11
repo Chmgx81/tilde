@@ -9,9 +9,11 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   token palette (amber/cyan/semantic glyphs on the blue-gray `#0D1117`
   surface), self-hosted Newsreader/Inter/JetBrains Mono, spec-glyph
   workflow demos, a deny/ask/allow permission-ladder section, and a
-  WCAG-AA-verified dark docs theme. The pixel-tilde banner is now the
-  site mark: header logo (icon-scale, beside the wordmark) and
-  amber-on-dark favicon.
+  WCAG-AA-verified dark docs theme. The transparent banner set is now the
+  site mark: nav banner in the header (~140px desktop, ~120px mobile),
+  hero banner above the landing headline (~480px desktop, ~416px tablet,
+  up to 320px mobile), and the 32px PNG as favicon (48px for
+  apple-touch-icon, hero banner for og/twitter images).
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
   comes from the project's Node.js Version setting); `/docs` redirects to
