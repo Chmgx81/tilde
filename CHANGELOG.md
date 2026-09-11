@@ -11,8 +11,9 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   workflow demos, a deny/ask/allow permission-ladder section, and a
   WCAG-AA-verified dark docs theme. The pixel-tilde banner is now the
   site mark: header logo, wordmark pairing, and amber-on-dark favicon.
-- The site deploys to Vercel from the repo root (`vercel.json`: Node 24,
-  build inside `website/`, clean URLs, immutable `/_astro/` caching);
+- The site deploys to Vercel from the repo root (`vercel.json`: build
+  inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
+  comes from the project's Node.js Version setting);
   the build needs the repo-root `docs/`, so don't deploy from inside
   `website/`. Pushes to `main` touching `website/` or `docs/` deploy
   automatically via GitHub Actions.

@@ -4,7 +4,6 @@
   "outputDirectory": "website/dist",
   "installCommand": "echo 'skip: deps installed in buildCommand'",
   "framework": null,
-  "nodeVersion": "24.x",
   "cleanUrls": true,
   "trailingSlash": false,
   "headers": [
