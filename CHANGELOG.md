@@ -10,8 +10,8 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   surface), self-hosted Newsreader/Inter/JetBrains Mono, spec-glyph
   workflow demos, a deny/ask/allow permission-ladder section, and a
   WCAG-AA-verified dark docs theme. The pixel-tilde banner is now the
-  site mark: header logo (`replacesTitle` — the mark is the wordmark,
-  no duplicate "tilde" text) and amber-on-dark favicon.
+  site mark: header logo (icon-scale, beside the wordmark) and
+  amber-on-dark favicon.
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
   comes from the project's Node.js Version setting); `/docs` redirects to

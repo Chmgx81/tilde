@@ -68,6 +68,17 @@
   letter-spacing: -0.02em;
 }
 
+/* Header brand lockup — the wave mark at icon scale beside the wordmark,
+   not Starlight's banner scale (40px tall ≈ 169px wide for this mark). */
+.site-title img {
+  height: 1.5rem;
+  width: auto;
+}
+
+.site-title {
+  gap: 0.6rem;
+}
+
 .header {
   border-bottom-color: var(--sl-color-gray-5);
   backdrop-filter: blur(16px);
