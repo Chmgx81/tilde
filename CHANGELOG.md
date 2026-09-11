@@ -13,9 +13,10 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   site mark: header logo, wordmark pairing, and amber-on-dark favicon.
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
-  comes from the project's Node.js Version setting);
-  the build needs the repo-root `docs/`, so don't deploy from inside
-  `website/`. Pushes to `main` touching `website/` or `docs/` deploy
+  comes from the project's Node.js Version setting); `/docs` redirects to
+  the overview page. The build reads the repo-root `docs/`, so don't
+  deploy from inside `website/`. Pushes to `main` touching `website/`,
+  `docs/`, or `vercel.json` deploy
   automatically via GitHub Actions.
 
 - `--version` and the TUI now include the short source revision for VCS
