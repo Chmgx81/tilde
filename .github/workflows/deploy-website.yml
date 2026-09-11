@@ -1,0 +1,45 @@
+name: deploy-website
+
+# Production deploys for the website. The Vercel GitHub App is installed
+# on a different GitHub account than Chmgx81, so push-to-deploy runs here
+# via the Vercel CLI instead of the native git integration. The build runs
+# remotely per vercel.json from the repo root — docs/ must ship with the
+# upload because website/scripts/prepare-docs.mjs reads ../docs/.
+# Setup: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID repo secrets.
+
+on:
+  push:
+    branches: [main]
+    paths: ["website/**", "docs/**", "vercel.json"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-website
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for Vercel token
+        id: token
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -n "$VERCEL_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::VERCEL_TOKEN is not set — skipping deploy. Create one at https://vercel.com/account/tokens and add it as a repo secret (VERCEL_ORG_ID and VERCEL_PROJECT_ID are already set)."
+          fi
+      - name: Deploy to Vercel
+        if: steps.token.outputs.present == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@59 deploy --prod --yes
