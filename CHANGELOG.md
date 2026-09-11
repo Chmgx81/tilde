@@ -64,6 +64,18 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   with `⎿` result lines and a closing `✓ Done` (no jest-style proof
   bar), and the real split status bar (`plan · ~/payments-api · main`
   with model, cost). Every string now traces to the spec or the code.
+- Demo session chrome flattened: nested welcome box, mode banner with
+  floating tab label, and bordered composer box replaced with plain
+  monospace text flowing in the outer card frame — matching the visual
+  density of real terminal CLIs (Cursor, Grok Build, Copilot CLI) and
+  eliminating the "AI slop" card-inside-card nesting pattern.
+- Website contrast and alignment fixes: hintbar text upgraded from
+  `fg-dim` to `fg-faint` for WCAG AA compliance at 0.75rem, status bar
+  separator visibility improved, tool result indentation aligned to the
+  updated verb-column grid, and status bar gap tightened.
+- README banner fix: ASCII art moved outside the `<div align="center">`
+  wrapper so GitHub's markdown parser renders the code fence and centered
+  heading/badges correctly.
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
   comes from the project's Node.js Version setting); `/docs` redirects to
