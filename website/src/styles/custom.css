@@ -68,14 +68,13 @@
   letter-spacing: -0.02em;
 }
 
-/* Header brand lockup — the wave mark at icon scale beside the wordmark,
-   not Starlight's banner scale (40px tall ≈ 169px wide for this mark).
-   The mark is 4.2:1, so the box crops the long tail: only the curl shows. */
+/* Header brand lockup — the mark at icon scale beside the wordmark.
+   The asset is a single pixel-tilde at 4.216:1 (1130×268), so 1.5rem
+   tall renders ~6.3rem wide. Any narrower box crops mid-stroke and
+   reads as noise at icon size — the full glyph must show uncropped. */
 .site-title img {
   height: 1.5rem;
-  width: 3.25rem;
-  object-fit: cover;
-  object-position: 0 50%;
+  width: auto;
 }
 
 .site-title {
