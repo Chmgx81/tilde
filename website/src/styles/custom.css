@@ -272,11 +272,11 @@ body:has(.tilde-home) .tilde-topnav {
 .tilde-topnav a {
   color: var(--sl-color-gray-1);
   font-family: var(--sl-font-mono);
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-size: 0.85rem;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-decoration: none;
-  padding-block: 0.35rem;
+  padding-block: 0.4rem;
   border-bottom: 1px solid transparent;
   transition: color 180ms ease, border-color 180ms ease;
 }
@@ -429,8 +429,9 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   /* Fluid section rhythm: ~136px at desktop widths, ~69px on tablet,
      56px floor on mobile. Sections tune from this token individually. */
   --tilde-section: clamp(3.5rem, 9vw, 8.5rem);
-  /* Editorial container: ~1216px on desktop, fluid below. */
+  /* Layout system: wide product surfaces, narrow reading measure. */
   --tilde-container: min(100% - 3rem, 76rem);
+  --tilde-narrow: 47.5rem;
   color: var(--tilde-ink);
   background: var(--tilde-bg);
   font-family: var(--sl-font-system);
@@ -489,7 +490,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-label {
   color: var(--tilde-amber);
   font-family: var(--tilde-font-mono);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 500;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -504,14 +505,14 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   width: var(--tilde-container);
   min-height: 88vh;
   margin: 0 auto;
-  padding: calc(var(--tilde-section) + 2rem) 0 var(--tilde-section);
+  padding: calc(var(--tilde-section) + 0.5rem) 0 var(--tilde-section);
   text-align: center;
 }
 
 .tilde-hero-copy {
   min-width: 0;
   width: 100%;
-  max-width: 56rem;
+  max-width: var(--tilde-narrow);
   margin-inline: auto;
 }
 
@@ -526,8 +527,8 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
    width:min(100%, …) means it can never overflow. */
 .tilde-hero-brand {
   display: block;
-  width: min(100%, 37.5rem);
-  max-width: 37.5rem;
+  width: min(100%, 40rem);
+  max-width: 40rem;
   height: auto;
   margin: 0 auto 2.25rem;
 }
@@ -563,7 +564,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 
 .tilde-hero .tilde-actions {
   justify-content: center;
-  margin-top: 2.5rem;
+  margin-top: 2.25rem;
 }
 
 .tilde-hero .tilde-install {
@@ -589,10 +590,10 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 .tilde-button {
-  min-height: 3rem;
-  padding: 0.8rem 1.5rem;
+  min-height: 3.25rem;
+  padding: 0.85rem 1.65rem;
   font-family: var(--tilde-font-mono);
-  font-size: 0.88rem;
+  font-size: 0.92rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   border-radius: 0.4rem;
@@ -660,7 +661,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   display: flex;
   align-items: stretch;
   max-width: 40rem;
-  margin-top: 2rem;
+  margin-top: 1.75rem;
   overflow: hidden;
   background: var(--tilde-panel);
   border: 1px solid var(--tilde-frame);
@@ -755,7 +756,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 
 .tilde-hero-workflow {
   width: 100%;
-  max-width: 64rem;
+  max-width: 70rem;
   margin: var(--tilde-space-5) auto 0;
   text-align: left;
 }
@@ -793,7 +794,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   margin-inline: auto;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-style: normal;
   letter-spacing: 0.06em;
 }
@@ -802,10 +803,10 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.15rem 0.55rem;
+  padding: 0.2rem 0.6rem;
   color: var(--tilde-cyan);
   font-family: var(--tilde-font-mono);
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   font-style: normal;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -878,7 +879,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   padding: 1.35rem 1.75rem;
   color: var(--tilde-ink);
   font-family: var(--tilde-font-mono);
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   border-bottom: 1px solid var(--tilde-line);
 }
 
@@ -917,7 +918,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   margin-bottom: 0.5rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -950,6 +951,11 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 
 .tilde-plan li:hover {
   background: rgba(167, 178, 196, 0.05);
+}
+
+.tilde-plan li.active {
+  background: rgba(79, 195, 247, 0.05);
+  box-shadow: inset 2px 0 0 var(--tilde-cyan);
 }
 
 /* Left gutter glyphs: ✓ done · dot in-progress · ○ pending. */
@@ -1033,7 +1039,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   min-width: 0;
   overflow: hidden;
   padding: 0;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   text-overflow: ellipsis;
   white-space: nowrap;
   background: transparent;
@@ -1044,7 +1050,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-proof small {
   margin-left: auto;
   color: var(--tilde-faint);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 /* ── Sections ── */
 
@@ -1055,8 +1061,13 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   scroll-margin-top: 4rem;
 }
 
+.tilde-speed-heading,
+.tilde-permissions-head,
+.tilde-models-heading {
+  max-width: var(--tilde-narrow);
+}
+
 .tilde-speed-heading {
-  max-width: 48rem;
   margin-bottom: var(--tilde-space-5);
 }
 
@@ -1066,7 +1077,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-orchestration h2,
 .tilde-foundation h2,
 .tilde-intro h2 {
-  font-size: clamp(2.25rem, 1.75rem + 3vw, 3.75rem);
+  font-size: clamp(2.375rem, 1.5rem + 2.75vw, 3.25rem);
   line-height: 1.06;
 }
 
@@ -1077,7 +1088,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-speed-heading > p:last-child {
   margin-top: var(--tilde-space-3);
   color: var(--tilde-muted);
-  font-size: 1.02rem;
+  font-size: 1.05rem;
   line-height: 1.65;
 }
 
@@ -1125,7 +1136,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   padding: 0.25rem 0.6rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   background: var(--tilde-bg);
@@ -1145,7 +1156,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 
 .tilde-speed-grid p {
   color: var(--tilde-muted);
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1.65;
 }
 
@@ -1159,7 +1170,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 .tilde-permissions-head {
-  max-width: 48rem;
+  max-width: var(--tilde-narrow);
   margin-bottom: var(--tilde-space-5);
 }
 
@@ -1170,7 +1181,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-permissions-head > p:last-child {
   margin-top: var(--tilde-space-3);
   color: var(--tilde-muted);
-  font-size: 1.02rem;
+  font-size: 1.05rem;
   line-height: 1.65;
 }
 
@@ -1185,8 +1196,8 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-tier-head,
 .tilde-tier {
   display: grid;
-  grid-template-columns: 3.4rem 9.5rem 1fr;
-  gap: 1.25rem;
+  grid-template-columns: 4rem 11rem 1fr;
+  gap: 1.5rem;
   align-items: start;
 }
 
@@ -1203,9 +1214,9 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 .tilde-tier {
-  padding: 1.6rem 1.75rem;
+  padding: 1.9rem 2rem;
   border-bottom: 1px solid var(--tilde-line);
-  transition: background 180ms ease;
+  transition: background 180ms ease, transform 180ms ease;
 }
 
 .tilde-tier:last-of-type {
@@ -1214,6 +1225,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 
 .tilde-tier:hover {
   background: rgba(167, 178, 196, 0.04);
+  transform: translateX(4px);
 }
 
 /* Slight stagger so the ladder reads as a workflow, not a grid. */
@@ -1228,7 +1240,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-tier-glyph {
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   line-height: 1.4;
 }
 
@@ -1248,7 +1260,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   display: block;
   color: var(--tilde-ink);
   font-family: var(--tilde-font-mono);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: 0.03em;
 }
@@ -1258,7 +1270,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   margin-top: 0.3rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1266,7 +1278,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 
 .tilde-tier-desc {
   color: var(--tilde-muted);
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1.65;
 }
 
@@ -1280,7 +1292,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 .tilde-models-heading {
-  max-width: 48rem;
+  max-width: var(--tilde-narrow);
   margin-bottom: var(--tilde-space-5);
 }
 
@@ -1291,7 +1303,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-models-heading > p:last-child {
   margin-top: var(--tilde-space-3);
   color: var(--tilde-muted);
-  font-size: 1.02rem;
+  font-size: 1.05rem;
   line-height: 1.65;
 }
 
@@ -1322,8 +1334,14 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 .tilde-provider-grid article.is-active {
-  border-color: rgba(229, 160, 13, 0.55);
-  background: rgba(229, 160, 13, 0.06);
+  border-color: rgba(229, 160, 13, 0.8);
+  background: rgba(229, 160, 13, 0.08);
+  box-shadow: 0 0 2rem rgba(229, 160, 13, 0.08);
+}
+
+.tilde-provider-grid article.is-active:hover {
+  border-color: var(--tilde-amber);
+  transform: none;
 }
 
 .tilde-provider-logo {
@@ -1368,7 +1386,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   padding: 0.15rem 0.5rem;
   color: var(--tilde-muted);
   font-family: var(--tilde-font-mono);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   background: var(--tilde-panel-2);
   border: 1px solid var(--tilde-line);
   border-radius: 0.3rem;
@@ -1394,7 +1412,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-intro {
   width: var(--tilde-container);
   margin: 0 auto;
-  padding: var(--tilde-section) 0 0;
+  padding: var(--tilde-section) 0 var(--tilde-space-3);
   text-align: center;
 }
 
@@ -1416,7 +1434,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-principles {
   width: var(--tilde-container);
   margin: 0 auto;
-  padding: var(--tilde-space-5) 0 var(--tilde-section);
+  padding: var(--tilde-space-4) 0 var(--tilde-section);
 }
 
 .tilde-flow {
@@ -1441,7 +1459,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-flow li + li::before {
   content: '';
   position: absolute;
-  top: 2.6rem;
+  top: 2.8rem;
   left: -0.15rem;
   width: 1.5rem;
   border-top: 1px solid var(--tilde-frame);
@@ -1450,33 +1468,44 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-flow li + li::after {
   content: '→';
   position: absolute;
-  top: 1.95rem;
-  left: 0.85rem;
+  top: 2.32rem;
+  left: 0.55rem;
   color: var(--tilde-amber);
   font-family: var(--tilde-font-mono);
   font-size: 0.7rem;
 }
 
 .tilde-flow-index {
-  display: block;
+  display: inline-grid;
+  width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
   color: var(--tilde-amber);
   font-family: var(--tilde-font-mono);
   font-size: 0.75rem;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--tilde-frame);
+  border-radius: 50%;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.tilde-flow li:hover .tilde-flow-index {
+  border-color: var(--tilde-amber);
+  background: rgba(229, 160, 13, 0.07);
 }
 
 .tilde-flow strong {
   display: block;
-  margin: 0.7rem 0 0.4rem;
+  margin: 0.9rem 0 0.4rem;
   color: var(--tilde-ink);
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 650;
   letter-spacing: -0.01em;
 }
 
 .tilde-flow p {
   color: var(--tilde-muted);
-  font-size: 0.88rem;
+  font-size: 0.92rem;
   line-height: 1.6;
 }
 
@@ -1503,7 +1532,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-orchestration-copy > p:not(.tilde-label) {
   margin-bottom: var(--tilde-space-3);
   color: var(--tilde-muted);
-  font-size: 1.02rem;
+  font-size: 1.05rem;
   line-height: 1.65;
 }
 
@@ -1521,41 +1550,122 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   box-shadow: 0 2.5rem 6rem rgba(0, 0, 0, 0.45);
 }
 
-/* Coordinator tree — stacked worker rows share one continuous left
-   rail, so delegation reads as a branching structure. The rail is drawn
-   from the rows themselves, so it stays aligned at every breakpoint. */
-.tilde-tree .tilde-coordinator-row {
-  border-bottom: 1px solid var(--tilde-line);
-}
-
-.tilde-tree .tilde-agent-row {
-  margin-left: 1.75rem;
-  padding-left: 1.25rem;
-  border-left: 1px solid var(--tilde-line);
-  border-bottom: 1px solid var(--tilde-line);
-  transition: background 180ms ease, border-color 180ms ease;
-}
-
-.tilde-tree .tilde-agent-row:hover {
-  background: rgba(167, 178, 196, 0.04);
-}
-
-.tilde-tree .tilde-agent-row:has(.tilde-row-status.working) {
-  border-left-color: rgba(79, 195, 247, 0.6);
-}
-
-.tilde-tree .tilde-agent-row:has(.tilde-row-status.complete) {
-  border-left-color: rgba(76, 175, 80, 0.45);
-}
-
-.tilde-coordinator-row,
-.tilde-agent-row {
-  display: grid;
-  grid-template-columns: 1.6rem 1fr auto;
-  gap: 0.9rem;
+/* Coordinator tree — org-chart: a root node, a delegation bus with a
+   subtly animated drop, and one card per worker. */
+.tilde-tree-root {
+  display: flex;
   align-items: center;
-  padding: 1.05rem 0;
-  border-bottom: 1px solid var(--tilde-line);
+  gap: 0.75rem;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 0.9rem 1.4rem;
+  background: var(--tilde-panel);
+  border: 1px solid var(--tilde-frame);
+  border-radius: 999px;
+}
+
+.tilde-tree-root .tilde-row-glyph {
+  color: var(--tilde-amber);
+}
+
+.tilde-tree-root strong {
+  color: var(--tilde-ink);
+  font-size: 0.9rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.tilde-tree-root small {
+  color: var(--tilde-faint);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tilde-tree-bus {
+  position: relative;
+  height: 2.5rem;
+}
+
+/* Vertical drop from the root — dashes drift downward. */
+.tilde-tree-bus::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 1.25rem;
+  left: 50%;
+  width: 1px;
+  background: repeating-linear-gradient(to bottom, var(--tilde-frame) 0 4px, transparent 4px 8px);
+  animation: tilde-dash-drop 1.6s linear infinite;
+}
+
+@keyframes tilde-dash-drop {
+  to {
+    background-position-y: 8px;
+  }
+}
+
+/* Horizontal bar feeding the worker columns. */
+.tilde-tree-bus::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: calc(100% / 6);
+  right: calc(100% / 6);
+  border-top: 1px solid var(--tilde-line);
+}
+
+.tilde-tree-workers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.tilde-worker {
+  position: relative;
+  padding: 1.4rem 1.25rem 1.25rem;
+  background: var(--tilde-panel);
+  border: 1px solid var(--tilde-line);
+  border-radius: 0.6rem;
+  transition: border-color 180ms ease, transform 180ms ease, background 180ms ease;
+}
+
+/* Stub up to the bus bar. */
+.tilde-worker::before {
+  content: '';
+  position: absolute;
+  top: -1rem;
+  left: 50%;
+  width: 1px;
+  height: 1rem;
+  background: var(--tilde-line);
+}
+
+.tilde-worker:hover {
+  border-color: var(--tilde-frame);
+  background: rgba(167, 178, 196, 0.04);
+  transform: translateY(-2px);
+}
+
+.tilde-worker .tilde-row-glyph {
+  display: block;
+  margin-bottom: 0.6rem;
+}
+
+.tilde-worker strong {
+  display: block;
+  color: var(--tilde-ink);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.tilde-worker .tilde-row-status {
+  margin-top: 0.7rem;
 }
 
 .tilde-row-glyph {
@@ -1564,30 +1674,13 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   font-size: 0.8rem;
 }
 
-.tilde-coordinator-row .tilde-row-glyph {
-  color: var(--tilde-muted);
-}
-
-.tilde-agent-row {
-  margin-left: 1.1rem;
-}
-
-.tilde-coordinator-row strong,
-.tilde-agent-row strong {
-  color: var(--tilde-ink);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.tilde-coordinator-row small,
-.tilde-agent-row small,
 .tilde-row-status {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1610,7 +1703,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   padding: 1rem 0 0.6rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   text-align: right;
 }
 
@@ -1663,7 +1756,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   margin-inline: auto;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-style: normal;
   letter-spacing: 0.06em;
 }
@@ -1706,7 +1799,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   flex: none;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 
 .tilde-terminal-line button {
@@ -1764,7 +1857,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 /* Spec strip — binary / platform / runtime / models at a glance. */
 .tilde-spec-strip {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 1px;
   margin-top: var(--tilde-space-4);
   overflow: hidden;
@@ -1781,7 +1874,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-foundation .tilde-spec-strip dt {
   color: var(--tilde-amber);
   font-family: var(--tilde-font-mono);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1830,41 +1923,17 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 /* ── Final call ── */
 
 .tilde-final {
-  position: relative;
   width: var(--tilde-container);
   margin: 0 auto;
-  padding: var(--tilde-section) 0 calc(var(--tilde-section) + 1rem);
-  overflow: hidden;
+  padding: var(--tilde-section) 0;
   text-align: center;
-  background: var(--tilde-bg-deep);
-  border: 1px solid var(--tilde-line);
-  border-bottom: 0;
-  border-radius: 0.9rem 0.9rem 0 0;
-}
-
-/* Faint console mark behind the CTA buttons — product texture, kept
-   clear of the headline. */
-.tilde-final-mark {
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0.75rem;
-  color: transparent;
-  font-family: var(--tilde-font-mono);
-  font-size: clamp(3rem, 8vw, 6rem);
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  -webkit-text-stroke: 1px rgba(167, 178, 196, 0.1);
-  pointer-events: none;
-  user-select: none;
 }
 
 .tilde-final .tilde-label {
-  position: relative;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
 }
 
 .tilde-final h2 {
-  position: relative;
   margin: var(--tilde-space-2) auto var(--tilde-space-3);
   max-width: 16ch;
   font-size: clamp(2.5rem, 2rem + 3.5vw, 4.25rem);
@@ -1873,16 +1942,23 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 .tilde-final > p {
-  position: relative;
+  max-width: 38rem;
+  margin-inline: auto;
   color: var(--tilde-muted);
   font-size: 1.05rem;
   line-height: 1.65;
 }
 
 .tilde-final .tilde-actions {
-  position: relative;
   justify-content: center;
   margin-top: 2.5rem;
+}
+
+/* Closing terminal — the run sequence, not another card. */
+.tilde-final-terminal {
+  max-width: 44rem;
+  margin: var(--tilde-space-5) auto 0;
+  text-align: left;
 }
 
 /* ── Scroll reveal ── */
@@ -1922,6 +1998,12 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 
   .tilde-flow li:nth-child(-n + 2) {
     border-top: 0;
+  }
+
+  /* Five steps in two columns leaves an orphan — let Merge close the row. */
+  .tilde-flow li:last-child {
+    grid-column: 1 / -1;
+    max-width: 32rem;
   }
 }
 
@@ -2059,17 +2141,66 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
     grid-template-columns: 1fr;
   }
 
-  /* Flow: single column with a left rail. */
+  /* Flow: single column with a vertical connector rail. */
   .tilde-flow {
     grid-template-columns: 1fr;
   }
 
-  .tilde-flow li:nth-child(-n + 2) {
-    border-top: 1px solid var(--tilde-line);
+  .tilde-flow li:last-child {
+    grid-column: auto;
+    max-width: none;
   }
 
-  .tilde-flow li:first-child {
+  .tilde-flow li {
+    padding: 1.25rem 0 1.25rem 3.25rem;
     border-top: 0;
+  }
+
+  /* Match the base li + li specificity so the rail offset holds. */
+  .tilde-flow li + li {
+    padding-left: 3.25rem;
+  }
+
+  .tilde-flow li:nth-child(-n + 2) {
+    border-top: 0;
+  }
+
+  .tilde-flow li::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 1.05rem;
+    width: 1px;
+    background: var(--tilde-line);
+  }
+
+  /* Same specificity as the desktop connector hide above, later wins. */
+  .tilde-flow li + li::before {
+    display: block;
+    top: 0;
+    bottom: 0;
+    left: 1.05rem;
+    width: 1px;
+    border-top: 0;
+    background: var(--tilde-line);
+  }
+
+  .tilde-flow li:first-child::before {
+    top: 2.3rem;
+  }
+
+  .tilde-flow li:last-child::before {
+    bottom: auto;
+    height: 2.3rem;
+  }
+
+  .tilde-flow .tilde-flow-index {
+    position: absolute;
+    top: 1.25rem;
+    left: 0;
+    margin: 0;
+    background: var(--tilde-bg);
   }
 
   /* Spec strip: single column. */
@@ -2100,21 +2231,61 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
     grid-column: 2;
   }
 
-  .tilde-tree .tilde-agent-row {
-    margin-left: 1rem;
-    padding-left: 0.9rem;
+  /* Coordinator tree: vertical stack with a left rail. */
+  .tilde-tree-root {
+    margin-inline: 0;
+    border-radius: 0.6rem;
+    flex-wrap: wrap;
+    row-gap: 0.35rem;
   }
 
-  .tilde-coordinator-row,
-  .tilde-agent-row {
-    grid-template-columns: 1.4rem 1fr;
-    gap: 0.6rem;
+  .tilde-tree-root strong,
+  .tilde-tree-root small {
+    white-space: normal;
   }
 
-  .tilde-coordinator-row small,
-  .tilde-agent-row small {
-    grid-column: 2;
-    justify-self: start;
+  .tilde-tree-bus {
+    display: none;
+  }
+
+  .tilde-tree-workers {
+    position: relative;
+    grid-template-columns: 1fr;
+    margin-top: var(--tilde-space-3);
+    padding-left: 1.5rem;
+  }
+
+  .tilde-tree-workers::before {
+    content: '';
+    position: absolute;
+    top: 1rem;
+    bottom: 1rem;
+    left: 0.5rem;
+    width: 1px;
+    background: var(--tilde-line);
+  }
+
+  .tilde-worker::before {
+    display: none;
+  }
+
+  .tilde-worker::after {
+    content: '';
+    position: absolute;
+    top: 1.7rem;
+    left: -1.06rem;
+    width: 7px;
+    height: 7px;
+    background: var(--tilde-frame);
+    border-radius: 50%;
+  }
+
+  .tilde-worker:has(.tilde-row-status.working)::after {
+    background: var(--tilde-cyan);
+  }
+
+  .tilde-worker:has(.tilde-row-status.complete)::after {
+    background: var(--tilde-green);
   }
 }
 

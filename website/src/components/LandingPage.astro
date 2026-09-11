@@ -18,6 +18,12 @@ const installSteps = [
   { command: 'tilde models', note: 'browse the provider catalogue' },
 ];
 
+const finalSteps = [
+  { command: 'curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh', copy: true },
+  { command: 'tilde models', note: 'pick a provider' },
+  { command: 'tilde', note: 'start the interactive TUI' },
+];
+
 const installSpecs = [
   { term: 'Binary', desc: 'tilde — one static Go binary' },
   { term: 'Platform', desc: 'linux · macos — amd64 / arm64' },
@@ -274,20 +280,39 @@ const tiers = [
   </section>
 
   <section class="tilde-final reveal" aria-labelledby="final-title">
-    <span class="tilde-final-mark" aria-hidden="true">$ tilde</span>
     <p class="tilde-label">tilde Harness</p>
     <h2 id="final-title">Try tilde in a real repository.</h2>
-    <p>Install the binary, connect a model provider, and run <code>tilde</code>.</p>
+    <p>Install the binary, connect a model provider, and run <code>tilde</code> — three commands from a working setup.</p>
     <div class="tilde-actions">
       <a class="tilde-button tilde-button-primary" href="https://github.com/Chmgx81/tilde">Install tilde</a>
       <a class="tilde-text-link" href="/docs/plan/">Read the build plan <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="tilde-terminal tilde-final-terminal" role="group" aria-label="Run tilde">
+      <div class="tilde-terminal-bar" aria-hidden="true">
+        <span></span><span></span><span></span>
+        <em>terminal — run tilde</em>
+      </div>
+      {finalSteps.map((step) => (
+        <div class="tilde-terminal-line">
+          <span class="tilde-prompt" aria-hidden="true">$</span>
+          <code>{step.command}</code>
+          {step.copy ? (
+            <button type="button" data-copy-install data-command={installCommand} aria-label="Copy install command">
+              <svg class="copy-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="6" width="10" height="10" rx="2"></rect><path d="M13 6V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1"></path></svg>
+              <svg class="check-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-9"></path></svg>
+            </button>
+          ) : (
+            <small>{step.note}</small>
+          )}
+        </div>
+      ))}
+      <span class="tilde-copy-status" data-copy-status aria-live="polite"></span>
     </div>
   </section>
 </div>
 
 <script>
   const buttons = document.querySelectorAll('[data-copy-install]');
-  const copyStatus = document.querySelector('[data-copy-status]');
 
   const copyText = async (text: string) => {
     try {
@@ -310,6 +335,8 @@ const tiers = [
   buttons.forEach((button) => {
     button.addEventListener('click', async () => {
       const command = button.getAttribute('data-command') ?? '';
+      const group = button.closest('[role="group"]');
+      const copyStatus = group?.querySelector('[data-copy-status]');
       if (await copyText(command)) {
         button.classList.add('copied');
         button.setAttribute('aria-label', 'Install command copied');

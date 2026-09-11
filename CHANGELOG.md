@@ -23,6 +23,15 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   selectable provider cards (Ollama marked default), and restrained
   hover/reveal micro-interactions — all CSS-only, verified at
   375/768/1440px with no horizontal overflow.
+- Website refinement pass: deliberate type system (42–52px section
+  headings, 16–17px body, 12px metadata floor), narrow/wide content
+  widths, larger hero (640px mark, taller CTAs, 70rem preview with active
+  step highlight), bigger ladder rows with hover shift, clearer model
+  active state, ringed issue→merge stepper with a mobile connector rail,
+  coordinator org-chart (root pill, animated delegation bus, worker
+  cards, vertical mobile rail), two-column install specs, and a redesigned
+  open final CTA closing on a run terminal — verified in-browser at
+  desktop, tablet, and mobile widths.
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
   comes from the project's Node.js Version setting); `/docs` redirects to

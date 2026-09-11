@@ -88,19 +88,22 @@ const props = Astro.props as Props;
 {props.variant === 'agents' && (
   <div class="tilde-agents tilde-tree" role="group" aria-label="Example delegated work">
     {props.coordinator && (
-      <div class="tilde-coordinator-row tilde-tree-root">
+      <div class="tilde-tree-root">
         <span class="tilde-row-glyph" aria-hidden="true">●</span>
         <strong>{props.coordinator.task}</strong>
         <small>{props.coordinator.status}</small>
       </div>
     )}
-    {props.rows?.map((row) => (
-      <div class="tilde-agent-row">
-        <span class="tilde-row-glyph" aria-hidden="true">{row.number}</span>
-        <strong>{row.label}</strong>
-        <span class={`tilde-row-status ${row.statusClass ?? ''}`}><i class="tilde-status-glyph" aria-hidden="true">{row.status === 'complete' ? '✓' : row.status === 'working' ? '⋯' : '○'}</i>{row.status}</span>
-      </div>
-    ))}
+    <div class="tilde-tree-bus" aria-hidden="true"></div>
+    <div class="tilde-tree-workers">
+      {props.rows?.map((row) => (
+        <div class="tilde-worker">
+          <span class="tilde-row-glyph" aria-hidden="true">{row.number}</span>
+          <strong>{row.label}</strong>
+          <span class={`tilde-row-status ${row.statusClass ?? ''}`}><i class="tilde-status-glyph" aria-hidden="true">{row.status === 'complete' ? '✓' : row.status === 'working' ? '⋯' : '○'}</i>{row.status}</span>
+        </div>
+      ))}
+    </div>
     {props.note && <p>{props.note}</p>}
   </div>
 )}
