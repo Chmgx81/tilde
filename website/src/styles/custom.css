@@ -827,26 +827,23 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 .tilde-welcome {
-  margin: 1.25rem 1.75rem 0;
-  padding: 1.1rem 1.25rem;
-  background: var(--tilde-panel-2);
-  border: 1px solid var(--tilde-line);
-  border-radius: 0.5rem;
+  padding: 0.6rem 1.75rem 0;
 }
 
 .tilde-welcome strong {
   display: block;
   color: var(--tilde-ink);
-  font-size: 0.92rem;
+  font-size: 0.85rem;
   font-weight: 600;
+  font-family: var(--tilde-font-mono);
 }
 
 .tilde-welcome p {
-  margin-top: 0.6rem;
+  margin-top: 0.35rem;
   color: var(--tilde-muted);
   font-family: var(--tilde-font-mono);
   font-size: 0.8rem;
-  line-height: 1.65;
+  line-height: 1.55;
 }
 
 .tilde-budgetrow {
@@ -855,36 +852,25 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   gap: 0.5rem 1.5rem;
   align-items: center;
   justify-content: space-between;
-  padding: 1.1rem 1.75rem 0;
+  padding: 0.5rem 1.75rem 0;
   color: var(--tilde-muted);
   font-family: var(--tilde-font-mono);
   font-size: 0.8rem;
 }
 
 .tilde-modebanner {
-  position: relative;
-  margin: 1.25rem 1.75rem 1.25rem;
-  padding: 1.1rem 1.25rem;
-  border: 1px solid rgba(229, 160, 13, 0.5);
-  border-radius: 0.45rem;
+  padding: 0.35rem 1.75rem 0;
 }
 
 .tilde-modebanner-tab {
-  position: absolute;
-  top: -0.62rem;
-  left: 1rem;
-  padding: 0 0.6rem;
-  color: var(--tilde-amber);
-  font-family: var(--tilde-font-mono);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  background: var(--tilde-panel);
+  display: none;
 }
 
 .tilde-modebanner p {
-  color: var(--tilde-ink);
-  font-size: 0.9rem;
+  color: var(--tilde-muted);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
 .tilde-thought {
@@ -901,18 +887,15 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   color: var(--tilde-dim);
 }
 
-/* Composer — the input box, with the real placeholder text. */
+/* Composer — plain text prompt line, no decorative container. */
 .tilde-composer {
   display: flex;
   gap: 0.7rem;
-  align-items: center;
-  margin: 1.25rem 1.75rem 0;
-  padding: 0.95rem 1.15rem;
+  align-items: baseline;
+  padding: 0.35rem 1.75rem 0;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
   font-size: 0.85rem;
-  border: 1px solid var(--tilde-frame);
-  border-radius: 0.5rem;
 }
 
 .tilde-composer > span:first-child {
@@ -1046,7 +1029,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   gap: 0.6rem;
   align-items: baseline;
   margin: 0;
-  padding: 0.1rem 0 0.32rem 5.9rem;
+  padding: 0.1rem 0 0.32rem 6.2rem;
   font-family: var(--tilde-font-mono);
   font-size: 0.8rem;
   color: var(--tilde-faint);
@@ -1076,10 +1059,10 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
    the left shortens with an ellipsis, like truncANSI. */
 .tilde-statusbar {
   display: flex;
-  gap: 1rem;
+  gap: 1.5rem;
   align-items: center;
   justify-content: space-between;
-  padding: 0.7rem 1.75rem;
+  padding: 0.65rem 1.75rem;
   font-family: var(--tilde-font-mono);
   font-size: 0.75rem;
   white-space: nowrap;
@@ -1100,7 +1083,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 .tilde-status-left span {
-  color: var(--tilde-dim);
+  color: var(--tilde-faint);
 }
 
 .tilde-status-right {
@@ -1109,9 +1092,9 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 }
 
 .tilde-hintbar {
-  padding: 0.7rem 1.75rem 1.25rem;
+  padding: 0.65rem 1.75rem 1.25rem;
   overflow-x: auto;
-  color: var(--tilde-dim);
+  color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
   font-size: 0.75rem;
   letter-spacing: 0.02em;
@@ -2335,7 +2318,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   .tilde-welcome,
   .tilde-modebanner,
   .tilde-composer {
-    margin-inline: 1rem;
+    padding-inline: 1rem;
   }
 
   .tilde-window-bar {

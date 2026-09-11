@@ -1,5 +1,3 @@
-<div align="center">
-
 ```text
    ▄▄▄▄▄▄▄
 ▄▄█▀▀▀▀▀▀▀█▄
@@ -7,6 +5,8 @@
                ▀█▄▄▄▄▄▄▄█▀
                  ▀▀▀▀▀▀▀
 ```
+
+<div align="center">
 
 # tilde (~)
 
