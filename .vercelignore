@@ -1,0 +1,9 @@
+/tmp/
+website/dist/
+website/.astro/
+/tilde
+*.test
+*.out
+coverage.html
+.env.local
+.vercel/.env.*
