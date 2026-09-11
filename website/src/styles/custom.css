@@ -514,6 +514,11 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   width: 100%;
   max-width: var(--tilde-narrow);
   margin-inline: auto;
+  order: 1;
+}
+
+.tilde-hero-workflow {
+  order: 2;
 }
 
 .tilde-hero .tilde-eyebrow {
@@ -757,7 +762,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
 .tilde-hero-workflow {
   width: 100%;
   max-width: 70rem;
-  margin: var(--tilde-space-5) auto 0;
+  margin: var(--tilde-space-4) auto 0;
   text-align: left;
 }
 
@@ -1101,6 +1106,31 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   white-space: nowrap;
   scrollbar-width: none;
 }
+/* ── Security-first section (tilde's differentiator) ── */
+
+.tilde-security {
+  width: var(--tilde-container);
+  margin: 0 auto;
+  padding: var(--tilde-section) 0;
+  scroll-margin-top: 4rem;
+}
+
+.tilde-security-heading {
+  max-width: var(--tilde-narrow);
+  margin-bottom: var(--tilde-space-5);
+}
+
+.tilde-security-heading h2 {
+  margin-top: var(--tilde-space-2);
+}
+
+.tilde-security-heading > p:last-child {
+  margin-top: var(--tilde-space-3);
+  color: var(--tilde-muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
 /* ── Sections ── */
 
 .tilde-speed {
@@ -1189,14 +1219,7 @@ body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
   line-height: 1.65;
 }
 
-/* ── Permission ladder — deny / ask / allow as a spec table ── */
-
-.tilde-permissions {
-  width: var(--tilde-container);
-  margin: 0 auto;
-  padding: var(--tilde-section) 0;
-  scroll-margin-top: 4rem;
-}
+/* Permission ladder — deny / ask / allow as a spec table (now inside .tilde-security) */
 
 .tilde-permissions-head {
   max-width: var(--tilde-narrow);

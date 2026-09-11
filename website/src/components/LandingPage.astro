@@ -113,7 +113,9 @@ const tiers = [
   },
 ];
 ---
+
 <div class="tilde-home not-content">
+  <!-- ── Hero: stacked layout — text centered above full-width demo ── -->
   <section class="tilde-hero" id="top" aria-labelledby="tilde-title">
     <div class="tilde-hero-copy">
       <p class="tilde-eyebrow">A terminal coding agent · Open source</p>
@@ -126,9 +128,10 @@ const tiers = [
         fetchpriority="high"
         decoding="async"
       />
-      <h1 id="tilde-title">Built for <em>real</em> engineering.</h1>
+      <h1 id="tilde-title">Your repo. Your terminal. Your rules.</h1>
       <p class="tilde-hero-lede">
-        tilde turns complex repo work into a visible workflow: plan, build, test, and ship from one terminal, with every risky step waiting for your say-so.
+        tilde is a local-first coding harness: inspect, edit, test, and ship from one terminal —
+        every tool call visible, every destructive action gated, every session resumable.
       </p>
       <div class="tilde-actions">
         <a class="tilde-button tilde-button-primary" href="https://github.com/Chmgx81/tilde">Install tilde</a>
@@ -149,9 +152,32 @@ const tiers = [
     </div>
   </section>
 
+  <!-- ── Security-first: tilde's differentiator — this section doesn't exist on neo ── -->
+  <section class="tilde-security reveal" id="security" aria-labelledby="security-title">
+    <div class="tilde-security-heading">
+      <p class="tilde-label">Security-first</p>
+      <h2 id="security-title">Every action lands on the ladder.</h2>
+      <p>
+        deny, ask, or allow: three tiers evaluated in order, with deny winning in every mode. Asks
+        show the literal command and its reason; you answer with one key.
+      </p>
+    </div>
+    <div class="tilde-tier-table" role="table" aria-label="tilde permission tiers">
+      <div class="tilde-tier-head" aria-hidden="true"><span></span><span>Tier</span><span>What it means</span></div>
+      {tiers.map((tier) => (
+        <div class={`tilde-tier ${tier.slug}`}>
+          <span class="tilde-tier-glyph" aria-hidden="true">{tier.glyph}</span>
+          <span class="tilde-tier-name">{tier.name}<small>{tier.sub}</small></span>
+          <p class="tilde-tier-desc">{tier.desc}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- ── How it works: the mechanics ── -->
   <section class="tilde-speed reveal" id="product" aria-labelledby="speed-title">
     <div class="tilde-speed-heading">
-      <p class="tilde-label">Mechanics</p>
+      <p class="tilde-label">How it works</p>
       <h2 id="speed-title">Less waiting. More useful work in motion.</h2>
       <p>
         tilde coordinates visible workflows and focused subagents. Independent reads, searches, and
@@ -177,27 +203,7 @@ const tiers = [
     </div>
   </section>
 
-  <section class="tilde-permissions reveal" id="workflow" aria-labelledby="permissions-title">
-    <div class="tilde-permissions-head">
-      <p class="tilde-label">Permissions</p>
-      <h2 id="permissions-title">Every action lands on the ladder.</h2>
-      <p>
-        deny, ask, or allow: three tiers evaluated in order, with deny winning in every mode. Asks
-        show the literal command and its reason; you answer with one key.
-      </p>
-    </div>
-    <div class="tilde-tier-table" role="table" aria-label="tilde permission tiers">
-      <div class="tilde-tier-head" aria-hidden="true"><span></span><span>Tier</span><span>What it means</span></div>
-      {tiers.map((tier) => (
-        <div class={`tilde-tier ${tier.slug}`}>
-          <span class="tilde-tier-glyph" aria-hidden="true">{tier.glyph}</span>
-          <span class="tilde-tier-name">{tier.name}<small>{tier.sub}</small></span>
-          <p class="tilde-tier-desc">{tier.desc}</p>
-        </div>
-      ))}
-    </div>
-  </section>
-
+  <!-- ── Models ── -->
   <section class="tilde-models reveal" id="models" aria-labelledby="models-title">
     <div class="tilde-models-heading">
       <p class="tilde-label">Models</p>
@@ -224,8 +230,10 @@ const tiers = [
       model ID to the active provider.
     </p>
   </section>
-  <section class="tilde-intro reveal" aria-labelledby="difference-title">
-    <h2 id="difference-title">Follow the work from issue to merge.</h2>
+
+  <!-- ── Pipeline: issue → merge (renamed from "Follow the work") ── -->
+  <section class="tilde-intro reveal" aria-labelledby="pipeline-title">
+    <h2 id="pipeline-title">One visible pipeline. Issue to merge.</h2>
     <p>
       tilde inspects the issue, isolates the work, changes code, runs tests, opens the pull request,
       and responds to feedback, all in one visible workflow.
@@ -244,6 +252,7 @@ const tiers = [
     </ol>
   </section>
 
+  <!-- ── Orchestration ── -->
   <section class="tilde-orchestration reveal" aria-labelledby="orchestration-title">
     <div class="tilde-orchestration-copy">
       <p class="tilde-label">Focused delegation</p>
@@ -257,6 +266,7 @@ const tiers = [
     <DemoWorkflow {...agentWorkflow} />
   </section>
 
+  <!-- ── Install ── -->
   <section class="tilde-foundation reveal" id="install" aria-labelledby="foundation-title">
     <div>
       <p class="tilde-label">Install</p>
@@ -297,6 +307,7 @@ const tiers = [
     </dl>
   </section>
 
+  <!-- ── Final CTA ── -->
   <section class="tilde-final reveal" aria-labelledby="final-title">
     <p class="tilde-label">tilde Harness</p>
     <h2 id="final-title">Try tilde in a real repository.</h2>
@@ -336,8 +347,8 @@ const tiers = [
       </div>
       <nav aria-label="Product">
         <p>Product</p>
-        <a href="/#product">Mechanics</a>
-        <a href="/#workflow">Permissions</a>
+        <a href="/#security">Security</a>
+        <a href="/#product">How it works</a>
         <a href="/#models">Models</a>
         <a href="/#install">Install</a>
       </nav>
@@ -398,9 +409,6 @@ const tiers = [
     });
   });
 
-  // Scroll reveal: sections fade up once on entry (transform + opacity
-  // only, GPU-cheap). Respects prefers-reduced-motion via the matching
-  // CSS override — no JS media check needed.
   const revealed = document.querySelectorAll('.tilde-home .reveal');
   if ('IntersectionObserver' in window && revealed.length > 0) {
     const io = new IntersectionObserver((entries) => {
