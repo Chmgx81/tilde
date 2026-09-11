@@ -68,23 +68,23 @@
   letter-spacing: -0.02em;
 }
 
-/* Header brand lockup — the transparent nav banner (240×64, 3.75:1)
-   beside the wordmark. Width-driven sizing preserves the aspect ratio:
-   ~140px on desktop, ~120px on small screens, never wider than the bar. */
+/* Header brand lockup — hide the banner PNG (doesn't scale to header
+   size) and show a clean ~ mark in monospace instead. */
 .site-title img {
-  width: 140px;
-  max-width: 36vw;
-  height: auto;
+  display: none;
+}
+
+.site-title::before {
+  content: '~';
+  color: var(--sl-color-accent);
+  font-family: var(--sl-font-mono);
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .site-title {
   gap: 0.6rem;
-}
-
-@media (max-width: 38rem) {
-  .site-title img {
-    width: 120px;
-  }
 }
 
 .header {
