@@ -13,7 +13,16 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   site mark: nav banner in the header (~140px desktop, ~120px mobile),
   hero banner above the landing headline (~480px desktop, ~416px tablet,
   up to 320px mobile), and the 32px PNG as favicon (48px for
-  apple-touch-icon, hero banner for og/twitter images).
+  apple-touch-icon,   hero banner for og/twitter images).
+- Website UX pass: wider editorial container (~1216px), fluid section
+  rhythm, landing header with Product/Workflow/Models/Docs anchors and a
+  quiet Get started action (compact disclosure menu on mobile), a larger
+  centered hero (~88vh, 80px serif headline) over a framed live product
+  preview, an issue→merge stepper, a coordinator delegation tree, a
+  copyable install terminal with a binary/platform/runtime spec strip,
+  selectable provider cards (Ollama marked default), and restrained
+  hover/reveal micro-interactions — all CSS-only, verified at
+  375/768/1440px with no horizontal overflow.
 - The site deploys to Vercel from the repo root (`vercel.json`: build
   inside `website/`, clean URLs, immutable `/_astro/` caching; Node 24
   comes from the project's Node.js Version setting); `/docs` redirects to

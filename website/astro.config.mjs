@@ -22,6 +22,9 @@ export default defineConfig({
         baseUrl: 'https://github.com/Chmgx81/tilde/edit/main/website/',
       },
       customCss: ['./src/styles/fonts.css', './src/styles/custom.css'],
+      components: {
+        Header: './src/components/SiteHeader.astro',
+      },
       pagination: false,
       sidebar: [
         {

@@ -213,12 +213,200 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   display: none;
 }
 
+/* ── Landing header nav (landing-only; docs keep stock chrome) ── */
+
+/* NOTE: overriding Starlight's Header component replaces its scoped
+   <style> too, so the header's flex/grid skeleton is re-declared here
+   for all pages (landing and docs alike). */
+.tilde-site-header.header {
+  display: flex;
+  gap: var(--sl-nav-gap, 1rem);
+  justify-content: space-between;
+  align-items: center;
+  height: 100%;
+}
+
+.tilde-site-header .title-wrapper {
+  overflow: clip;
+  min-width: 0;
+}
+
+.tilde-site-header .right-group,
+.tilde-site-header .social-icons {
+  gap: 1rem;
+  align-items: center;
+}
+
+.tilde-site-header .social-icons::after {
+  content: '';
+  height: 2rem;
+  border-inline-end: 1px solid var(--sl-color-gray-5);
+}
+
+@media (min-width: 50rem) {
+  .tilde-site-header.header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    align-content: center;
+  }
+}
+
+.tilde-topnav,
+.tilde-nav-cta,
+.tilde-menu {
+  display: none;
+}
+
+body:has(.tilde-home) .tilde-search-wrap {
+  display: none;
+}
+
+body:has(.tilde-home) .tilde-topnav {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
+  justify-self: center;
+}
+
+.tilde-topnav a {
+  color: var(--sl-color-gray-1);
+  font-family: var(--sl-font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  padding-block: 0.35rem;
+  border-bottom: 1px solid transparent;
+  transition: color 180ms ease, border-color 180ms ease;
+}
+
+.tilde-topnav a:hover {
+  color: var(--sl-color-white);
+  border-bottom-color: var(--sl-color-accent);
+}
+
+body:has(.tilde-home) .tilde-nav-cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.95rem;
+  color: var(--sl-color-white);
+  font-family: var(--sl-font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  white-space: nowrap;
+  border: 1px solid var(--sl-color-gray-3);
+  border-radius: 0.4rem;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+body:has(.tilde-home) .tilde-nav-cta:hover {
+  border-color: var(--sl-color-accent);
+  background: rgba(229, 160, 13, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Compact menu — a native disclosure, no JS, keyboard-accessible. */
+body:has(.tilde-home) .tilde-menu {
+  display: none;
+  position: relative;
+  margin-left: auto;
+}
+
+.tilde-menu summary {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  cursor: pointer;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.4rem;
+  list-style: none;
+  transition: border-color 180ms ease;
+}
+
+.tilde-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.tilde-menu summary:hover {
+  border-color: var(--sl-color-gray-3);
+}
+
+.tilde-menu summary span {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.tilde-menu summary i {
+  display: block;
+  width: 1rem;
+  height: 2px;
+  background: var(--sl-color-gray-1);
+  border-radius: 1px;
+  transition: background 180ms ease;
+}
+
+.tilde-menu summary:hover i {
+  background: var(--sl-color-white);
+}
+
+.tilde-menu nav {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  z-index: 50;
+  display: grid;
+  min-width: 12rem;
+  padding: 0.5rem;
+  background: var(--sl-color-gray-7);
+  border: 1px solid var(--sl-color-gray-3);
+  border-radius: 0.55rem;
+  box-shadow: 0 1.5rem 3.5rem rgba(0, 0, 0, 0.5);
+}
+
+.tilde-menu nav a {
+  padding: 0.65rem 0.85rem;
+  color: var(--sl-color-gray-1);
+  font-family: var(--sl-font-mono);
+  font-size: 0.85rem;
+  text-decoration: none;
+  border-radius: 0.35rem;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.tilde-menu nav a:hover {
+  color: var(--sl-color-white);
+  background: rgba(167, 178, 196, 0.08);
+}
+
+body:has(.tilde-home) .tilde-menu nav .tilde-nav-cta {
+  display: block;
+  margin-top: 0.35rem;
+  text-align: center;
+  border: 1px solid var(--sl-color-gray-3);
+}
+
+@media (max-width: 50rem) {
+  body:has(.tilde-home) .tilde-topnav {
+    display: none;
+  }
+
+  body:has(.tilde-home) .tilde-menu {
+    display: block;
+  }
+}
+
 /* ── Landing tokens ── */
 
 .tilde-home {
   --tilde-bg: #0d1117;
+  --tilde-bg-deep: #090c10;
   --tilde-panel: #111823;
   --tilde-panel-2: #0a0e13;
+  --tilde-band: #0d131b;
   --tilde-ink: #e6e6e6;
   --tilde-muted: #a7b2c4;
   --tilde-faint: #8b97ac;
@@ -238,6 +426,11 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   --tilde-space-4: 2.5rem;
   --tilde-space-5: 4rem;
   --tilde-space-6: 6.5rem;
+  /* Fluid section rhythm: ~136px at desktop widths, ~69px on tablet,
+     56px floor on mobile. Sections tune from this token individually. */
+  --tilde-section: clamp(3.5rem, 9vw, 8.5rem);
+  /* Editorial container: ~1216px on desktop, fluid below. */
+  --tilde-container: min(100% - 3rem, 76rem);
   color: var(--tilde-ink);
   background: var(--tilde-bg);
   font-family: var(--sl-font-system);
@@ -307,61 +500,74 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  width: min(100% - 3rem, 70rem);
+  justify-content: center;
+  width: var(--tilde-container);
+  min-height: 88vh;
   margin: 0 auto;
-  padding: var(--tilde-space-5) 0 var(--tilde-space-6);
-  text-align: left;
+  padding: calc(var(--tilde-section) + 2rem) 0 var(--tilde-section);
+  text-align: center;
 }
 
 .tilde-hero-copy {
   min-width: 0;
   width: 100%;
+  max-width: 56rem;
+  margin-inline: auto;
 }
 
 .tilde-hero .tilde-eyebrow {
-  margin-bottom: 1.1rem;
+  margin-bottom: 1.75rem;
+  font-size: 0.75rem;
 }
 
-/* Hero brand mark — the transparent hero banner. Width-capped so it
-   scales down with its container: ~480px on desktop, ~416px on tablet,
-   full-width up to 320px on mobile. height:auto keeps it sharp and
-   undistorted; width:min(100%, …) means it can never overflow. */
+/* Hero brand mark — the transparent hero banner, prominent above the
+   headline: ~600px on desktop, ~440px on tablet, full-width up to
+   320px on mobile. height:auto keeps it sharp and undistorted;
+   width:min(100%, …) means it can never overflow. */
 .tilde-hero-brand {
   display: block;
-  width: min(100%, 30rem);
-  max-width: 30rem;
+  width: min(100%, 37.5rem);
+  max-width: 37.5rem;
   height: auto;
-  margin-bottom: 1.75rem;
+  margin: 0 auto 2.25rem;
 }
 
 @media (max-width: 64rem) {
   .tilde-hero-brand {
-    max-width: 26rem;
+    max-width: 27.5rem;
   }
 }
 
 @media (max-width: 38rem) {
   .tilde-hero-brand {
     max-width: 20rem;
+    margin-bottom: 1.75rem;
   }
 }
 
 .tilde-hero h1 {
-  max-width: 15ch;
-  margin: 0 0 1.4rem;
-  font-size: clamp(3.2rem, 6.4vw, 5.4rem);
-  line-height: 1.02;
+  max-width: 14ch;
+  margin: 0 auto 1.5rem;
+  font-size: clamp(2.375rem, 1rem + 5vw, 5rem);
+  line-height: 1.04;
+  text-wrap: balance;
 }
 
 .tilde-hero .tilde-hero-lede {
-  max-width: 36rem;
+  max-width: 38rem;
+  margin-inline: auto;
   color: var(--tilde-muted);
-  font-size: clamp(1rem, 1.35vw, 1.12rem);
-  line-height: 1.55;
+  font-size: clamp(1rem, 0.9rem + 0.5vw, 1.15rem);
+  line-height: 1.65;
 }
 
 .tilde-hero .tilde-actions {
-  justify-content: flex-start;
+  justify-content: center;
+  margin-top: 2.5rem;
+}
+
+.tilde-hero .tilde-install {
+  margin-inline: auto;
 }
 
 /* ── Actions ── */
@@ -383,14 +589,14 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 }
 
 .tilde-button {
-  min-height: 2.9rem;
-  padding: 0.72rem 1.3rem;
+  min-height: 3rem;
+  padding: 0.8rem 1.5rem;
   font-family: var(--tilde-font-mono);
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   border-radius: 0.4rem;
-  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
 .tilde-button-primary {
@@ -401,10 +607,12 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 
 .tilde-button-primary:hover {
   background: var(--tilde-amber-bright);
+  transform: translateY(-1px);
+  box-shadow: 0 0.6rem 1.6rem rgba(229, 160, 13, 0.22);
 }
 
 .tilde-button-primary:active {
-  transform: translateY(1px);
+  transform: translateY(0);
 }
 
 .tilde-text-link {
@@ -451,8 +659,8 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   position: relative;
   display: flex;
   align-items: stretch;
-  max-width: 38rem;
-  margin-top: 1.8rem;
+  max-width: 40rem;
+  margin-top: 2rem;
   overflow: hidden;
   background: var(--tilde-panel);
   border: 1px solid var(--tilde-frame);
@@ -474,10 +682,10 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   flex: 1;
   min-width: 0;
   overflow-x: auto;
-  padding: 0.85rem 0.75rem 0.85rem 0.6rem;
+  padding: 0.9rem 0.75rem 0.9rem 0.6rem;
   color: var(--tilde-muted);
   font-family: var(--tilde-font-mono);
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   white-space: nowrap;
   background: transparent;
   border: 0;
@@ -541,14 +749,77 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   overflow: hidden;
   background: var(--tilde-panel);
   border: 1px solid var(--tilde-frame);
-  border-radius: 0.6rem;
-  box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.35);
+  border-radius: 0.75rem;
+  box-shadow: 0 2.5rem 6rem rgba(0, 0, 0, 0.45), 0 0 5rem rgba(79, 195, 247, 0.04);
 }
 
 .tilde-hero-workflow {
   width: 100%;
-  margin-top: var(--tilde-space-5);
+  max-width: 64rem;
+  margin: var(--tilde-space-5) auto 0;
   text-align: left;
+}
+
+/* Window chrome — the preview reads as a real application frame. */
+.tilde-window-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 1.25rem;
+  background: var(--tilde-panel-2);
+  border-bottom: 1px solid var(--tilde-line);
+}
+
+.tilde-window-bar span {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--tilde-frame);
+}
+
+.tilde-window-bar span:first-child {
+  background: rgba(244, 71, 71, 0.7);
+}
+
+.tilde-window-bar span:nth-child(2) {
+  background: rgba(229, 160, 13, 0.7);
+}
+
+.tilde-window-bar span:nth-child(3) {
+  background: rgba(76, 175, 80, 0.7);
+}
+
+.tilde-window-bar em {
+  margin-inline: auto;
+  color: var(--tilde-faint);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.72rem;
+  font-style: normal;
+  letter-spacing: 0.06em;
+}
+
+.tilde-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  color: var(--tilde-cyan);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.62rem;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid rgba(79, 195, 247, 0.35);
+  border-radius: 999px;
+}
+
+.tilde-live::before {
+  content: '';
+  width: 0.35rem;
+  height: 0.35rem;
+  background: var(--tilde-cyan);
+  border-radius: 50%;
+  animation: tilde-pulse 2.2s ease-in-out infinite;
 }
 
 .tilde-workflow-top,
@@ -561,11 +832,11 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 
 .tilde-workflow-top {
   justify-content: space-between;
-  min-height: 3rem;
-  padding: 0 1.25rem;
+  min-height: 3.25rem;
+  padding: 0 1.5rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   letter-spacing: 0.02em;
   border-bottom: 1px solid var(--tilde-line);
 }
@@ -604,10 +875,10 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 .tilde-request {
   display: flex;
   gap: 0.75rem;
-  padding: 1.15rem 1.5rem;
+  padding: 1.35rem 1.75rem;
   color: var(--tilde-ink);
   font-family: var(--tilde-font-mono);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   border-bottom: 1px solid var(--tilde-line);
 }
 
@@ -616,16 +887,37 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   font-weight: 700;
 }
 
+/* Restrained terminal cursor after the active command. */
+.tilde-cursor {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.05em;
+  margin-left: 0.35em;
+  vertical-align: text-bottom;
+  background: var(--tilde-amber);
+  animation: tilde-blink 1.2s steps(2, start) infinite;
+}
+
+@keyframes tilde-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
 .tilde-plan {
-  padding: 1.3rem 1.5rem 1rem;
+  padding: 1.5rem 1.75rem 1.25rem;
 }
 
 .tilde-plan-meta {
   justify-content: space-between;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.5rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -644,13 +936,20 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   display: grid;
   grid-template-columns: 1.4rem 1fr;
   gap: 0.7rem;
-  padding: 0.8rem 0;
+  padding: 0.95rem 0.75rem;
+  margin-inline: -0.75rem;
   border-bottom: 1px solid var(--tilde-line);
+  border-radius: 0.35rem;
   align-items: start;
+  transition: background 180ms ease;
 }
 
 .tilde-plan li:last-child {
   border-bottom: 0;
+}
+
+.tilde-plan li:hover {
+  background: rgba(167, 178, 196, 0.05);
 }
 
 /* Left gutter glyphs: ✓ done · dot in-progress · ○ pending. */
@@ -676,7 +975,7 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 .tilde-plan strong {
   display: block;
   color: var(--tilde-ink);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -687,10 +986,10 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 
 .tilde-plan small {
   display: block;
-  margin-top: 0.2rem;
+  margin-top: 0.25rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.67rem;
+  font-size: 0.75rem;
 }
 
 /* Sub-detail row — `⎿` marks a child of the line above (spec §1.2). */
@@ -718,7 +1017,7 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 /* Proof line — success green. */
 .tilde-proof {
   gap: 0.7rem;
-  padding: 0.85rem 1.5rem;
+  padding: 1rem 1.75rem;
   color: var(--tilde-muted);
   font-family: var(--tilde-font-mono);
   background: rgba(76, 175, 80, 0.05);
@@ -734,7 +1033,7 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   min-width: 0;
   overflow: hidden;
   padding: 0;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   text-overflow: ellipsis;
   white-space: nowrap;
   background: transparent;
@@ -745,44 +1044,66 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 .tilde-proof small {
   margin-left: auto;
   color: var(--tilde-faint);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
 }
 /* ── Sections ── */
 
 .tilde-speed {
-  padding: var(--tilde-space-6) max(1.5rem, calc((100vw - 70rem) / 2));
-  background: var(--tilde-panel);
+  padding: var(--tilde-section) max(2rem, calc((100vw - 76rem) / 2));
+  background: var(--tilde-band);
   border-block: 1px solid var(--tilde-line);
+  scroll-margin-top: 4rem;
 }
 
 .tilde-speed-heading {
-  max-width: 44rem;
+  max-width: 48rem;
   margin-bottom: var(--tilde-space-5);
+}
+
+.tilde-speed-heading h2,
+.tilde-permissions-head h2,
+.tilde-models-heading h2,
+.tilde-orchestration h2,
+.tilde-foundation h2,
+.tilde-intro h2 {
+  font-size: clamp(2.25rem, 1.75rem + 3vw, 3.75rem);
+  line-height: 1.06;
 }
 
 .tilde-speed-heading h2 {
   margin-top: var(--tilde-space-2);
-  font-size: clamp(2.4rem, 4.2vw, 3.9rem);
 }
 
 .tilde-speed-heading > p:last-child {
-  margin-top: var(--tilde-space-2);
+  margin-top: var(--tilde-space-3);
   color: var(--tilde-muted);
+  font-size: 1.02rem;
+  line-height: 1.65;
 }
 
 .tilde-speed-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  max-width: 76rem;
+  margin-inline: auto;
   border-top: 1px solid var(--tilde-line);
 }
 
 .tilde-speed-grid article {
-  padding: var(--tilde-space-4) var(--tilde-space-4) 0 0;
+  padding: var(--tilde-space-4) var(--tilde-space-4) var(--tilde-space-3) 0;
+  border-radius: 0.55rem;
+  transition: background 200ms ease, transform 200ms ease;
 }
 
 .tilde-speed-grid article + article {
   padding-left: var(--tilde-space-4);
   border-left: 1px solid var(--tilde-line);
+}
+
+.tilde-speed-grid article:hover {
+  background: rgba(167, 178, 196, 0.04);
+  transform: translateY(-2px);
 }
 
 .tilde-speed-card-meta {
@@ -794,17 +1115,17 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 .tilde-speed-card-meta span {
   color: var(--tilde-amber);
   font-family: var(--tilde-font-mono);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 
 .tilde-speed-card-meta small {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.22rem 0.55rem;
+  padding: 0.25rem 0.6rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.6rem;
+  font-size: 0.65rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   background: var(--tilde-bg);
@@ -819,44 +1140,46 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 
 .tilde-speed-grid h3 {
   margin: var(--tilde-space-4) 0 var(--tilde-space-1);
-  font-size: 1.05rem;
+  font-size: 1.15rem;
 }
 
 .tilde-speed-grid p {
   color: var(--tilde-muted);
-  font-size: 0.9rem;
-  line-height: 1.6;
+  font-size: 0.95rem;
+  line-height: 1.65;
 }
 
 /* ── Permission ladder — deny / ask / allow as a spec table ── */
 
 .tilde-permissions {
-  width: min(100% - 3rem, 70rem);
+  width: var(--tilde-container);
   margin: 0 auto;
-  padding: var(--tilde-space-6) 0;
+  padding: var(--tilde-section) 0;
+  scroll-margin-top: 4rem;
 }
 
 .tilde-permissions-head {
-  max-width: 44rem;
+  max-width: 48rem;
   margin-bottom: var(--tilde-space-5);
 }
 
 .tilde-permissions-head h2 {
   margin-top: var(--tilde-space-2);
-  font-size: clamp(2.4rem, 4.2vw, 3.9rem);
 }
 
 .tilde-permissions-head > p:last-child {
-  margin-top: var(--tilde-space-2);
+  margin-top: var(--tilde-space-3);
   color: var(--tilde-muted);
+  font-size: 1.02rem;
+  line-height: 1.65;
 }
 
 .tilde-tier-table {
   overflow: hidden;
   background: var(--tilde-panel);
   border: 1px solid var(--tilde-frame);
-  border-radius: 0.6rem;
-  box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.35);
+  border-radius: 0.75rem;
+  box-shadow: 0 2.5rem 6rem rgba(0, 0, 0, 0.45);
 }
 
 .tilde-tier-head,
@@ -880,18 +1203,32 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 }
 
 .tilde-tier {
-  padding: 1.3rem 1.4rem;
+  padding: 1.6rem 1.75rem;
   border-bottom: 1px solid var(--tilde-line);
+  transition: background 180ms ease;
 }
 
 .tilde-tier:last-of-type {
   border-bottom: 0;
 }
 
+.tilde-tier:hover {
+  background: rgba(167, 178, 196, 0.04);
+}
+
+/* Slight stagger so the ladder reads as a workflow, not a grid. */
+@media (min-width: 50rem) {
+  .tilde-tier.ask {
+    margin-inline: 1.5rem;
+    border-inline: 1px solid var(--tilde-line);
+    border-radius: 0.5rem;
+  }
+}
+
 .tilde-tier-glyph {
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   line-height: 1.4;
 }
 
@@ -911,17 +1248,17 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   display: block;
   color: var(--tilde-ink);
   font-family: var(--tilde-font-mono);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.03em;
 }
 
 .tilde-tier-name small {
   display: block;
-  margin-top: 0.25rem;
+  margin-top: 0.3rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -929,51 +1266,64 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 
 .tilde-tier-desc {
   color: var(--tilde-muted);
-  font-size: 0.9rem;
-  line-height: 1.6;
+  font-size: 0.95rem;
+  line-height: 1.65;
 }
 
 /* ── Models ── */
 
 .tilde-models {
-  padding: var(--tilde-space-6) max(1.5rem, calc((100vw - 70rem) / 2));
+  padding: var(--tilde-section) max(2rem, calc((100vw - 76rem) / 2));
+  background: var(--tilde-bg-deep);
+  border-block: 1px solid var(--tilde-line);
+  scroll-margin-top: 4rem;
 }
 
 .tilde-models-heading {
-  max-width: 44rem;
+  max-width: 48rem;
   margin-bottom: var(--tilde-space-5);
 }
 
 .tilde-models-heading h2 {
   margin-top: var(--tilde-space-2);
-  font-size: clamp(2.4rem, 4.2vw, 3.9rem);
 }
 
 .tilde-models-heading > p:last-child {
-  margin-top: var(--tilde-space-2);
+  margin-top: var(--tilde-space-3);
   color: var(--tilde-muted);
+  font-size: 1.02rem;
+  line-height: 1.65;
 }
 
 .tilde-provider-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border-block: 1px solid var(--tilde-line);
+  gap: 1rem;
+  max-width: 76rem;
+  margin-inline: auto;
 }
 
 .tilde-provider-grid article {
   display: flex;
-  gap: 0.9rem;
+  gap: 1rem;
   align-items: center;
-  padding: var(--tilde-space-4) 0;
+  padding: 1.4rem 1.5rem;
+  background: var(--tilde-panel);
+  border: 1px solid var(--tilde-line);
+  border-radius: 0.6rem;
+  cursor: default;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
 }
 
-.tilde-provider-grid article:not(:nth-child(3n + 1)) {
-  padding-left: var(--tilde-space-4);
-  border-left: 1px solid var(--tilde-line);
+.tilde-provider-grid article:hover {
+  border-color: var(--tilde-frame);
+  background: rgba(167, 178, 196, 0.04);
+  transform: translateY(-2px);
 }
 
-.tilde-provider-grid article:nth-child(n + 4) {
-  border-top: 1px solid var(--tilde-line);
+.tilde-provider-grid article.is-active {
+  border-color: rgba(229, 160, 13, 0.55);
+  background: rgba(229, 160, 13, 0.06);
 }
 
 .tilde-provider-logo {
@@ -998,82 +1348,136 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 }
 
 .tilde-provider-grid strong {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   color: var(--tilde-ink);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 600;
+}
+
+.tilde-provider-active {
+  color: var(--tilde-amber);
+  font-size: 0.6rem;
+  animation: tilde-pulse 2.2s ease-in-out infinite;
+}
+
+.tilde-provider-grid code {
+  display: inline-block;
+  margin-top: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  color: var(--tilde-muted);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.72rem;
+  background: var(--tilde-panel-2);
+  border: 1px solid var(--tilde-line);
+  border-radius: 0.3rem;
 }
 
 .tilde-provider-grid small {
   display: block;
-  margin-top: 0.15rem;
+  margin-top: 0.35rem;
   color: var(--tilde-faint);
   font-size: 0.75rem;
 }
 
 .tilde-model-note {
-  max-width: 44rem;
-  margin-top: var(--tilde-space-3);
+  max-width: 48rem;
+  margin-top: var(--tilde-space-4);
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.75rem;
-  line-height: 1.6;
+  font-size: 0.78rem;
+  line-height: 1.65;
 }
 /* ── Intro statement ── */
 
 .tilde-intro {
-  width: min(100% - 3rem, 70rem);
+  width: var(--tilde-container);
   margin: 0 auto;
-  padding: var(--tilde-space-6) 0;
+  padding: var(--tilde-section) 0 0;
   text-align: center;
 }
 
 .tilde-intro h2 {
   margin: var(--tilde-space-2) 0 var(--tilde-space-3);
-  font-size: clamp(2.6rem, 5vw, 4.6rem);
-  line-height: 1;
+  line-height: 1.06;
 }
 
 .tilde-intro > p:last-child {
-  max-width: 43rem;
+  max-width: 45rem;
   margin-inline: auto;
   color: var(--tilde-muted);
   font-size: 1.05rem;
+  line-height: 1.65;
 }
 
-/* ── Principles ── */
+/* ── Engineering flow — issue → plan → implement → review → merge ── */
 
 .tilde-principles {
+  width: var(--tilde-container);
+  margin: 0 auto;
+  padding: var(--tilde-space-5) 0 var(--tilde-section);
+}
+
+.tilde-flow {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  width: min(100% - 3rem, 70rem);
-  margin: 0 auto var(--tilde-space-6);
-  border-block: 1px solid var(--tilde-line);
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
 }
 
-.tilde-principles article {
-  padding: var(--tilde-space-4) var(--tilde-space-4) var(--tilde-space-4) 0;
+.tilde-flow li {
+  position: relative;
+  padding: 1.75rem 1.5rem 0 0;
 }
 
-.tilde-principles article + article {
-  padding-left: var(--tilde-space-4);
-  border-left: 1px solid var(--tilde-line);
+.tilde-flow li + li {
+  padding-left: 1.5rem;
 }
 
-.tilde-principles article > span {
-  color: var(--tilde-faint);
+/* Connector: the progression line each step (except the first) arrives on. */
+.tilde-flow li + li::before {
+  content: '';
+  position: absolute;
+  top: 2.6rem;
+  left: -0.15rem;
+  width: 1.5rem;
+  border-top: 1px solid var(--tilde-frame);
+}
+
+.tilde-flow li + li::after {
+  content: '→';
+  position: absolute;
+  top: 1.95rem;
+  left: 0.85rem;
+  color: var(--tilde-amber);
   font-family: var(--tilde-font-mono);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
 }
 
-.tilde-principles h3 {
-  margin: var(--tilde-space-4) 0 var(--tilde-space-1);
+.tilde-flow-index {
+  display: block;
+  color: var(--tilde-amber);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+}
+
+.tilde-flow strong {
+  display: block;
+  margin: 0.7rem 0 0.4rem;
+  color: var(--tilde-ink);
   font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
-.tilde-principles p {
+.tilde-flow p {
   color: var(--tilde-muted);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
 }
 
 /* ── Orchestration ── */
@@ -1083,8 +1487,8 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   grid-template-columns: 0.85fr 1.15fr;
   gap: var(--tilde-space-6);
   align-items: center;
-  padding: var(--tilde-space-6) max(1.5rem, calc((100vw - 70rem) / 2));
-  background: var(--tilde-panel);
+  padding: var(--tilde-section) max(2rem, calc((100vw - 76rem) / 2));
+  background: var(--tilde-band);
   border-block: 1px solid var(--tilde-line);
 }
 
@@ -1094,13 +1498,13 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 
 .tilde-orchestration h2 {
   margin: var(--tilde-space-2) 0 var(--tilde-space-3);
-  font-size: clamp(2.6rem, 4.6vw, 4.2rem);
-  line-height: 1;
 }
 
 .tilde-orchestration-copy > p:not(.tilde-label) {
   margin-bottom: var(--tilde-space-3);
   color: var(--tilde-muted);
+  font-size: 1.02rem;
+  line-height: 1.65;
 }
 
 .tilde-orchestration .tilde-text-link {
@@ -1110,11 +1514,38 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 
 /* Delegated-work panel — a mini session log on the spec's glyphs. */
 .tilde-agents {
-  padding: 0.4rem 1.4rem;
+  padding: 0.6rem 1.75rem;
   background: var(--tilde-panel-2);
   border: 1px solid var(--tilde-frame);
-  border-radius: 0.6rem;
-  box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.35);
+  border-radius: 0.75rem;
+  box-shadow: 0 2.5rem 6rem rgba(0, 0, 0, 0.45);
+}
+
+/* Coordinator tree — stacked worker rows share one continuous left
+   rail, so delegation reads as a branching structure. The rail is drawn
+   from the rows themselves, so it stays aligned at every breakpoint. */
+.tilde-tree .tilde-coordinator-row {
+  border-bottom: 1px solid var(--tilde-line);
+}
+
+.tilde-tree .tilde-agent-row {
+  margin-left: 1.75rem;
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--tilde-line);
+  border-bottom: 1px solid var(--tilde-line);
+  transition: background 180ms ease, border-color 180ms ease;
+}
+
+.tilde-tree .tilde-agent-row:hover {
+  background: rgba(167, 178, 196, 0.04);
+}
+
+.tilde-tree .tilde-agent-row:has(.tilde-row-status.working) {
+  border-left-color: rgba(79, 195, 247, 0.6);
+}
+
+.tilde-tree .tilde-agent-row:has(.tilde-row-status.complete) {
+  border-left-color: rgba(76, 175, 80, 0.45);
 }
 
 .tilde-coordinator-row,
@@ -1144,7 +1575,7 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 .tilde-coordinator-row strong,
 .tilde-agent-row strong {
   color: var(--tilde-ink);
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
@@ -1156,7 +1587,7 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   gap: 0.4rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1179,22 +1610,189 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   padding: 1rem 0 0.6rem;
   color: var(--tilde-faint);
   font-family: var(--tilde-font-mono);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   text-align: right;
 }
 
 /* ── Foundation ── */
 
 .tilde-foundation {
-  width: min(100% - 3rem, 70rem);
+  width: var(--tilde-container);
   margin: 0 auto;
-  padding: var(--tilde-space-6) 0;
+  padding: var(--tilde-section) 0;
+  scroll-margin-top: 4rem;
+}
+
+.tilde-foundation .tilde-label {
+  display: block;
+  margin-bottom: var(--tilde-space-2);
 }
 
 .tilde-foundation h2 {
   max-width: 22ch;
   margin-bottom: var(--tilde-space-5);
-  font-size: clamp(2.4rem, 4vw, 3.6rem);
+}
+
+/* Install terminal — copyable command flow in a framed console. */
+.tilde-terminal {
+  position: relative;
+  overflow: hidden;
+  background: var(--tilde-panel-2);
+  border: 1px solid var(--tilde-frame);
+  border-radius: 0.75rem;
+  box-shadow: 0 2.5rem 6rem rgba(0, 0, 0, 0.45);
+}
+
+.tilde-terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 1.25rem;
+  background: var(--tilde-panel);
+  border-bottom: 1px solid var(--tilde-line);
+}
+
+.tilde-terminal-bar span {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--tilde-frame);
+}
+
+.tilde-terminal-bar em {
+  margin-inline: auto;
+  color: var(--tilde-faint);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.72rem;
+  font-style: normal;
+  letter-spacing: 0.06em;
+}
+
+.tilde-terminal-line {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--tilde-line);
+}
+
+.tilde-terminal-line:last-of-type {
+  border-bottom: 0;
+}
+
+.tilde-terminal-line .tilde-prompt {
+  flex: none;
+  color: var(--tilde-amber);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.tilde-terminal-line code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 0;
+  color: var(--tilde-ink);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  scrollbar-width: none;
+}
+
+.tilde-terminal-line small {
+  flex: none;
+  color: var(--tilde-faint);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.72rem;
+}
+
+.tilde-terminal-line button {
+  display: grid;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  place-items: center;
+  color: var(--tilde-faint);
+  background: transparent;
+  border: 1px solid var(--tilde-line);
+  border-radius: 0.35rem;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.tilde-terminal-line button:hover {
+  color: var(--tilde-ink);
+  border-color: var(--tilde-frame);
+}
+
+.tilde-terminal-line button svg {
+  grid-area: 1 / 1;
+  width: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.tilde-terminal-line .check-icon,
+.tilde-terminal-line button.copied .copy-icon {
+  display: none;
+}
+
+.tilde-terminal-line button.copied .check-icon {
+  display: block;
+  color: var(--tilde-green);
+}
+
+.tilde-terminal .tilde-copy-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+/* Spec strip — binary / platform / runtime / models at a glance. */
+.tilde-spec-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  margin-top: var(--tilde-space-4);
+  overflow: hidden;
+  background: var(--tilde-line);
+  border: 1px solid var(--tilde-line);
+  border-radius: 0.6rem;
+}
+
+.tilde-spec-strip > div {
+  padding: 1.25rem 1.4rem;
+  background: var(--tilde-panel);
+}
+
+.tilde-foundation .tilde-spec-strip dt {
+  color: var(--tilde-amber);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tilde-foundation .tilde-spec-strip dd {
+  margin: 0.5rem 0 0;
+  color: var(--tilde-ink);
+  font-family: var(--tilde-font-mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
 }
 
 .tilde-foundation dl > div {
@@ -1203,6 +1801,16 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   gap: var(--tilde-space-3);
   padding: 1.4rem 0;
   border-top: 1px solid var(--tilde-line);
+}
+
+.tilde-foundation dl.tilde-spec-strip > div {
+  display: block;
+  padding: 1.25rem 1.4rem;
+  border-top: 0;
+}
+
+.tilde-foundation dl:not(.tilde-spec-strip) {
+  margin-top: var(--tilde-space-5);
 }
 
 .tilde-foundation dt {
@@ -1222,27 +1830,59 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 /* ── Final call ── */
 
 .tilde-final {
-  width: min(100% - 3rem, 70rem);
+  position: relative;
+  width: var(--tilde-container);
   margin: 0 auto;
-  padding: var(--tilde-space-6) 0;
+  padding: var(--tilde-section) 0 calc(var(--tilde-section) + 1rem);
+  overflow: hidden;
   text-align: center;
-  border-top: 1px solid var(--tilde-line);
+  background: var(--tilde-bg-deep);
+  border: 1px solid var(--tilde-line);
+  border-bottom: 0;
+  border-radius: 0.9rem 0.9rem 0 0;
+}
+
+/* Faint console mark behind the CTA buttons — product texture, kept
+   clear of the headline. */
+.tilde-final-mark {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0.75rem;
+  color: transparent;
+  font-family: var(--tilde-font-mono);
+  font-size: clamp(3rem, 8vw, 6rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  -webkit-text-stroke: 1px rgba(167, 178, 196, 0.1);
+  pointer-events: none;
+  user-select: none;
+}
+
+.tilde-final .tilde-label {
+  position: relative;
+  font-size: 0.75rem;
 }
 
 .tilde-final h2 {
-  margin: var(--tilde-space-2) 0 var(--tilde-space-3);
-  font-size: clamp(2.6rem, 5vw, 4.4rem);
-  line-height: 1;
+  position: relative;
+  margin: var(--tilde-space-2) auto var(--tilde-space-3);
+  max-width: 16ch;
+  font-size: clamp(2.5rem, 2rem + 3.5vw, 4.25rem);
+  line-height: 1.05;
+  text-wrap: balance;
 }
 
 .tilde-final > p {
+  position: relative;
   color: var(--tilde-muted);
-  font-size: 1rem;
+  font-size: 1.05rem;
+  line-height: 1.65;
 }
 
 .tilde-final .tilde-actions {
+  position: relative;
   justify-content: center;
-  margin-top: 2.2rem;
+  margin-top: 2.5rem;
 }
 
 /* ── Scroll reveal ── */
@@ -1259,26 +1899,54 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 }
 /* ── Responsive ── */
 
+@media (max-width: 64rem) {
+  /* Flow: five columns get cramped — two-column rhythm, connectors off. */
+  .tilde-flow {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0 2.5rem;
+  }
+
+  .tilde-flow li + li {
+    padding-left: 0;
+  }
+
+  .tilde-flow li + li::before,
+  .tilde-flow li + li::after {
+    display: none;
+  }
+
+  .tilde-flow li {
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--tilde-line);
+  }
+
+  .tilde-flow li:nth-child(-n + 2) {
+    border-top: 0;
+  }
+}
+
 @media (max-width: 50rem) {
   .tilde-home {
     --tilde-space-6: 4rem;
+    --tilde-container: min(100% - 4rem, 76rem);
   }
 
-  .tilde-principles {
-    grid-template-columns: 1fr;
-  }
-
+  /* Mechanics: 3 columns → 2 columns on tablet. */
   .tilde-speed-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0 2rem;
   }
 
-  .tilde-speed-grid article,
-  .tilde-speed-grid article + article {
+  .tilde-speed-grid article {
     padding: 2rem 0;
+  }
+
+  .tilde-speed-grid article + article {
+    padding-left: 0;
     border-left: 0;
   }
 
-  .tilde-speed-grid article + article {
+  .tilde-speed-grid article:nth-child(n + 3) {
     border-top: 1px solid var(--tilde-line);
   }
 
@@ -1286,41 +1954,14 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
     margin-top: 1.5rem;
   }
 
-  .tilde-principles article,
-  .tilde-principles article + article {
-    padding: 2rem 0;
-    border-left: 0;
-  }
-
-  .tilde-principles article + article {
-    border-top: 1px solid var(--tilde-line);
-  }
-
-  .tilde-principles h3 {
-    margin-top: 1.5rem;
-  }
-
-  /* Providers: 3 columns → 2 columns. Re-derive the hairlines. */
+  /* Providers: 3 cards → 2 cards on tablet. */
   .tilde-provider-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .tilde-provider-grid article:not(:nth-child(3n + 1)) {
-    padding-left: 0;
-    border-left: 0;
-  }
-
-  .tilde-provider-grid article:nth-child(n + 4) {
-    border-top: 0;
-  }
-
-  .tilde-provider-grid article:nth-child(even) {
-    padding-left: var(--tilde-space-4);
-    border-left: 1px solid var(--tilde-line);
-  }
-
-  .tilde-provider-grid article:nth-child(n + 3) {
-    border-top: 1px solid var(--tilde-line);
+  /* Spec strip: 4 cells → 2 cells on tablet. */
+  .tilde-spec-strip {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .tilde-orchestration {
@@ -1328,7 +1969,7 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
     gap: var(--tilde-space-5);
   }
 
-  .tilde-foundation dl > div {
+  .tilde-foundation dl:not(.tilde-spec-strip) > div {
     grid-template-columns: 1fr;
     gap: 0.35rem;
   }
@@ -1341,20 +1982,19 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
 }
 
 @media (max-width: 38rem) {
-  .tilde-hero,
-  .tilde-intro,
-  .tilde-principles,
-  .tilde-foundation,
-  .tilde-permissions {
-    width: min(100% - 2rem, 70rem);
+  .tilde-home {
+    --tilde-container: min(100% - 2.5rem, 76rem);
+  }
+
+  .tilde-speed,
+  .tilde-models,
+  .tilde-orchestration {
+    padding-inline: 1.25rem;
   }
 
   .tilde-hero {
-    padding-top: 2.5rem;
-  }
-
-  .tilde-hero h1 {
-    font-size: clamp(2.7rem, 12vw, 3.6rem);
+    min-height: 0;
+    padding-top: calc(var(--tilde-section) + 1rem);
   }
 
   .tilde-hero-workflow {
@@ -1381,7 +2021,15 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   }
 
   .tilde-install code {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
+  }
+
+  .tilde-window-bar em {
+    display: none;
+  }
+
+  .tilde-window-bar .tilde-live {
+    margin-left: auto;
   }
 
   .tilde-request,
@@ -1390,22 +2038,51 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
     padding-inline: 1rem;
   }
 
-  /* Providers: single column. */
+  .tilde-window-bar {
+    padding-inline: 1rem;
+  }
+
+  /* Mechanics + providers: single column. */
+  .tilde-speed-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tilde-speed-grid article:nth-child(n + 3) {
+    border-top: 0;
+  }
+
+  .tilde-speed-grid article:nth-child(n + 2) {
+    border-top: 1px solid var(--tilde-line);
+  }
+
   .tilde-provider-grid {
     grid-template-columns: 1fr;
   }
 
-  .tilde-provider-grid article:nth-child(even) {
-    padding-left: 0;
-    border-left: 0;
+  /* Flow: single column with a left rail. */
+  .tilde-flow {
+    grid-template-columns: 1fr;
   }
 
-  .tilde-provider-grid article:nth-child(n + 3) {
+  .tilde-flow li:nth-child(-n + 2) {
+    border-top: 1px solid var(--tilde-line);
+  }
+
+  .tilde-flow li:first-child {
     border-top: 0;
   }
 
-  .tilde-provider-grid article:nth-child(n + 2) {
-    border-top: 1px solid var(--tilde-line);
+  /* Spec strip: single column. */
+  .tilde-spec-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .tilde-terminal-line small {
+    display: none;
+  }
+
+  .tilde-terminal-line code {
+    font-size: 0.75rem;
   }
 
   /* Permission ladder: header out, glyph + tier / description rows. */
@@ -1416,15 +2093,16 @@ body:has(.tilde-home) .header button[aria-label='Search'] {
   .tilde-tier {
     grid-template-columns: 2rem 1fr;
     gap: 0.6rem 0.9rem;
-    padding: 1.1rem 1.1rem;
+    padding: 1.25rem 1.1rem;
   }
 
   .tilde-tier-desc {
     grid-column: 2;
   }
 
-  .tilde-agent-row {
-    margin-left: 0.5rem;
+  .tilde-tree .tilde-agent-row {
+    margin-left: 1rem;
+    padding-left: 0.9rem;
   }
 
   .tilde-coordinator-row,

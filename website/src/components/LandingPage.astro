@@ -4,12 +4,33 @@ import DemoWorkflow from './DemoWorkflow.astro';
 const installCommand = 'curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh';
 
 const providers = [
-  { name: 'Ollama', detail: 'Local models', slug: 'ollama' },
-  { name: 'Anthropic', detail: 'Claude models', slug: 'anthropic' },
-  { name: 'OpenAI', detail: 'GPT models', slug: 'openai' },
-  { name: 'Gemini', detail: 'Google models', slug: 'gemini' },
-  { name: 'OpenRouter', detail: 'Live catalogue', slug: 'openrouter' },
-  { name: 'OpenCode', detail: 'Any provider', slug: 'opencode' },
+  { name: 'Ollama', model: 'local models', meta: 'default · no key needed', slug: 'ollama', active: true },
+  { name: 'Anthropic', model: 'claude', meta: 'api key', slug: 'anthropic' },
+  { name: 'OpenAI', model: 'gpt', meta: 'api key', slug: 'openai' },
+  { name: 'Gemini', model: 'gemini', meta: 'api key', slug: 'gemini' },
+  { name: 'OpenRouter', model: 'live catalogue', meta: 'api key', slug: 'openrouter' },
+  { name: 'OpenCode', model: 'any provider', meta: 'api key', slug: 'opencode' },
+];
+
+const installSteps = [
+  { command: 'curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh', copy: true },
+  { command: 'tilde --version', note: 'single binary, no runtime' },
+  { command: 'tilde models', note: 'browse the provider catalogue' },
+];
+
+const installSpecs = [
+  { term: 'Binary', desc: 'tilde — one static Go binary' },
+  { term: 'Platform', desc: 'linux · macos — amd64 / arm64' },
+  { term: 'Runtime', desc: 'none — nothing to install' },
+  { term: 'Models', desc: 'ollama local by default, or your api key' },
+];
+
+const flowSteps = [
+  { index: '01', name: 'Issue', desc: 'Create the issue — start from the code as it is.' },
+  { index: '02', name: 'Plan', desc: 'Trace the work and isolate it in a clean branch.' },
+  { index: '03', name: 'Implement', desc: 'Change code, run focused tests, prove the fix.' },
+  { index: '04', name: 'Review', desc: 'Open the pull request and answer feedback.' },
+  { index: '05', name: 'Merge', desc: 'Land the change with the trail to show for it.' },
 ];
 
 const productWorkflow = {
@@ -71,6 +92,7 @@ const tiers = [
 <div class="tilde-home not-content">
   <section class="tilde-hero" aria-labelledby="tilde-title">
     <div class="tilde-hero-copy">
+      <p class="tilde-eyebrow">A terminal coding agent · Open source</p>
       <img
         class="tilde-hero-brand"
         src="/images/banner_hero_logo.png"
@@ -80,7 +102,6 @@ const tiers = [
         fetchpriority="high"
         decoding="async"
       />
-      <p class="tilde-eyebrow">A terminal coding agent · Open source</p>
       <h1 id="tilde-title">Built for <em>real</em> engineering.</h1>
       <p class="tilde-hero-lede">
         tilde turns complex repo work into a visible workflow — plan, build, test, and ship from one terminal, with every risky step waiting for your say-so.
@@ -104,7 +125,7 @@ const tiers = [
     </div>
   </section>
 
-  <section class="tilde-speed reveal" aria-labelledby="speed-title">
+  <section class="tilde-speed reveal" id="product" aria-labelledby="speed-title">
     <div class="tilde-speed-heading">
       <p class="tilde-label">Mechanics</p>
       <h2 id="speed-title">Less waiting. More useful work in motion.</h2>
@@ -132,7 +153,7 @@ const tiers = [
     </div>
   </section>
 
-  <section class="tilde-permissions reveal" aria-labelledby="permissions-title">
+  <section class="tilde-permissions reveal" id="workflow" aria-labelledby="permissions-title">
     <div class="tilde-permissions-head">
       <p class="tilde-label">Permissions</p>
       <h2 id="permissions-title">Every action lands on the ladder.</h2>
@@ -153,7 +174,7 @@ const tiers = [
     </div>
   </section>
 
-  <section class="tilde-models reveal" aria-labelledby="models-title">
+  <section class="tilde-models reveal" id="models" aria-labelledby="models-title">
     <div class="tilde-models-heading">
       <p class="tilde-label">Models</p>
       <h2 id="models-title">Use the best model for the job.</h2>
@@ -162,11 +183,15 @@ const tiers = [
         from the terminal without changing how tilde works.
       </p>
     </div>
-    <div class="tilde-provider-grid" aria-label="Supported model providers">
+    <div class="tilde-provider-grid" role="list" aria-label="Supported model providers">
       {providers.map((provider) => (
-        <article>
+        <article role="listitem" class:list={[{ 'is-active': provider.active }]}>
           <div class={`tilde-provider-logo tilde-provider-${provider.slug}`} aria-hidden="true">{provider.name[0]}</div>
-          <div><strong>{provider.name}</strong><small>{provider.detail}</small></div>
+          <div>
+            <strong>{provider.name}{provider.active && <span class="tilde-provider-active" title="Default provider">●</span>}</strong>
+            <code>{provider.model}</code>
+            <small>{provider.meta}</small>
+          </div>
         </article>
       ))}
     </div>
@@ -183,22 +208,16 @@ const tiers = [
     </p>
   </section>
 
-  <section class="tilde-principles reveal" aria-label="tilde principles">
-    <article>
-      <span>01</span>
-      <h3>Works in the real repository</h3>
-      <p>Start with the code, git state, project instructions, and tools your team already uses.</p>
-    </article>
-    <article>
-      <span>02</span>
-      <h3>Proves the change</h3>
-      <p>Keep tests, builds, diff review, CI, and feedback inside the same visible workflow.</p>
-    </article>
-    <article>
-      <span>03</span>
-      <h3>Follows your rules</h3>
-      <p>Load AGENTS.md, reusable skills, and optional tool confirmations for the way your team works.</p>
-    </article>
+  <section class="tilde-principles reveal" aria-label="From issue to merge">
+    <ol class="tilde-flow">
+      {flowSteps.map((step) => (
+        <li>
+          <span class="tilde-flow-index" aria-hidden="true">{step.index}</span>
+          <strong>{step.name}</strong>
+          <p>{step.desc}</p>
+        </li>
+      ))}
+    </ol>
   </section>
 
   <section class="tilde-orchestration reveal" aria-labelledby="orchestration-title">
@@ -214,10 +233,37 @@ const tiers = [
     <DemoWorkflow {...agentWorkflow} />
   </section>
 
-  <section class="tilde-foundation reveal" aria-labelledby="foundation-title">
+  <section class="tilde-foundation reveal" id="install" aria-labelledby="foundation-title">
     <div>
+      <p class="tilde-label">Install</p>
       <h2 id="foundation-title">One Go binary. No runtime to install.</h2>
     </div>
+    <div class="tilde-terminal" role="group" aria-label="Install tilde">
+      <div class="tilde-terminal-bar" aria-hidden="true">
+        <span></span><span></span><span></span>
+        <em>terminal — install tilde</em>
+      </div>
+      {installSteps.map((step) => (
+        <div class="tilde-terminal-line">
+          <span class="tilde-prompt" aria-hidden="true">$</span>
+          <code>{step.command}</code>
+          {step.copy ? (
+            <button type="button" data-copy-install data-command={installCommand} aria-label="Copy install command">
+              <svg class="copy-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="6" width="10" height="10" rx="2"></rect><path d="M13 6V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1"></path></svg>
+              <svg class="check-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-9"></path></svg>
+            </button>
+          ) : (
+            <small>{step.note}</small>
+          )}
+        </div>
+      ))}
+      <span class="tilde-copy-status" data-copy-status aria-live="polite"></span>
+    </div>
+    <dl class="tilde-spec-strip">
+      {installSpecs.map((spec) => (
+        <div><dt>{spec.term}</dt><dd>{spec.desc}</dd></div>
+      ))}
+    </dl>
     <dl>
       <div><dt>Built-in tools</dt><dd>Read, search, edit, write, and run shell commands without adding plugins.</dd></div>
       <div><dt>Hash-pinned plugins</dt><dd>Extend with skills, hooks, and MCP servers from sources you trust.</dd></div>
@@ -228,6 +274,7 @@ const tiers = [
   </section>
 
   <section class="tilde-final reveal" aria-labelledby="final-title">
+    <span class="tilde-final-mark" aria-hidden="true">$ tilde</span>
     <p class="tilde-label">tilde Harness</p>
     <h2 id="final-title">Try tilde in a real repository.</h2>
     <p>Install the binary, connect a model provider, and run <code>tilde</code>.</p>
@@ -239,7 +286,7 @@ const tiers = [
 </div>
 
 <script>
-  const button = document.querySelector('[data-copy-install]');
+  const buttons = document.querySelectorAll('[data-copy-install]');
   const copyStatus = document.querySelector('[data-copy-status]');
 
   const copyText = async (text: string) => {
@@ -260,21 +307,23 @@ const tiers = [
     }
   };
 
-  button?.addEventListener('click', async () => {
-    const command = button.getAttribute('data-command') ?? '';
-    if (await copyText(command)) {
-      button.classList.add('copied');
-      button.setAttribute('aria-label', 'Install command copied');
-      if (copyStatus) copyStatus.textContent = 'Install command copied.';
-      window.setTimeout(() => {
-        button.classList.remove('copied');
-        button.setAttribute('aria-label', 'Copy install command');
-        if (copyStatus) copyStatus.textContent = '';
-      }, 1800);
-    } else {
-      button.setAttribute('aria-label', 'Copy failed. Select the command manually.');
-      if (copyStatus) copyStatus.textContent = 'Copy failed. Select the command manually.';
-    }
+  buttons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const command = button.getAttribute('data-command') ?? '';
+      if (await copyText(command)) {
+        button.classList.add('copied');
+        button.setAttribute('aria-label', 'Install command copied');
+        if (copyStatus) copyStatus.textContent = 'Install command copied.';
+        window.setTimeout(() => {
+          button.classList.remove('copied');
+          button.setAttribute('aria-label', 'Copy install command');
+          if (copyStatus) copyStatus.textContent = '';
+        }, 1800);
+      } else {
+        button.setAttribute('aria-label', 'Copy failed. Select the command manually.');
+        if (copyStatus) copyStatus.textContent = 'Copy failed. Select the command manually.';
+      }
+    });
   });
 
   // Scroll reveal: sections fade up once on entry (transform + opacity

@@ -1,0 +1,56 @@
+---
+// Site header: stock Starlight chrome (title, search, social, theme)
+// plus landing-only primary nav and a quiet Get started action.
+// Scoped to the landing page via body:has(.tilde-home) CSS so docs
+// pages keep the default header exactly.
+import LanguageSelect from 'virtual:starlight/components/LanguageSelect';
+import Search from 'virtual:starlight/components/Search';
+import SiteTitle from 'virtual:starlight/components/SiteTitle';
+import SocialIcons from 'virtual:starlight/components/SocialIcons';
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
+import config from 'virtual:starlight/user-config';
+
+/**
+ * Render the `Search` component if Pagefind is enabled or the default search component has been overridden.
+ */
+const shouldRenderSearch =
+  config.pagefind || config.components.Search !== '@astrojs/starlight/components/Search.astro';
+
+const links = [
+  { label: 'Product', href: '/#product' },
+  { label: 'Workflow', href: '/#workflow' },
+  { label: 'Models', href: '/#models' },
+  { label: 'Docs', href: '/docs/readme/' },
+];
+
+const cta = { label: 'Get started', href: 'https://github.com/Chmgx81/tilde' };
+---
+
+<div class="header tilde-site-header">
+  <div class="title-wrapper sl-flex">
+    <SiteTitle />
+  </div>
+  <nav class="tilde-topnav" aria-label="Primary">
+    {links.map((link) => <a href={link.href}>{link.label}</a>)}
+  </nav>
+  <div class="sl-flex print:hidden tilde-search-wrap">
+    {shouldRenderSearch && <Search />}
+  </div>
+  <div class="sl-hidden md:sl-flex print:hidden right-group">
+    <div class="sl-flex social-icons">
+      <SocialIcons />
+    </div>
+    <ThemeSelect />
+    <LanguageSelect />
+    <a class="tilde-nav-cta" href={cta.href}>{cta.label}</a>
+  </div>
+  <details class="tilde-menu">
+    <summary aria-label="Menu">
+      <span aria-hidden="true"><i></i><i></i></span>
+    </summary>
+    <nav aria-label="Primary">
+      {links.map((link) => <a href={link.href}>{link.label}</a>)}
+      <a class="tilde-nav-cta" href={cta.href}>{cta.label}</a>
+    </nav>
+  </details>
+</div>

@@ -41,13 +41,18 @@ const props = Astro.props as Props;
 
 {props.variant === 'product' && (
   <div class="tilde-workflow tilde-card" role="group" aria-label="Example tilde workflow">
+    <div class="tilde-window-bar" aria-hidden="true">
+      <span></span><span></span><span></span>
+      <em>tilde — plan · build · test · ship</em>
+      <i class="tilde-live">live</i>
+    </div>
     <div class="tilde-workflow-top">
       <span>{props.project}</span>
       <span class="tilde-mode"><i class="tilde-status-dot"></i> {props.mode}</span>
     </div>
     <div class="tilde-request">
       <span aria-hidden="true">→</span>
-      <p>{props.request}</p>
+      <p>{props.request}<span class="tilde-cursor" aria-hidden="true"></span></p>
     </div>
     <div class="tilde-plan">
       <div class="tilde-plan-meta">
@@ -81,9 +86,9 @@ const props = Astro.props as Props;
 )}
 
 {props.variant === 'agents' && (
-  <div class="tilde-agents" role="group" aria-label="Example delegated work">
+  <div class="tilde-agents tilde-tree" role="group" aria-label="Example delegated work">
     {props.coordinator && (
-      <div class="tilde-coordinator-row">
+      <div class="tilde-coordinator-row tilde-tree-root">
         <span class="tilde-row-glyph" aria-hidden="true">●</span>
         <strong>{props.coordinator.task}</strong>
         <small>{props.coordinator.status}</small>
