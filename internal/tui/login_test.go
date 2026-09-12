@@ -165,8 +165,14 @@ func TestSwitchProviderOpenRouterDefaultsFree(t *testing.T) {
 	if m.model != want {
 		t.Fatalf("empty model should default to first free entry: got %q, want %q", m.model, want)
 	}
-	if m.budget != 128000 {
-		t.Fatalf("budget should auto-size to the free model's window (128000), got %d", m.budget)
+	// Budget auto-sizes from the catalog's first entry — read it rather
+	// than pinning a window that moves when the free shelf is refreshed.
+	wantWin := provider.BudgetFor("openrouter", provider.CatalogIDs("openrouter")[0])
+	if wantWin == 0 {
+		t.Fatal("first free OpenRouter catalog entry needs a reported window")
+	}
+	if m.budget != wantWin {
+		t.Fatalf("budget should auto-size to the free model's window (%d), got %d", wantWin, m.budget)
 	}
 }
 

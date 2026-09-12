@@ -121,16 +121,18 @@ var Catalog = map[string][]CatalogModel{
 		{"claude-opus-4-6", "Claude Opus 4.6", 200000, 5, 25},
 		{"claude-haiku-4-5", "Claude Haiku 4.5", 200000, 1, 5},
 	},
-	// Free per-token models (account + key still required). Free-tier
-	// ids rotate as vendors join/leave — refreshed 2026-09-08; if a 404
-	// points here, check openrouter.ai/models or pass any custom id to
-	// /model. Prices are 0: the point of this shelf is $0 experiments.
+	// Free per-token models (account + key still required; a free key can
+	// still hit upstream 429s). Free-tier ids rotate as vendors join/leave
+	// — refreshed 2026-09-12 from GET /api/v1/models (filter :free +
+	// tools); the previous shelf's :free slugs were retired. If one 404s,
+	// check openrouter.ai/models or pass any custom id to /model. Prices
+	// are 0: the point of this shelf is $0 experiments.
 	"openrouter": {
-		{"meta-llama/llama-3.3-70b-instruct:free", "Llama 3.3 70B (free)", 128000, 0, 0},
-		{"qwen/qwen-2.5-72b-instruct:free", "Qwen 2.5 72B (free)", 32768, 0, 0},
-		{"mistralai/mistral-small-3.1-24b-instruct:free", "Mistral Small 3.1 (free)", 128000, 0, 0},
-		{"google/gemma-3-27b-it:free", "Gemma 3 27B (free)", 128000, 0, 0},
-		{"deepseek/deepseek-chat:free", "DeepSeek Chat (free)", 64000, 0, 0},
+		{"nex-agi/nex-n2.5-pro:free", "Nex N2.5 Pro (free, agentic coding)", 262144, 0, 0},
+		{"nvidia/nemotron-3-super-120b-a12b:free", "Nemotron 3 Super 120B (free)", 262144, 0, 0},
+		{"google/gemma-4-31b-it:free", "Gemma 4 31B (free)", 262144, 0, 0},
+		{"cohere/north-mini-code:free", "North Mini Code (free)", 256000, 0, 0},
+		{"thinkingmachines/inkling:free", "Inkling (free, 1M ctx)", 1048576, 0, 0},
 	},
 	// Gemini via the OpenAI-compatible endpoint (chat + tools covered;
 	// native client deferred). Prices move — verify on ai.google.dev.

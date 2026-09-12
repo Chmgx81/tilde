@@ -76,6 +76,12 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   file's contents. `File.DeniesPath` is the shared per-file matcher
   (broken pattern fails closed); it is wired through the harness, the eval
   trials, and subagent/tool clones.
+- OpenRouter catalog refreshed: the previous `:free` shelf (llama-3.3,
+  qwen-2.5, mistral-small, gemma-3, deepseek-chat) was retired upstream
+  ("unavailable for free"). Replaced with the current live free,
+  tool-calling slugs (nex-n2.5-pro, nemotron-3-super-120b,
+  gemma-4-31b-it, north-mini-code, inkling), pulled from
+  `GET /api/v1/models`.
 - **Typed project memory**: `memory` save now takes an optional `kind`
   (fact|decision|constraint|env|correction; default fact, which keeps the
   untagged `- YYYY-MM-DD: text` shape). A new `correct` op supersedes a
