@@ -464,7 +464,7 @@ Flags:
 		Log:  sessLog,
 		Cfg: agent.Config{
 			MaxIters: 25, DoomRepeats: 3, Root: root,
-			Mode: m, Pol: &policy.Policy{AlwaysAllow: *yesFlag || m == mode.Auto, Unattended: *yesFlag, File: polFile},
+			Mode: m, Pol: &policy.Policy{AlwaysAllow: *yesFlag || m == mode.Auto, Unattended: *yesFlag, File: polFile, Root: root},
 			Compactor: &compact.Compactor{
 				Budget:    budget,
 				Summarize: compact.SummarizeWithProvider(prov),
@@ -697,7 +697,7 @@ func runEval(root string, prov provider.Provider, filter string, trials int) {
 			Reg:  reg,
 			Cfg: agent.Config{
 				MaxIters: 25, DoomRepeats: 3, Root: dir,
-				Mode: mode.Build, Pol: &policy.Policy{AlwaysAllow: true, File: evalPol},
+				Mode: mode.Build, Pol: &policy.Policy{AlwaysAllow: true, File: evalPol, Root: dir},
 				AskUser: func(string, map[string]any) bool { return true },
 				Skills:  trialSkills,
 			},

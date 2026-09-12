@@ -57,6 +57,11 @@ func resolveOut(sessionID, outPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("export: cannot determine working dir: %w", err)
 	}
+	// Canonicalize the cwd once so containment compares real paths — a
+	// symlinked cwd must not defeat the check.
+	if real, rerr := filepath.EvalSymlinks(cwd); rerr == nil {
+		cwd = real
+	}
 	if strings.TrimSpace(outPath) == "" {
 		return filepath.Join(cwd, sessionID+"-brief.md"), nil
 	}
@@ -64,12 +69,50 @@ func resolveOut(sessionID, outPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("export: cannot resolve --out %q: %w", outPath, err)
 	}
-	rel, err := filepath.Rel(cwd, abs)
-	if err != nil {
-		return "", fmt.Errorf("export: refusing --out %q: outside the working dir — write inside %s", outPath, cwd)
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+	// Resolve symlinks in the existing prefix: a symlinked parent dir
+	// (./link -> /etc) would otherwise pass the lexical Rel check and
+	// redirect the write outside the cwd.
+	abs = resolveExistingPrefix(abs)
+	if err := requireContained(cwd, abs); err != nil {
 		return "", fmt.Errorf("export: refusing --out %q: outside the working dir — write inside %s", outPath, cwd)
 	}
 	return abs, nil
+}
+
+// resolveExistingPrefix resolves symlinks along the longest existing
+// ancestor of abs and re-attaches the not-yet-existing components, so a
+// symlinked parent dir cannot hide an escape from the lexical check.
+func resolveExistingPrefix(abs string) string {
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		return real
+	}
+	tail := []string{filepath.Base(abs)}
+	dir := filepath.Dir(abs)
+	for {
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			p := real
+			for i := len(tail) - 1; i >= 0; i-- {
+				p = filepath.Join(p, tail[i])
+			}
+			return p
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return abs // reached the root with nothing resolvable
+		}
+		tail = append(tail, filepath.Base(dir))
+		dir = parent
+	}
+}
+
+// requireContained refuses p unless it resolves inside root.
+func requireContained(root, p string) error {
+	rel, err := filepath.Rel(root, p)
+	if err != nil {
+		return err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return fmt.Errorf("outside %s", root)
+	}
+	return nil
 }

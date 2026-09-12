@@ -124,3 +124,29 @@ func TestWriteBriefFileExplicitOut(t *testing.T) {
 		t.Errorf("out file missing goal\n--- file ---\n%s", data)
 	}
 }
+
+// A symlinked parent dir inside the cwd must not redirect the export
+// outside it: the resolved parent is checked, not the lexical spelling.
+func TestWriteBriefFileOutSymlinkEscape(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	id := writeSessionFixture(t, home, "sessSym",
+		line("user", map[string]any{"text": "symlink escape goal"}),
+	)
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(cwd, "link")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	_, _, err := WriteBriefFile(id, filepath.Join("link", "evil.md"))
+	if err == nil {
+		t.Fatal("want refusal for symlinked-parent escape, got nil")
+	}
+	if !strings.Contains(err.Error(), "outside the working dir") {
+		t.Fatalf("error should name containment, got: %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(outside, "evil.md")); statErr == nil {
+		t.Fatal("export wrote through the symlink outside the cwd")
+	}
+}

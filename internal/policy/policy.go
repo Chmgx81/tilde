@@ -42,6 +42,11 @@ type Policy struct {
 	// File is the loaded policies.yaml overlay (nil = defaults).
 	// deny wins over everything, including AlwaysAllow.
 	File *File
+	// Root is the project root used to match an absolute spelling of a
+	// contained path against deny_paths (a relative glob like `*.key`
+	// must still deny `/root/of/project/id.key`). Empty disables the
+	// absolute-path form; relative targets always match as before.
+	Root string
 
 	// mu guards sessionAllow: Check runs on the agent goroutine
 	// (Loop.Run via runAgentCmd) while ApproveSession runs on the TUI
@@ -75,8 +80,11 @@ type File struct {
 	// path tools (read_file/write_file/edit_file `path`, grep `dir`,
 	// glob `pattern`); every other tool — shell_command included —
 	// ignores the list. Matching is pure string on the slash-normalized,
-	// path.Clean-ed value as given (no filesystem access, no
-	// root-joining): containment still owns `..` escapes at exec time.
+	// path.Clean-ed value as given (no filesystem access for the lexical
+	// form); an absolute path arg is ALSO tested root-relative against
+	// the pattern (and via a best-effort symlink resolve), so a relative
+	// glob cannot be dodged by spelling a contained path absolutely.
+	// Containment still owns `..` escapes at exec time.
 	// Shell cwd scoping is deliberately OUT: shell stays argv-judged
 	// per segment (shellDeny), and its cwd is already containment-bound.
 	// NOTE (owner wiring, outside internal/policy): main.go loadPolicies
@@ -205,7 +213,7 @@ func (f *File) Validate() error {
 // A broken pattern denies path-tool calls fail-CLOSED here (Load
 // already refuses such files at startup; this covers Files built
 // without Load, e.g. in tests or embeddings of defaults).
-func (f *File) PathDenyReason(tool string, args map[string]any) string {
+func (f *File) PathDenyReason(tool string, args map[string]any, root string) string {
 	if f == nil || len(f.DenyPaths) == 0 {
 		return ""
 	}
@@ -213,7 +221,9 @@ func (f *File) PathDenyReason(tool string, args map[string]any) string {
 	if !ok {
 		return ""
 	}
-	target := normDenyPath(cand)
+	// Compile every pattern first so a broken pattern reports itself
+	// regardless of which candidate would have matched.
+	matchers := make([]func(string) bool, 0, len(f.DenyPaths))
 	for _, pat := range f.DenyPaths {
 		if strings.TrimSpace(pat) == "" {
 			return fmt.Sprintf("invalid deny_paths entry %q — remove it or fix the pattern", pat)
@@ -222,11 +232,61 @@ func (f *File) PathDenyReason(tool string, args map[string]any) string {
 		if err != nil {
 			return fmt.Sprintf("invalid deny_paths pattern %q — fix the pattern or remove it", pat)
 		}
-		if m(target) {
-			return fmt.Sprintf("deny_paths pattern %q matched — narrow the path or amend deny_paths", pat)
+		matchers = append(matchers, m)
+	}
+	for _, target := range denyCandidates(cand, root) {
+		for i, m := range matchers {
+			if m(target) {
+				return fmt.Sprintf("deny_paths pattern %q matched — narrow the path or amend deny_paths", f.DenyPaths[i])
+			}
 		}
 	}
 	return ""
+}
+
+// denyCandidates lists the normalized spellings of a path arg that
+// deny_paths should be tested against. A relative arg yields one form;
+// an absolute arg additionally yields its root-relative form (so `*.key`
+// matches `/root/id.key`) and the same for a best-effort symlink-resolved
+// form — closing the "spell the contained path absolutely" bypass. Forms
+// that escape root are dropped, so a `../` spelling can never manufacture
+// a false match.
+func denyCandidates(cand, root string) []string {
+	out := []string{normDenyPath(cand)}
+	if root == "" || !filepath.IsAbs(cand) {
+		return out
+	}
+	cleanRoot := root
+	if r, err := filepath.EvalSymlinks(root); err == nil {
+		cleanRoot = r
+	}
+	add := func(p string) {
+		if p == "" {
+			return
+		}
+		n := normDenyPath(p)
+		for _, e := range out {
+			if e == n {
+				return
+			}
+		}
+		out = append(out, n)
+	}
+	spellings := []string{cand}
+	if real, err := filepath.EvalSymlinks(cand); err == nil {
+		spellings = append(spellings, real)
+	}
+	for _, p := range spellings {
+		rel, err := filepath.Rel(cleanRoot, p)
+		if err != nil {
+			continue
+		}
+		if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+			continue // outside root: no root-relative form to match
+		}
+		add(rel)
+	}
+	return out
 }
 
 // pathArgForTool returns the file-path argument a path-scoped deny
@@ -395,7 +455,7 @@ func (p *Policy) autoAllowed(tool string, args map[string]any) bool {
 // Check returns the decision for a tool call.
 func (p *Policy) Check(tool string, args map[string]any) Decision {
 	if p != nil && p.File != nil {
-		if reason := p.File.PathDenyReason(tool, args); reason != "" {
+		if reason := p.File.PathDenyReason(tool, args, p.Root); reason != "" {
 			return Deny // path-scoped deny beats everything, including --yes
 		}
 	}
@@ -438,11 +498,25 @@ func (p *Policy) Check(tool string, args map[string]any) Decision {
 		}
 		return Ask
 	default:
-		if listed(f.Ask, tool) {
+		if listed(f.Ask, tool) || builtinAsk(tool) {
 			return Ask
 		}
 		return Allow // read-only tools run free
 	}
+}
+
+// builtinAsk reports tools that are ask-tier by design even when no
+// policies.yaml lists them: they perform outbound network egress (and
+// web_shot spawns an unsandboxed browser), which the bwrap sandbox does
+// not gate. A missing policy file must not silently free them; Auto mode
+// still upgrades Ask→Allow in the loop, and --yes stays narrowed by its
+// unattended allowlist.
+func builtinAsk(tool string) bool {
+	switch tool {
+	case "web_fetch", "web_search", "web_shot":
+		return true
+	}
+	return false
 }
 
 // bareFetchers fetch remote code under any invocation (npx/uvx run it,

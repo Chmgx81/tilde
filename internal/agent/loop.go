@@ -505,7 +505,7 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 				denied := fmt.Sprintf("tool %q denied by policy (%s). Do not retry; propose an alternative.", tc.Name, policy.Describe(tc.Name, tc.Args))
 				detail := "denied by policy tier"
 				if l.Cfg.Pol != nil && l.Cfg.Pol.File != nil {
-					if reason := l.Cfg.Pol.File.PathDenyReason(tc.Name, tc.Args); reason != "" {
+					if reason := l.Cfg.Pol.File.PathDenyReason(tc.Name, tc.Args, l.Cfg.Pol.Root); reason != "" {
 						denied = fmt.Sprintf("tool %q denied by policy — %s. Do not retry; propose an alternative.", tc.Name, reason)
 						detail = reason
 					}

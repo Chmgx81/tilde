@@ -19,6 +19,12 @@ func segmentDeny(argv []string) bool {
 	if len(argv) == 0 {
 		return false
 	}
+	// Substitution is judged on the RAW argv: stripPrefix deletes leading
+	// `NAME=value` tokens after validating only the NAME, so a value like
+	// `X=$(reboot)` would otherwise vanish before the scan below runs.
+	if hasCommandSubstitution(argv) {
+		return true
+	}
 	var ok bool
 	if argv, ok = stripPrefix(argv); !ok {
 		return true
@@ -166,12 +172,24 @@ func isDestructiveVerb(first string, rest []string) bool {
 	case "find":
 		return hasFlag(rest, "-delete") || hasFlag(rest, "-exec", "-execdir")
 	case "xargs":
-		for _, a := range rest {
-			if path.Base(strings.ToLower(a)) == "rm" {
-				return true
-			}
+		// xargs runs whatever its command word names, so a denied verb or
+		// an interpreter payload must not ride through it (e.g.
+		// `find . | xargs sh -c 'rm -rf /'`). A bare `xargs` defaults to
+		// echo and has no command word — it passes.
+		word, args := xargsTarget(rest)
+		if word == "" || word == "xargs" {
+			return false
 		}
-		return false
+		switch word {
+		case "rm":
+			// Any rm under xargs deletes a supplied list: fail closed
+			// (plain `rm file` is Ask-tier only at top level).
+			return true
+		case "sh", "bash", "dash", "zsh", "ksh", "ash", "env", "eval", "exec",
+			"python", "python3", "perl", "ruby", "node", "php":
+			return true // opaque/interpreter payload: fail closed
+		}
+		return isDestructiveVerb(word, args)
 	case "git":
 		// -C/--git-dir/--work-tree redirect git outside the project.
 		for _, a := range rest {
@@ -216,6 +234,31 @@ func isDestructiveVerb(first string, rest []string) bool {
 	return false
 }
 
+// xargsTarget finds the command word xargs will run, skipping xargs' own
+// flags and the values of value-taking ones. Returns "" when there is no
+// command word (bare `xargs` defaults to echo).
+func xargsTarget(rest []string) (string, []string) {
+	i := 0
+	for i < len(rest) {
+		a := rest[i]
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			break
+		}
+		switch a {
+		case "-I", "-n", "-P", "-s", "-L", "-E", "-d", "-a",
+			"--replace", "--max-args", "--max-procs", "--max-chars",
+			"--eof", "--delimiter", "--arg-file":
+			i += 2 // flag plus its separate value
+			continue
+		}
+		i++ // self-contained flag (e.g. -I{}, -n1, -0, -r, -t)
+	}
+	if i >= len(rest) {
+		return "", nil
+	}
+	return path.Base(strings.ToLower(rest[i])), rest[i+1:]
+}
+
 // hasDangerousRedirects scans argv for fork bombs, absolute-path tee
 // targets, and redirects at devices, /proc, or /sys.
 func hasDangerousRedirects(argv []string) bool {
@@ -224,10 +267,13 @@ func hasDangerousRedirects(argv []string) bool {
 			return true
 		}
 		target := ""
-		if (a == ">" || a == ">>") && i+1 < len(argv) {
+		// Normalize an optional fd prefix (`2>`, `1>>`, `&>`) before the
+		// operator so device//proc//sys writes cannot hide behind it.
+		redir := strings.TrimLeft(a, "0123456789&")
+		if (redir == ">" || redir == ">>") && i+1 < len(argv) {
 			target = argv[i+1]
-		} else if len(a) > 1 && (strings.HasPrefix(a, ">") || strings.HasPrefix(a, ">>")) {
-			target = a
+		} else if len(redir) > 1 && strings.HasPrefix(redir, ">") {
+			target = redir
 		} else if a == "tee" || strings.HasSuffix(a, "/tee") {
 			for _, t := range argv[i+1:] {
 				if strings.HasPrefix(t, "-") {
