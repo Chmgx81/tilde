@@ -91,7 +91,7 @@ func (u *UndoManager) SnapshotFor(tool string, args map[string]any) bool {
 	e := UndoEntry{Seq: u.seq, Tool: tool, Backups: map[string]*[]byte{}}
 	switch tool {
 	case "write_file", "edit_file":
-		if p, ok := args["path"].(string); ok && p != "" {
+		if p := optStr(args, "path", ""); p != "" {
 			e.Target = p
 			full, err := contain(u.Root, p)
 			if err != nil {
@@ -107,12 +107,12 @@ func (u *UndoManager) SnapshotFor(tool string, args map[string]any) bool {
 	case "git_worktree_add":
 		// Undo = remove the added worktree. git itself refuses when the
 		// worktree is dirty, so this cannot discard in-flight work.
-		if p, ok := args["path"].(string); ok && p != "" {
+		if p := optStr(args, "path", ""); p != "" {
 			e.Target = p
 			e.Worktree = p
 		}
 	case "shell_command":
-		if c, ok := args["command"].(string); ok {
+		if c := optStr(args, "command", ""); c != "" {
 			e.Target = c
 		}
 		e.Stash = stashCreate(u.Root)

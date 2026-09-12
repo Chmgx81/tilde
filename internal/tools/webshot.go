@@ -93,21 +93,14 @@ const (
 // every hop must pass it in addition to the SSRF rules — matching
 // web_fetch, which refuses redirects to non-allow_net hosts. Nil hostOK
 // means "any public host" (session-wide network opt-in).
-func resolveShotTarget(ctx context.Context, raw string, hostOK func(host string) bool) (string, error) {
-	client := &http.Client{
-		Timeout: 20 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("refused %q: too many redirects", raw)
-			}
-			if err := validateFetchTarget(req.Context(), req.URL); err != nil {
-				return err
-			}
-			if hostOK != nil && !hostOK(req.URL.Hostname()) {
-				return fmt.Errorf("refused %q: redirect target %q is not in the approved hosts — add it via allow_net or TILDE_ALLOW_NET=1", raw, req.URL.Hostname())
-			}
-			return nil
-		},
+//
+// client is the probe's HTTP client. Production passes shotProbeClient
+// (the SSRF-hardened, pinned-dialer transport); tests inject a plain client
+// so the redirect logic can be exercised against loopback fixtures without
+// weakening the production path.
+func resolveShotTarget(ctx context.Context, raw string, hostOK func(host string) bool, client *http.Client) (string, error) {
+	if client == nil {
+		client = shotProbeClient(raw, hostOK)
 	}
 	// HEAD first (cheap); some servers reject it — fall back to a
 	// bounded GET that discards the body. The status is ignored: a 404
@@ -132,6 +125,33 @@ func resolveShotTarget(ctx context.Context, raw string, hostOK func(host string)
 		return final, nil
 	}
 	return "", fmt.Errorf("refused %q: redirect chain check failed", raw)
+}
+
+// shotProbeClient builds the redirect-probe client. It uses the same
+// SSRF-hardened transport as web_fetch/web_search (netsafe.go): the dialer
+// resolves once, refuses un-routable addresses, and connects to the
+// validated address — closing the rebinding window on the probe itself.
+//
+// The browser's own fetch remains a documented residual: Firefox resolves
+// independently of us, which is why web_shot stays ask-tier, human-reviewed
+// output. A constructor (not an inline literal) so tests can pin it.
+func shotProbeClient(raw string, hostOK func(host string) bool) *http.Client {
+	return &http.Client{
+		Timeout:   20 * time.Second,
+		Transport: newSafeTransport(),
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("refused %q: too many redirects", raw)
+			}
+			if err := validateFetchTarget(req.Context(), req.URL); err != nil {
+				return err
+			}
+			if hostOK != nil && !hostOK(req.URL.Hostname()) {
+				return fmt.Errorf("refused %q: redirect target %q is not in the approved hosts — add it via allow_net or TILDE_ALLOW_NET=1", raw, req.URL.Hostname())
+			}
+			return nil
+		},
+	}
 }
 
 func (t *WebShot) Exec(ctx context.Context, args map[string]any) (string, error) {
@@ -171,7 +191,7 @@ func (t *WebShot) Exec(ctx context.Context, args map[string]any) (string, error)
 			hostOK = func(host string) bool { return allow != nil && allow(host) }
 		}
 		resolve = func(ctx context.Context, raw string) (string, error) {
-			return resolveShotTarget(ctx, raw, hostOK)
+			return resolveShotTarget(ctx, raw, hostOK, nil)
 		}
 	}
 	finalURL, err := resolve(ctx, raw)

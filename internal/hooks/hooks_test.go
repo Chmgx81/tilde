@@ -193,6 +193,21 @@ func TestHookAuditScrubbed(t *testing.T) {
 	}
 }
 
+// Regression: a sandbox wrapper that refuses to build (here: `/` as the
+// project root) returns a nil *exec.Cmd. runHook must surface that as an
+// error instead of dereferencing the nil command.
+func TestSandboxBuildFailureDoesNotPanic(t *testing.T) {
+	t.Setenv("TILDE_NO_SANDBOX", "") // empty means "not disabled"
+	before := &Config{Root: "/", Before: map[string][]string{"read_file": {"true"}}}
+	if err := before.RunBefore(context.Background(), "read_file", "{}"); err == nil {
+		t.Fatal("an unbuildable sandboxed hook must report an error")
+	}
+	after := &Config{Root: "/", After: map[string][]string{"read_file": {"true"}}}
+	if notes := after.RunAfter(context.Background(), "read_file", "{}", "ok"); notes == "" {
+		t.Fatal("an unbuildable sandboxed after-hook must report a note")
+	}
+}
+
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {

@@ -8,6 +8,10 @@ This directory contains the detailed design, operational, and research documents
 | --- | --- |
 | [Architecture](ARCHITECTURE.md) | module boundaries and dependency rules |
 | [Master build plan](Plan.md) | product scope, decisions, and implementation status |
+| [Security model](SECURITY.md) | threat model and the defense layers |
+| [Slopsquatting defense](SLOPSQUATTING.md) | package-name hallucination risk and install prompts |
+| [Contributing](CONTRIBUTING.md) | conventions, hard invariants, and the change checklist |
+| [Testing](TESTING.md) | how to run and write the test suite |
 | [Marketplace](marketplace.md) | plugins, skills, hooks, MCP, catalogs, and trust |
 | [TUI specification](tui-design-spec.md) | interaction patterns and terminal presentation |
 | [TUI audit](tui-audit.md) | current UI/UX findings, fixes, and next pass |

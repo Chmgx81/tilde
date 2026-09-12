@@ -106,7 +106,7 @@ func (t *WebFetch) Exec(ctx context.Context, args map[string]any) (string, error
 	} else {
 		req.Header.Set("Accept", "text/html, text/plain;q=0.9, */*;q=0.1")
 	}
-	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	client := &http.Client{Timeout: 30 * time.Second, Transport: newSafeTransport(), CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 5 {
 			return fmt.Errorf("stopped after 5 redirects")
 		}
@@ -230,13 +230,18 @@ func renderFetchText(title, text, format string) string {
 	return text
 }
 
+// validateFetchTarget is the early, named refusal: it resolves the host and
+// rejects un-routable addresses before any connection is attempted, so the
+// error text says exactly why. It is not the only guard — the transport's
+// pinned dialer re-checks at connect time, which is what closes the
+// rebinding window between this check and the actual request.
 func validateFetchTarget(ctx context.Context, u *url.URL) error {
 	host := u.Hostname()
 	if host == "" {
 		return fmt.Errorf("refused %q: missing host", u.String())
 	}
 	if ip := net.ParseIP(host); ip != nil {
-		if fetchIPBlocked(ip) {
+		if netBlockedIP(ip) {
 			return fmt.Errorf("refused %q: resolves to private/loopback/link-local address", u.String())
 		}
 		return nil
@@ -246,23 +251,9 @@ func validateFetchTarget(ctx context.Context, u *url.URL) error {
 		return fmt.Errorf("refused %q: DNS lookup failed: %v", u.String(), err)
 	}
 	for _, a := range addrs {
-		if fetchIPBlocked(a.IP) {
+		if netBlockedIP(a.IP) {
 			return fmt.Errorf("refused %q: resolves to private/loopback/link-local address", u.String())
 		}
 	}
 	return nil
-}
-
-func fetchIPBlocked(ip net.IP) bool {
-	if ip.IsUnspecified() || ip.IsLoopback() || ip.IsMulticast() ||
-		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsPrivate() {
-		return true
-	}
-	if !ip.IsGlobalUnicast() {
-		return true
-	}
-	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 0 {
-		return true
-	}
-	return false
 }

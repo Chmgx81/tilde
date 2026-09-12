@@ -702,6 +702,18 @@ As of v0.9+:
 | Headless export | DONE, `tilde --export <id> [--out]` (cwd-contained, 0600, conflict guards) |
 | Plan banner + todos | DONE, banner at start/demotion, Update Todos block from manager state; `todo_write add` dedupes identical open text (revision, not duplication) |
 | Subagent view | DONE, ⋮ running / │ [done\|failed] completion rows, per-row model |
+| Slopsquatting defense | DONE, `internal/slopsquatting` hallucination DB + typo distance, install-shape warning in the confirm prompt, `TILDE_STRICT_INSTALL=1` forces Ask even in Auto/`--yes` |
+| Secret scrubber hardening | DONE, Vercel `vcp_` tokens, URL `user:pass@host` credentials, GCP service-account `private_key` redacted in place (never whole-document) |
+| SSRF / DNS-rebinding guard | DONE, `web_fetch` + `web_search` resolve once, refuse un-routable addresses, and dial the validated IP (`internal/tools/netsafe.go`); no HTTP proxy on guarded fetchers |
+| Headless credentials | DONE, `tilde login\|logout [provider\|service]` against the sealed store; keys read from env or stdin, never argv |
+| Deploy | DONE, `tilde deploy [vercel] [--prod\|--preview]`, token from the credential ladder, passed in the child env, deployment URL reported; not an agent tool |
+| Install health | DONE, `tilde doctor [--json]`, exit 2 on a hard failure |
+| PTY terminal contract | DONE, `pty_smoke_test.go` runs the real binary under a pty: alt-screen enter/exit, live resize re-render, clean Ctrl+C |
+| Input bounds | DONE, NUL bytes refused at `contain()` (all file tools), 64 KiB shell-command cap naming the fix |
+| Status bar: background work | DONE, `⚙ N bg` in `accent-auto` while detached shell tasks run, read in-memory; documented in tui-design-spec §2.2 |
+| Bug: scrubber over-redaction | FIXED, a GCP match replaced the entire output; now an in-place field redaction. ARN redaction removed (identifiers, not credentials) |
+| Bug: hooks nil-deref | FIXED, `runHook` dereferenced a nil `*exec.Cmd` when the sandbox wrapper refused to build |
+| Bug: fork path traversal | FIXED, `tilde fork ../../x` read outside the sessions dir; ids validated in `session.ValidID`, now shared by fork/export/TUI (was three copies) |
 
 ---
 

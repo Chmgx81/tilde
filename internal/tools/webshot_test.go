@@ -272,12 +272,21 @@ func TestParsePNGSize(t *testing.T) {
 	}
 }
 
+// plainTestClient reuses the shot probe's redirect logic on the default
+// transport, so loopback httptest fixtures are reachable. The production
+// transport is the pinned dialer (pinned by
+// TestAllNetworkToolsUseSafeTransport); these tests isolate CheckRedirect's
+// per-hop SSRF and allowlist rules.
+func plainTestClient(raw string, hostOK func(string) bool) *http.Client {
+	return &http.Client{Timeout: 20 * time.Second, CheckRedirect: shotProbeClient(raw, hostOK).CheckRedirect}
+}
+
 func TestResolveShotTargetNoRedirect(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
-	final, err := resolveShotTarget(context.Background(), srv.URL+"/page", nil)
+	final, err := resolveShotTarget(context.Background(), srv.URL+"/page", nil, plainTestClient(srv.URL+"/page", nil))
 	if err != nil {
 		t.Fatalf("no-redirect page must resolve: %v", err)
 	}
@@ -292,7 +301,7 @@ func TestResolveShotTargetRedirectToPrivateRefused(t *testing.T) {
 		http.Redirect(w, r, "http://127.0.0.1:9/metadata", http.StatusFound)
 	}))
 	defer srv.Close()
-	if _, err := resolveShotTarget(context.Background(), srv.URL, nil); err == nil {
+	if _, err := resolveShotTarget(context.Background(), srv.URL, nil, plainTestClient(srv.URL, nil)); err == nil {
 		t.Fatal("redirect to loopback must be refused")
 	} else if !strings.Contains(strings.ToLower(err.Error()), "refus") && !strings.Contains(err.Error(), "private") && !strings.Contains(err.Error(), "loopback") {
 		t.Fatalf("refusal must name the reason, got %q", err)
@@ -305,7 +314,7 @@ func TestResolveShotTargetRedirectLoopRefused(t *testing.T) {
 		http.Redirect(w, r, srv.URL, http.StatusFound)
 	}))
 	defer srv.Close()
-	if _, err := resolveShotTarget(context.Background(), srv.URL, nil); err == nil {
+	if _, err := resolveShotTarget(context.Background(), srv.URL, nil, plainTestClient(srv.URL, nil)); err == nil {
 		t.Fatal("redirect loop must be refused")
 	}
 }
@@ -319,7 +328,7 @@ func TestResolveShotTargetHonorsHostAllowlist(t *testing.T) {
 	}))
 	defer redir.Close()
 	denyHost := func(host string) bool { return false }
-	_, err := resolveShotTarget(context.Background(), redir.URL, denyHost)
+	_, err := resolveShotTarget(context.Background(), redir.URL, denyHost, plainTestClient(redir.URL, denyHost))
 	if err == nil || !strings.Contains(err.Error(), "not in the approved hosts") || !strings.Contains(err.Error(), "93.184.216.34") {
 		t.Fatalf("non-allowlisted redirect target must be refused naming the host, got %v", err)
 	}
@@ -337,7 +346,7 @@ func TestResolveShotTargetHonorsHostAllowlist(t *testing.T) {
 	defer same.Close()
 	// Same-server redirect stays on 127.0.0.1 → SSRF refusal is correct
 	// and must name the SSRF reason, not the allowlist.
-	_, err = resolveShotTarget(context.Background(), same.URL, nil)
+	_, err = resolveShotTarget(context.Background(), same.URL, nil, plainTestClient(same.URL, nil))
 	if err == nil || strings.Contains(err.Error(), "approved hosts") {
 		t.Fatalf("loopback redirect must fail on SSRF grounds, got %v", err)
 	}

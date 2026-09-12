@@ -22,3 +22,6 @@ dist/
 .vercel/
 .vercel
 .env*
+
+# Command Code local state (taste/session data — never commit)
+.commandcode/

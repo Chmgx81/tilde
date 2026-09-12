@@ -100,3 +100,21 @@ func NewID() string {
 	}
 	return fmt.Sprintf("session_%x", time.Now().UnixNano())
 }
+
+// ValidID reports whether id is safe to name a session file: non-empty,
+// at most 64 characters, and only letters, digits, '_' or '-'. Separators
+// and dots are rejected, so an id can never traverse out of the sessions
+// directory — traversal is structurally impossible, not merely unlikely.
+func ValidID(id string) bool {
+	if id == "" || len(id) > 64 {
+		return false
+	}
+	for _, r := range id {
+		if r == '_' || r == '-' || ('a' <= r && r <= 'z') ||
+			('A' <= r && r <= 'Z') || ('0' <= r && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
+}

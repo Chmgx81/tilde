@@ -51,6 +51,15 @@ var (
 	// sauce") must not redact.
 	reScrubSecretAssign = regexp.MustCompile(`(?i)(["']?(?:password|passwd|pwd|client_secret|access_token|secret_token|private_key)["']?\s*[:=]\s*["']?)[A-Za-z0-9_.\-/+=]{4,}`)
 	reScrubQueryParam   = regexp.MustCompile(`(?i)([?&](?:key|token|secret|password|access_token|refresh_token|id_token|client_secret|api_key|apikey|auth|authorization|session|sig|signature|code)=)[^&#\s]*`)
+	// reScrubVercel matches Vercel deployment tokens (vcp_ prefix).
+	reScrubVercel = regexp.MustCompile(`vcp_[A-Za-z0-9]{40,}`)
+	// reScrubGCPPrivateKey matches the private_key field of a GCP service
+	// account JSON file. The value is redacted in place — unlike a
+	// whole-document rule, reading the file still yields every other
+	// field, so the output stays usable.
+	reScrubGCPPrivateKey = regexp.MustCompile(`(?i)("private_key"\s*:\s*")[^"]*(")`)
+	// reScrubURLCreds matches user:password@host patterns in URLs.
+	reScrubURLCreds = regexp.MustCompile(`(?i)(?:https?|ftp|ssh)://[A-Za-z0-9_.\-]+:[^@\s]+@`)
 )
 
 // Scrub redacts secrets in s, returning the cleaned string and the number
@@ -94,6 +103,9 @@ func Scrub(s string) (string, int) {
 	// After the query rule: in a URL the query marker wins (no double
 	// redaction); bare KEY=value assignments still fall through to here.
 	replace(reScrubSecretAssign, `$1<<REDACTED:secret>>`)
+	replace(reScrubVercel, "<<REDACTED:vercel>>")
+	replace(reScrubGCPPrivateKey, `$1<<REDACTED:gcp-private-key>>$2`)
+	replace(reScrubURLCreds, "://<<REDACTED:url-creds>>@")
 	if home := os.Getenv("HOME"); home != "" {
 		if c := strings.Count(s, home); c > 0 {
 			n += c

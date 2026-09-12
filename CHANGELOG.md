@@ -5,6 +5,85 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
 
 ## v0.10.0 (unreleased)
 
+- **Security hardening — slopsquatting defense**: a new `internal/policy/slopsquatting.go`
+  package detects package-name hallucinations (e.g. `langchin` for `langchain`)
+  in install commands (`pip install`, `npm install`, `cargo add`, ...).
+  Flagged names trigger a prominent `SLOPSQUATTING WARNING` in the confirm
+  prompt naming the probable real package. `TILDE_STRICT_INSTALL=1` makes
+  all install commands require explicit approval even in Auto mode with
+  `--yes`. See `docs/SLOPSQUATTING.md`.
+- **Secret scrubbing enhancement**: `internal/scrub/scrub.go` adds patterns
+  for Vercel tokens (`vcp_` prefix), URL credentials (`user:pass@host`),
+  and the GCP service-account `private_key` JSON field (redacted in place,
+  so the rest of the file stays readable). All tool output, session logs,
+  and audit trails benefit automatically.
+- **SSRF hardening (DNS rebinding)**: `web_fetch` and `web_search` now
+  connect through a transport whose dialer resolves the host once, refuses
+  un-routable addresses, and dials the exact validated address. Previously
+  the URL was checked and then the HTTP client resolved it again — a
+  rebinding attacker could pass the check and connect to
+  loopback/link-local/private space. The private-range guard is now one
+  shared implementation (`internal/tools/netsafe.go`). These guarded
+  fetchers deliberately do not use an HTTP proxy, which would move
+  resolution outside the guard.
+- `web_shot`'s redirect probe now uses the same hardened transport. It was
+  still building its client from the default transport, so the third
+  outbound-HTTP tool kept the unpinned-dialer gap the other two had fixed.
+  A test pins the transport on every outbound client so a new one cannot
+  reintroduce it silently. Firefox's own fetch remains the documented
+  residual that keeps `web_shot` ask-tier.
+- `tilde login [provider|service]` / `tilde logout [provider|service]`:
+  headless credential management against the sealed store (the TUI
+  `/login` is the interactive equivalent). The key is read from the
+  target's env var or stdin — never argv, so it stays out of `ps` and
+  shell history; a bare `tilde login` prints the masked
+  credential-ladder status. `vercel` is accepted alongside the model
+  providers.
+- `tilde deploy [vercel] [--prod|--preview]`: deploy the current project
+  with the Vercel CLI, resolving the token through the same ladder
+  (`$VERCEL_TOKEN`, then the sealed store) and passing it in the child's
+  environment — never argv. User-invoked only; it is deliberately not an
+  agent tool, so a model can never ship on its own. Prefers a `vercel`
+  already on PATH, else `npx vercel@<major>` (matching the website
+  deploy workflow); a missing token or Node fails loud with the fix.
+- `tilde doctor [--json]`: one read-only health report covering the sandbox
+  backstop, the policy file, credential availability per provider, session
+  and audit dir writability, git, provider construction, and the network
+  opt-in. Exit 2 when a hard check fails, so a script can gate on it; the
+  human form pairs a glyph with an explicit word so it reads in monochrome.
+- Fixed a path-traversal hole in `tilde fork <id>`: the session id was
+  joined into a path without validation, so `tilde fork ../../secret` read
+  an arbitrary `*.jsonl` from outside the sessions directory and copied it
+  into a new branch. Ids are now validated at the `session.Fork` entry
+  point (`session.ValidID`), protecting every caller — and the guard is now
+  one implementation shared by `fork`, `--export`, and the TUI `/export`
+  (three copies before). Regression test included.
+- Fixed a nil-pointer panic in `internal/hooks`: when the sandbox wrapper
+  refused to build (missing bwrap, an invalid backend, or `/` as the project
+  root), `runHook` dereferenced the nil `*exec.Cmd` before checking the
+  error. Hooks now surface the refusal as a normal error/note. Regression
+  test included (`TestSandboxBuildFailureDoesNotPanic`).
+- Input bounds: a NUL byte in any file-tool path is refused with a clear
+  message at the shared `contain()` choke point, and `shell_command` refuses a
+  command over 64 KiB (far above any real command) naming the fix.
+- Status bar shows running background work (`⚙ N bg`, `accent-auto`) while
+  detached shell tasks are live, read in-memory; absent at zero so the
+  default bar is unchanged. Documented in tui-design-spec §2.2, including its
+  place in the narrow-terminal drop order.
+- New docs: `docs/TESTING.md` (suite shape, conventions, security-testing
+  rules) and `docs/CONTRIBUTING.md` (invariants, house style, change
+  checklist), both added to the documentation index. `docs/Plan.md`'s status
+  table now covers this session's work.
+- Test coverage: a PTY smoke test (`pty_smoke_test.go`) runs the real binary
+  under a pseudo-terminal and asserts alt-screen entry, live resize
+  (TIOCSWINSZ → SIGWINCH re-render), a clean Ctrl+C exit, alt-screen exit,
+  and cursor restore — the terminal-cleanup contract the rendered tests
+  cannot observe. Linux-only, skipped under `-short`.
+- Maintainability refactor (no behavior change): the `main` composition root
+  is split (`main.go` flag parsing/dispatch + `harness.go` registry/gates
+  wiring), `tools/undo.go` snapshot args go through the shared `optStr`
+  helper, and `policy` arg normalization is centralized in `argOp`. CLI
+  flags, tool schemas, exit codes, and output shapes are unchanged.
 - Plan mode no longer dumps artifacts into chat: the Plan prompt requires a
   short numbered outline (full detail lives in the `save_plan` file), and
   `todo_write add` revises instead of duplicating identical open text.

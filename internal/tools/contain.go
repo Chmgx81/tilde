@@ -16,6 +16,12 @@ import (
 // Absolute paths are allowed only when contained. Symlinks resolve before
 // the check, so link->outside escapes fail closed too.
 func contain(root, p string) (string, error) {
+	// A NUL byte can never appear in a real path, and every os/filesystem
+	// call rejects one with a cryptic EINVAL. Refuse it here with a clear
+	// message, once, for every file tool (read/write/edit/grep/glob).
+	if strings.IndexByte(p, 0) >= 0 {
+		return "", fmt.Errorf("refusing path with a NUL byte: send a normal project-relative path")
+	}
 	abs := p
 	if !filepath.IsAbs(p) {
 		abs = filepath.Join(root, p)

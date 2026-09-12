@@ -374,6 +374,12 @@ func (t *Shell) buildCmd(ctx context.Context, cmdStr string, stdout, stderr io.W
 	return cmd, "", nil
 }
 
+// maxShellCommandBytes bounds one command string. Far above any real
+// command (even a generous heredoc) and far below pathological input, so a
+// runaway payload cannot bloat the session log and model context in a
+// single call. The refusal names the fix.
+const maxShellCommandBytes = 64 * 1024
+
 func (t *Shell) Exec(ctx context.Context, args map[string]any) (string, error) {
 	cmdStr, err := strArg(args, "command")
 	if err != nil {
@@ -381,6 +387,9 @@ func (t *Shell) Exec(ctx context.Context, args map[string]any) (string, error) {
 	}
 	if strings.TrimSpace(cmdStr) == "" {
 		return "", fmt.Errorf("command is blank: send a non-empty shell command")
+	}
+	if len(cmdStr) > maxShellCommandBytes {
+		return "", fmt.Errorf("command is %d bytes (over the %d-byte cap): split it into smaller commands, or write the long text to a file with write_file and reference that file", len(cmdStr), maxShellCommandBytes)
 	}
 	detachDefault, max := t.timeouts()
 	detachAfter := detachDefault

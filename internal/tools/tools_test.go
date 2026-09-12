@@ -85,6 +85,38 @@ func TestDispatchUnknownToolListsAvailable(t *testing.T) {
 	}
 }
 
+func TestShellCommandLengthCap(t *testing.T) {
+	root := testRoot(t)
+	s := &Shell{Root: root}
+	huge := strings.Repeat("a", maxShellCommandBytes+1)
+	_, err := s.Exec(context.Background(), map[string]any{"command": huge})
+	if err == nil {
+		t.Fatal("an over-cap command must be refused")
+	}
+	if !contains(err.Error(), "cap") || !contains(err.Error(), "write_file") {
+		t.Fatalf("refusal must name the cap and the fix, got: %v", err)
+	}
+	// A command just under the cap still runs (leave room for "echo ").
+	ok := strings.Repeat("a", maxShellCommandBytes-16)
+	if _, err := s.Exec(context.Background(), map[string]any{"command": "echo " + ok}); err != nil {
+		t.Fatalf("under-cap command should run: %v", err)
+	}
+}
+
+func TestContainRejectsNULPath(t *testing.T) {
+	root := testRoot(t)
+	if _, err := contain(root, "a\x00b"); err == nil {
+		t.Fatal("a NUL byte in a path must be refused")
+	}
+	// The file tools surface the same refusal (they all route through contain).
+	if _, err := (&ReadFile{Root: root}).Exec(context.Background(), map[string]any{"path": "a\x00b"}); err == nil {
+		t.Fatal("read_file must refuse a NUL path")
+	}
+	if _, err := (&WriteFile{Root: root}).Exec(context.Background(), map[string]any{"path": "a\x00b", "content": "x"}); err == nil {
+		t.Fatal("write_file must refuse a NUL path")
+	}
+}
+
 func TestShellExitHonest(t *testing.T) {
 	root := testRoot(t)
 	s := &Shell{Root: root}

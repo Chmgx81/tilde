@@ -173,9 +173,13 @@ Configuration is per-feature rather than one global chain:
 - hooks concatenate project `.tilde/hooks.yaml` with user hooks (project runs first) and likewise need `--hooks-project`/trust;
 - skills load from both user and project skill dirs (project needs `--skills-project`/trust).
 
-Keep credentials in the environment or an external secret store. Do not place tokens, private keys, or provider credentials in project config, session exports, plugin manifests, or logs.
+Keep credentials in the environment, the sealed credential store, or an external secret manager. Do not place tokens, private keys, or provider credentials in project config, session exports, plugin manifests, or logs.
+
+The credential store is `~/.tilde/credentials.json` (AES-GCM sealed to `credentials.enc.json`, 0600). Manage it headlessly with `tilde login <provider|service>` / `tilde logout <provider|service>`; a bare `tilde login` prints the masked ladder status. Keys are read from the target's env var or stdin, never argv. The TUI `/login` is the interactive equivalent. `tilde deploy [vercel] [--prod]` uses the same ladder for its deploy token.
 
 Useful runtime controls include budget, timeout, task-slot, paste, and unattended-approval settings. Run `./tilde --help` to see the exact names and defaults for the current build.
+
+Before filing a "tilde won't start" report, run `./tilde doctor`. It checks the sandbox backstop, the policy file, per-provider credential availability, session/audit writability, git, provider construction, and the network opt-in, and exits 2 when something required is broken. `--json` emits one object per check for scripts.
 
 ## Updating
 

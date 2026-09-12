@@ -78,6 +78,48 @@ func TestHeadlessExitCode(t *testing.T) {
 	}
 }
 
+func TestParseRetention(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"30d", 30 * 24 * time.Hour, false},
+		{"0d", 0, false},
+		{"720h", 720 * time.Hour, false},
+		{"1h30m", 90 * time.Minute, false},
+		{"0", 0, false},
+		// Destructive-shape guards: negative, NaN and Inf must refuse —
+		// otherwise "NaNd" would validate and wipe the session store.
+		{"-1d", 0, true},
+		{"NaNd", 0, true},
+		{"+Inf d", 0, true},
+		{"-Inf d", 0, true},
+		{"-720h", 0, true},
+		{"abc", 0, true},
+		{"", 0, true},
+		{"1w", 0, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			in := tc.in
+			got, err := parseRetention(&in, "sessions")
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("parseRetention(%q) = %v, want error", tc.in, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseRetention(%q) unexpected error: %v", tc.in, err)
+			}
+			if got != tc.want {
+				t.Fatalf("parseRetention(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRunExportCmdMissingSession(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	err := runExportCmd("nosuchsession", "")

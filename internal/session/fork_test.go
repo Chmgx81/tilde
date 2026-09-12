@@ -9,6 +9,55 @@ import (
 	"time"
 )
 
+// Regression: a traversal id must never reach the filesystem. Before the
+// guard, `../../secret` would join to a path outside the sessions dir and
+// copy that file's contents into a new branch.
+func TestForkRejectsTraversalID(t *testing.T) {
+	parent := t.TempDir()
+	sessions := filepath.Join(parent, "sessions")
+	if err := os.MkdirAll(sessions, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A juicy file one level up that a traversal id would target.
+	outside := filepath.Join(parent, "secret.jsonl")
+	os.WriteFile(outside, []byte(`{"type":"user","data":{"x":1}}`+"\n"), 0o600)
+
+	for _, id := range []string{
+		"../secret",
+		"../../etc/passwd",
+		"a/b",
+		"..",
+		".",
+		"",
+		strings.Repeat("a", 65),
+	} {
+		if _, err := Fork(sessions, id, ""); err == nil {
+			t.Errorf("Fork(%q) must refuse a traversal/oversized id", id)
+		}
+	}
+	// And nothing was created.
+	entries, err := os.ReadDir(sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("refused fork left files behind: %v", entries)
+	}
+}
+
+func TestValidID(t *testing.T) {
+	for _, ok := range []string{"session_abc123", "A-b_9", "x"} {
+		if !ValidID(ok) {
+			t.Errorf("ValidID(%q) = false, want true", ok)
+		}
+	}
+	for _, bad := range []string{"", ".", "..", "a/b", "../x", "a\\b", "a b", "a.jsonl", strings.Repeat("a", 65)} {
+		if ValidID(bad) {
+			t.Errorf("ValidID(%q) = true, want false", bad)
+		}
+	}
+}
+
 // writeSrc writes entries with fixed timestamps so cutoff tests are
 // deterministic. Returns the src id and the exact raw lines written.
 func writeSrc(t *testing.T, dir, id string, stamps ...time.Time) []string {

@@ -7,18 +7,24 @@ This is intentionally a pointer document, not a package-by-package encyclopedia.
 Module layout:
 
 ```text
-main.go (composition root) -> internal/* (flat packages)
+main.go + harness.go (composition root, package main) -> internal/* (flat packages)
 ```
 
-- `main.go` wires everything; `internal/*` holds flat, single-purpose
+- `main.go` owns flag parsing and dispatch; `harness.go` owns the core tool
+  registry and startup gates (audit sink, provider, policies, hooks, MCP);
+  `internal/*` holds flat, single-purpose
   packages (agent, audit, compact, creds, eval, export, hooks, ide,
   mcp, marketplace, mode, plugin, policy, provider, repair, rules, sandbox,
-  schedule, scrub, session, skills, tools, trust, tui, update, vec).
+  schedule, scrub, session, skills, slopsquatting, tools, trust, tui,
+  update, vec).
 - Dependency direction rule: `main.go` may import `internal/*`;
   `internal/*` packages must not import `main.go`, and new
   cross-package deps should point inward toward policy/sandbox/trust/scrub
   style leaf gates, never form cycles (`tools` imports `hooks`, so shared
   secrets patterns live in the `scrub` leaf, never in `tools`).
+- `slopsquatting` is a stdlib-only leaf (like `scrub`): it knows the
+  hallucinated-package-name database, and `policy` imports it to annotate
+  install confirm prompts. The deny/ask machinery itself stays in `policy`.
 
 ## Runtime boundaries
 

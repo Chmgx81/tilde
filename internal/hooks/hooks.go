@@ -145,15 +145,18 @@ func runHook(ctx context.Context, tool, argsJSON, stdin, cmdStr string) (string,
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	var cmd *exec.Cmd
-	var err error
 	if hookRoot := hookRootFromContext(ctx); hookRoot != "" {
 		// The command itself is still configured by the user, but its process
 		// runs under the same filesystem/network boundary as shell tools.
+		// Build the command and bail out before touching it: a failed
+		// wrapper (missing bwrap, `/` as root, bad backend) returns a nil
+		// *exec.Cmd, and assigning to its fields would panic.
 		wrapped := "export TILDE_TOOL=" + shellQuote(tool) + " TILDE_ARGS_JSON=" + shellQuote(scrubLocal(argsJSON)) + "; " + cmdStr
-		cmd, err = (&sandbox.Config{Root: hookRoot}).Command(cctx, wrapped)
+		built, err := (&sandbox.Config{Root: hookRoot}).Command(cctx, wrapped)
 		if err != nil {
 			return "", err
 		}
+		cmd = built
 	} else {
 		cmd = exec.Command("bash", "-c", cmdStr)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -164,10 +167,7 @@ func runHook(ctx context.Context, tool, argsJSON, stdin, cmdStr string) (string,
 	}
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
-	if err == nil && cmd.Process == nil {
-		err = cmd.Start()
-	}
-	if err != nil {
+	if err := cmd.Start(); err != nil {
 		return "", err
 	}
 	wait := make(chan error, 1)

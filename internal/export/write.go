@@ -10,24 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode"
-)
 
-// validSessionID keeps the session lookup inside the sessions dir: no
-// separators, no dot games, no empty — traversal is structurally
-// impossible, not just unlikely. Mirrors the TUI /export guard.
-func validSessionID(id string) bool {
-	if id == "" || len(id) > 64 {
-		return false
-	}
-	for _, r := range id {
-		if r == '_' || r == '-' || unicode.IsLetter(r) || unicode.IsDigit(r) {
-			continue
-		}
-		return false
-	}
-	return true
-}
+	"tilde/internal/session"
+)
 
 // WriteBriefFile builds the distilled brief for sessionID and writes it to
 // outPath (default <sessionID>-brief.md in the cwd) with mode 0600.
@@ -36,7 +21,9 @@ func validSessionID(id string) bool {
 // the fix named; the brief content itself is whatever BriefFromFile
 // builds today.
 func WriteBriefFile(sessionID, outPath string) (string, int, error) {
-	if !validSessionID(sessionID) {
+	// One session-id guard for the whole codebase (session.ValidID): no
+	// separators, no dots, so the lookup can never leave the sessions dir.
+	if !session.ValidID(sessionID) {
 		return "", 0, fmt.Errorf("export: bad session id %q: letters, digits, _ and - only (max 64) — list sessions with `tilde --resume`", sessionID)
 	}
 	home, err := os.UserHomeDir()

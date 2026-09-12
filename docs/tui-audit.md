@@ -191,5 +191,12 @@ specific implementation path.
 1. ~~Add near-limit composer capacity feedback.~~ DONE 2026-09-10.
 2. ~~Standardize actionable empty states across all pickers.~~ DONE 2026-09-10.
 3. ~~Add color-profile and ASCII-glyph snapshot coverage.~~ DONE (Ascii-profile + marker-stripping test) 2026-09-10; 256-color snapshots optional.
-4. Add a PTY smoke test for resize, Ctrl+C/Esc cancellation, and terminal cleanup. (Still open.)
+4. ~~Add a PTY smoke test for resize, Ctrl+C/Esc cancellation, and terminal cleanup.~~
+   DONE: `pty_smoke_test.go` builds the real binary, runs it under a
+   pseudo-terminal, verifies alt-screen entry, performs a live resize
+   (TIOCSWINSZ → SIGWINCH) and checks the UI re-renders, sends Ctrl+C and
+   checks a clean exit, then asserts alt-screen exit (`\x1b[?1049l`) and
+   cursor restore (`\x1b[?25h`) in the captured output. Linux-only and
+   skipped under `-short`. Esc cancellation is covered by the Model-level
+   tests; the PTY test owns the OS-terminfo half.
 5. Re-run the audit after browser/vision surfaces become implemented rather than only specified.

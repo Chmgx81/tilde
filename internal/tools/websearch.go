@@ -118,7 +118,7 @@ func (t *WebSearch) runSearch(ctx context.Context, q string, n int) ([]searchRes
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return nil, fmt.Errorf("tool_unavailable: web_search backend URL is invalid: %v. Do not retry; work from local context", err)
 	}
-	if ip := net.ParseIP(u.Hostname()); ip != nil && searchIPBlocked(ip) {
+	if ip := net.ParseIP(u.Hostname()); ip != nil && netBlockedIP(ip) {
 		return nil, fmt.Errorf("tool_unavailable: web_search backend resolves to a blocked address. Do not retry; work from local context")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
@@ -130,7 +130,7 @@ func (t *WebSearch) runSearch(ctx context.Context, q string, n int) ([]searchRes
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	client := t.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: searchTimeout, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		client = &http.Client{Timeout: searchTimeout, Transport: newSafeTransport(), CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("stopped after 5 redirects")
 			}
@@ -225,7 +225,7 @@ func resolveSearchLink(href string) string {
 	if u.Host == "" {
 		return ""
 	}
-	if ip := net.ParseIP(u.Hostname()); ip != nil && searchIPBlocked(ip) {
+	if ip := net.ParseIP(u.Hostname()); ip != nil && netBlockedIP(ip) {
 		return ""
 	}
 	u.Fragment = ""
@@ -290,19 +290,5 @@ func (t *WebSearch) cachePut(key, out string) {
 	t.cache[key] = searchCacheEntry{output: out, expiry: time.Now().Add(searchTTL)}
 }
 
-// searchIPBlocked mirrors the fetcher's private-range guard, duplicated here
-// so websearch stays decoupled from webfetch internals. DNS-free by design:
-// literal-IP results are filtered, everything else is display-only text.
-func searchIPBlocked(ip net.IP) bool {
-	if ip.IsUnspecified() || ip.IsLoopback() || ip.IsMulticast() ||
-		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsPrivate() {
-		return true
-	}
-	if !ip.IsGlobalUnicast() {
-		return true
-	}
-	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 0 {
-		return true
-	}
-	return false
-}
+// The private-range guard is shared with the fetcher (netBlockedIP in
+// netsafe.go): same trust boundary, one implementation.

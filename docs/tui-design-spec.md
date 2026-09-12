@@ -268,6 +268,7 @@ up through history.
 
 ```
  Plan · ~/dev/tilde · main [+2]         kimi-k2.7-code · ctx 41% (13.1k/32k)
+ Plan · ~/dev/tilde · main              kimi-k2.7-code · ctx 8% · ⚙ 2 bg
 ```
 
 - Left: mode word (color = mode-accent, bold) → cwd (`fg-muted`) → git branch +
@@ -278,9 +279,16 @@ up through history.
   (` $0.0012`, `fg-muted`, hidden when the model has no catalog price) trails
   the context segment, display only, computed from live token totals, never
   width-breaking before the drop order below applies.
+- Background tasks (`⚙ N bg`, `accent-auto`) trail the right side and appear
+  only while detached `shell_command` work is running (2026-09-11). They are
+  read from the session's in-memory task manager — no subprocess — so the
+  indicator is exact and cheap per render. The glyph and the words carry the
+  meaning; color is never the only signal. Absent at zero, so the default bar
+  is unchanged.
 - This line never wraps. If the terminal is too narrow, drop the raw token
   count before dropping anything else; drop the branch dirty-count before the
-  branch name; never drop the mode word.
+  branch name; drop the background indicator before shortening the root;
+  never drop the mode word.
 - Git branch and dirty-count status is refreshed asynchronously on startup and
   on a 10-second cadence. Rendering never launches `git`, so a slow repository
   or locked index cannot freeze typing, scrolling, streaming output, or an

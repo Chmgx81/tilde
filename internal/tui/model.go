@@ -29,6 +29,7 @@ import (
 	"tilde/internal/marketplace"
 	"tilde/internal/mode"
 	"tilde/internal/skills"
+	"tilde/internal/tools"
 	"tilde/internal/update"
 )
 
@@ -170,6 +171,11 @@ type Model struct {
 	// budgetExplicit is set once at startup (main): true when --budget
 	// or $TILDE_BUDGET was given. See SetBudgetExplicit in login.go.
 	budgetExplicit bool
+	// tasks is the session's background-task manager (nil when unwired).
+	// Reading its running count is in-memory and mutex-guarded, so the
+	// status bar can ask per render without a subprocess (unlike the git
+	// branch probe, which must stay async — spec §2.2).
+	tasks *tools.TaskManager
 
 	// Phase 4 surfaces.
 	helpOpen           bool
@@ -364,6 +370,7 @@ func New(loop *agent.Loop, m mode.Mode, root, modelName string, budget int) Mode
 	vp := viewport.New(78, 20)
 	mdl := Model{loop: loop, ta: ta, vp: vp, curMode: m,
 		root: root, model: modelName, budget: budget, stick: true,
+		tasks:     findTaskManager(loop),
 		pasteEcho: map[int][]pasteSeg{}}
 	mdl.refreshCost()
 	mdl.refreshPlaceholder()
@@ -2070,6 +2077,15 @@ func shuffleVerbs(r *rand.Rand) []int {
 // root shortens — the mode word is never dropped. Right side docks right.
 func (m *Model) statusBar() string {
 	root, ctx, branch := m.root, m.ctx, m.branch
+	// Background-task indicator (spec §2.2): present only while detached
+	// shell work is running. Read from the in-memory manager (mutex-guarded,
+	// no subprocess), unlike the git branch probe, which must stay async.
+	bg := ""
+	if m.tasks != nil {
+		if n := len(m.tasks.RunningIDs()); n > 0 {
+			bg = fmt.Sprintf("⚙ %d bg", n)
+		}
+	}
 	right := func() string {
 		if !m.turnStart.IsZero() {
 			if v, ok := m.reasonVerb(); ok {
@@ -2102,8 +2118,17 @@ func (m *Model) statusBar() string {
 		}
 		return s
 	}
+	// bgSuffix is the rendered tail for the background indicator; the drop
+	// order below shortens it away before the root, so running work stays
+	// visible longer than a branch name but never crowds the mode word.
+	bgSuffix := func() string {
+		if bg == "" {
+			return ""
+		}
+		return " · " + bg
+	}
 	if w := m.vp.Width; w > 0 {
-		for runeLen(left()+"  "+right()+cost) > w {
+		for runeLen(left()+"  "+right()+cost+bgSuffix()) > w {
 			if i := strings.Index(ctx, " ("); i >= 0 {
 				ctx = ctx[:i]
 				continue
@@ -2114,6 +2139,10 @@ func (m *Model) statusBar() string {
 			}
 			if branch != "" {
 				branch = ""
+				continue
+			}
+			if bg != "" {
+				bg = ""
 				continue
 			}
 			if r := []rune(root); len(r) > 24 {
@@ -2148,6 +2177,14 @@ func (m *Model) statusBar() string {
 		}
 	} else {
 		lineRight = mutSt.Render(right() + cost)
+	}
+	// Background tasks trail the right side in accent-auto (spec §2.2),
+	// appended after the cost readout so it is the most persistent optional
+	// segment. Color is not the only signal: the ⚙ glyph and "N bg" clear
+	// text carry the meaning in monochrome.
+	if bg != "" {
+		autoSt := lipgloss.NewStyle().Foreground(borderAuto)
+		lineRight += mutSt.Render(" · ") + autoSt.Render(bg)
 	}
 	// Dock right: pad between, hard-cut when nothing fits.
 	gap := 2

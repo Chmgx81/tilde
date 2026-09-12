@@ -753,3 +753,62 @@ func TestValidateDenyPaths(t *testing.T) {
 		}
 	}
 }
+
+// TILDE_STRICT_INSTALL: install commands always prompt, even with --yes.
+func TestStrictInstallAlwaysPrompts(t *testing.T) {
+	t.Setenv("TILDE_STRICT_INSTALL", "1")
+	p := &Policy{AlwaysAllow: true}
+	installs := []string{
+		"pip install requests",
+		"npm install lodash",
+		"uv add numpy",
+		"cargo add serde",
+	}
+	for _, cmd := range installs {
+		if got := p.Check("shell_command", shellArgs(cmd)); got != Ask {
+			t.Errorf("strict install %q: got %v, want Ask", cmd, got)
+		}
+	}
+	// Non-install commands still allow with --yes.
+	if got := p.Check("shell_command", shellArgs("go test ./...")); got != Allow {
+		t.Errorf("strict non-install: got %v, want Allow", got)
+	}
+	// Session allowlist still works for installs.
+	p.ApproveSession("pip install requests")
+	if got := p.Check("shell_command", shellArgs("pip install requests")); got != Allow {
+		t.Errorf("strict approved install: got %v, want Allow", got)
+	}
+	// Without the flag, --yes allows installs.
+	t.Setenv("TILDE_STRICT_INSTALL", "")
+	p2 := &Policy{AlwaysAllow: true}
+	if got := p2.Check("shell_command", shellArgs("pip install requests")); got != Allow {
+		t.Errorf("non-strict install with --yes: got %v, want Allow", got)
+	}
+}
+
+// Slopsquatting warnings: Describe flags hallucinated package names.
+func TestSlopsquattingWarningInDescribe(t *testing.T) {
+	tests := []struct {
+		cmd       string
+		wantWarn  string
+		wantClean string
+	}{
+		{"pip install langchin", "SLOPSQUATTING", "langchin"},
+		{"npm install lodahs", "SLOPSQUATTING", "lodahs"},
+		{"pip install requests", "", "unverified"}, // real pkg, generic warning
+		{"go test ./...", "", ""},                  // not an install
+	}
+	for _, tc := range tests {
+		got := Describe("shell_command", shellArgs(tc.cmd))
+		if tc.wantWarn != "" {
+			if !strings.Contains(got, tc.wantWarn) {
+				t.Errorf("Describe(%q): got %q, want to contain %q", tc.cmd, got, tc.wantWarn)
+			}
+		}
+		if tc.wantClean == "" {
+			if strings.Contains(got, "SLOPSQUATTING") || strings.Contains(got, "unverified") {
+				t.Errorf("Describe(%q): got %q, want no warning", tc.cmd, got)
+			}
+		}
+	}
+}

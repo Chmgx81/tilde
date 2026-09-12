@@ -35,8 +35,11 @@ func Fork(dir, srcID, throughTS string) (string, error) {
 	if dir == "" {
 		return "", fmt.Errorf("session: empty dir")
 	}
-	if srcID == "" {
-		return "", fmt.Errorf("session: empty session id")
+	// Validate before building any path: an id with separators or dots
+	// would escape the sessions directory (../../x.jsonl). Rejecting it
+	// here protects every caller, not just the CLI.
+	if !ValidID(srcID) {
+		return "", fmt.Errorf("session: bad session id %q: letters, digits, _ and - only (max 64)", srcID)
 	}
 	var cutoff time.Time
 	if throughTS != "" {

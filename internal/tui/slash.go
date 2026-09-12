@@ -9,16 +9,17 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"tilde/internal/agent"
 	"tilde/internal/export"
 	"tilde/internal/mode"
 	"tilde/internal/provider"
 	"tilde/internal/sandbox"
+	"tilde/internal/session"
 	"tilde/internal/tools"
 )
 
@@ -335,7 +336,7 @@ func (m *Model) doExport(args string) {
 		src = m.loop.Log.Path
 		id = strings.TrimSuffix(filepath.Base(src), ".jsonl")
 	} else {
-		if !validSessionID(id) {
+		if !session.ValidID(id) {
 			m.append(fmt.Sprintf("✗ bad session id %q: letters, digits, _ and - only (max 64).", id))
 			return
 		}
@@ -362,20 +363,24 @@ func (m *Model) doExport(args string) {
 	}
 }
 
-// validSessionID keeps /export <id> inside the sessions dir: no
-// separators, no dot games, no empty — traversal is structurally
-// impossible, not just unlikely.
-func validSessionID(id string) bool {
-	if id == "" || len(id) > 64 {
-		return false
+// findTaskManager returns the session's background-task manager (the
+// registry's shell_command wiring), or nil when unwired. Called once at
+// construction so the status bar can read a running count without walking
+// the registry on every render.
+func findTaskManager(loop *agent.Loop) *tools.TaskManager {
+	if loop == nil || loop.Reg == nil {
+		return nil
 	}
-	for _, r := range id {
-		if r == '_' || r == '-' || unicode.IsLetter(r) || unicode.IsDigit(r) {
+	for _, n := range loop.Reg.Names() {
+		t, ok := loop.Reg.Get(n)
+		if !ok {
 			continue
 		}
-		return false
+		if sh, ok := t.(*tools.Shell); ok && sh.Tasks != nil {
+			return sh.Tasks
+		}
 	}
-	return true
+	return nil
 }
 
 // runningBackground lists in-flight shell tasks across the registry's

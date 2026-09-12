@@ -147,6 +147,55 @@ func TestScrubHighRiskPathsExtended(t *testing.T) {
 		}
 	}
 }
+
+// TestScrubPreservesNonSecrets guards against over-redaction: scrubbing
+// must rewrite only the secret span, never discard the surrounding
+// document (a whole-string replacement would destroy a file read).
+func TestScrubPreservesNonSecrets(t *testing.T) {
+	in := `{"type":"service_account","private_key":"SECRETKEY","client_email":"svc@proj.iam.gserviceaccount.com"}`
+	got, _ := Scrub(in)
+	for _, want := range []string{"service_account", "client_email", "svc@proj.iam.gserviceaccount.com"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("scrub dropped non-secret %q; got %q", want, got)
+		}
+	}
+	if strings.Contains(got, "SECRETKEY") {
+		t.Errorf("scrub left the private key in place: %q", got)
+	}
+	// ARNs are identifiers, not credentials: they must survive intact so
+	// IaC and logs stay readable.
+	arn := "arn:aws:s3:us-east-1:123456789012:bucket"
+	if got, _ := Scrub(arn); got != arn {
+		t.Errorf("ARN over-redacted: %q", got)
+	}
+}
+
+func TestScrubNewProviderPatterns(t *testing.T) {
+	tests := []struct {
+		name  string
+		in    string
+		check string
+		leak  string
+	}{
+		{"vercel", "token=vcp_FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE", "<<REDACTED:vercel>>", "vcp_FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE"},
+		{"url-creds", "https://user:password123@github.com/repo.git", "://<<REDACTED:url-creds>>@", "user:password123@"},
+		{"gcp-private-key", `{"type":"service_account","private_key":"MIIEfakekey","client_email":"x@y.iam.gserviceaccount.com"}`, "<<REDACTED:gcp-private-key>>", "MIIEfakekey"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, n := Scrub(tc.in)
+			if n < 1 {
+				t.Errorf("count = %d, want >=1", n)
+			}
+			if !strings.Contains(got, tc.check) {
+				t.Errorf("got %q, want to contain %q", got, tc.check)
+			}
+			if strings.Contains(got, tc.leak) {
+				t.Errorf("got %q, still contains secret %q", got, tc.leak)
+			}
+		})
+	}
+}
 func TestScrubNormalPaths(t *testing.T) {
 	safe := []string{
 		"main.go",
