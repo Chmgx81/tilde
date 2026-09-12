@@ -2,8 +2,14 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+// Canonical origin. Defaults to the live Vercel URL; set SITE_URL (e.g.
+// https://tilde.sh) when a custom domain is attached. Used for canonical
+// tags, the sitemap, and absolute social-preview images.
+const site = (process.env.SITE_URL || 'https://tilde-wheat.vercel.app').replace(/\/$/, '');
+const ogImage = `${site}/images/banner_hero_logo.png`;
+
 export default defineConfig({
-  site: 'https://tilde.sh',
+  site,
   integrations: [
     starlight({
       title: 'tilde',
@@ -14,8 +20,9 @@ export default defineConfig({
         { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/images/banner_favicon_32x32.png' } },
         { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/images/banner_favicon_48x48.png' } },
         { tag: 'link', attrs: { rel: 'apple-touch-icon', sizes: '48x48', href: '/images/banner_favicon_48x48.png' } },
-        { tag: 'meta', attrs: { property: 'og:image', content: '/images/banner_hero_logo.png' } },
-        { tag: 'meta', attrs: { name: 'twitter:image', content: '/images/banner_hero_logo.png' } },
+        { tag: 'meta', attrs: { property: 'og:image', content: ogImage } },
+        { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
+        { tag: 'meta', attrs: { name: 'twitter:image', content: ogImage } },
       ],
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/Chmgx81/tilde' }],
       editLink: {
@@ -41,6 +48,20 @@ export default defineConfig({
             { label: 'Plan', slug: 'docs/plan' },
             { label: 'Marketplace', slug: 'docs/marketplace' },
             { label: 'Sandbox image', slug: 'docs/sandbox-image' },
+          ],
+        },
+        {
+          label: 'Security',
+          items: [
+            { label: 'Security model', slug: 'docs/security' },
+            { label: 'Slopsquatting defense', slug: 'docs/slopsquatting' },
+          ],
+        },
+        {
+          label: 'Contributing',
+          items: [
+            { label: 'Contributing', slug: 'docs/contributing' },
+            { label: 'Testing', slug: 'docs/testing' },
           ],
         },
         {

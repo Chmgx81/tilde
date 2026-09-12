@@ -22,9 +22,6 @@
       ]
     }
   ],
-  "rewrites": [
-    { "source": "/docs/:slug/", "destination": "/docs/:slug/" }
-  ],
   "redirects": [
     { "source": "/docs", "destination": "/docs/readme", "permanent": false },
     { "source": "/docs/", "destination": "/docs/readme", "permanent": false }

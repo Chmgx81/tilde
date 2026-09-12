@@ -40,6 +40,25 @@ jobs:
           test -n "$(/tmp/tilde-smoke --version)"
           test -n "$(/tmp/tilde-smoke -version)"
 
+  website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install
+        working-directory: website
+        run: npm ci
+      - name: Check docs links
+        working-directory: website
+        run: npm run check-links
+      - name: Build site
+        working-directory: website
+        run: npm run build
+
   govulncheck:
     runs-on: ubuntu-latest
     # Strict scan, but tolerate offline mirrors: failures never block
