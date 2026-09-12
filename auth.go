@@ -8,8 +8,8 @@
 //
 // Two kinds of credential live in the same sealed store: model-provider
 // keys (the ladder in internal/provider resolves them) and non-model
-// service tokens such as Vercel's deploy token. The store itself is a
-// generic map, so both ride the same envelope, locking, and masking.
+// service tokens (see serviceTargets). The store itself is a generic map,
+// so both ride the same envelope, locking, and masking.
 package main
 
 import (
@@ -25,29 +25,50 @@ import (
 )
 
 // credTarget is one storable credential: its id and the ambient env var
-// that can supply it. Model-provider targets come from the provider
-// registry; service tokens (e.g. vercel) are appended explicitly.
+// that can supply it.
 type credTarget struct {
 	ID     string
 	EnvKey string
 }
 
+// serviceTarget is a non-model credential (a CLI/service token). The table
+// is the one-line extension point for future service keys: add an entry and
+// it becomes storable, listable, and removable with no other change. Empty
+// today — model providers are derived from the registry above.
+type serviceTarget struct {
+	ID     string
+	EnvKey string
+}
+
+var serviceTargets = []serviceTarget{}
+
 // credTargets is the full set `tilde login` accepts, in display order.
-func credTargets() []credTarget {
+func credTargets() []credTarget { return credTargetsWith(serviceTargets) }
+
+// credTargetsWith builds the target list for a given service table (the
+// injection point for tests). Model providers with NeedsKey OR OptionalKey
+// are included: Ollama Cloud keys are optional but storable.
+func credTargetsWith(services []serviceTarget) []credTarget {
 	var out []credTarget
 	for _, d := range provider.Descriptions {
-		if !d.NeedsKey {
-			continue // local daemons: nothing to store
+		if !d.NeedsKey && !d.OptionalKey {
+			continue // purely local daemons: nothing to store
 		}
 		out = append(out, credTarget{ID: d.ID, EnvKey: d.EnvKey})
 	}
-	out = append(out, credTarget{ID: "vercel", EnvKey: "VERCEL_TOKEN"})
+	for _, s := range services {
+		out = append(out, credTarget{ID: s.ID, EnvKey: s.EnvKey})
+	}
 	return out
 }
 
 // lookupCredTarget finds one target by id.
 func lookupCredTarget(id string) (credTarget, bool) {
-	for _, t := range credTargets() {
+	return lookupCredTargetIn(credTargets(), id)
+}
+
+func lookupCredTargetIn(targets []credTarget, id string) (credTarget, bool) {
+	for _, t := range targets {
 		if t.ID == id {
 			return t, true
 		}
@@ -76,11 +97,6 @@ func runAuthCmd(verb string, args []string) error {
 	}
 	target, ok := lookupCredTarget(id)
 	if !ok {
-		// Ollama is a special case worth a real hint: it has no storable
-		// key for the local daemon, but Ollama Cloud takes an env key.
-		if id == "ollama" {
-			return fmt.Errorf("ollama needs no stored key for the local daemon. For Ollama Cloud, set $OLLAMA_HOST=https://ollama.com and $OLLAMA_API_KEY — both are read per request")
-		}
 		return fmt.Errorf("unknown credential %q — options: %s", id, strings.Join(credIDs(), ", "))
 	}
 	if verb == "logout" {
@@ -102,6 +118,9 @@ func runAuthCmd(verb string, args []string) error {
 		return err
 	}
 	fmt.Printf("tilde: stored %s credential %s in the sealed credential store\n", id, creds.Mask(key))
+	if id == "ollama" {
+		fmt.Println("tilde: note: an Ollama key is only sent when $OLLAMA_HOST points at a remote host (e.g. https://ollama.com); the local daemon ignores it.")
+	}
 	return nil
 }
 
@@ -157,7 +176,7 @@ func readCredential(t credTarget) (string, error) {
 
 // printAuthStatus renders the ladder's verdict for every model backend
 // (masked tails, never a full key), then any extra stored service
-// credentials (e.g. vercel) that have no provider row.
+// credentials that have no provider row.
 func printAuthStatus(store *creds.Store) {
 	seen := map[string]bool{}
 	for _, st := range provider.Status(store, nil) {

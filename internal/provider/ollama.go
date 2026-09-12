@@ -21,14 +21,28 @@ import (
 type Ollama struct {
 	Host  string
 	Model string
-	http  *http.Client
+	// Key is an explicit cloud credential from the credential ladder. Empty
+	// means "read $OLLAMA_API_KEY per request" so a test can set the env
+	// after construction (and a local daemon stays keyless).
+	Key  string
+	http *http.Client
 }
 
-// NewOllama returns an Ollama provider. Host defaults to
-// $OLLAMA_HOST or http://localhost:11434. Model defaults to
-// $TILDE_MODEL or qwen3.8-4b:16k (measured 14/15 vs 7/15).
-func NewOllama(model string) *Ollama {
-	host := os.Getenv("OLLAMA_HOST")
+// NewOllama returns an Ollama provider with the ambient host and no
+// explicit key: $OLLAMA_HOST or http://localhost:11434, $TILDE_MODEL or
+// qwen3.8-4b:16k, and $OLLAMA_API_KEY read per request.
+func NewOllama(model string) *Ollama { return newOllama(model, "", "") }
+
+// NewOllamaAuth returns an Ollama provider with an explicit base/key from
+// the credential ladder (Ollama Cloud). Empty values fall back to
+// $OLLAMA_HOST / $OLLAMA_API_KEY and then the localhost default.
+func NewOllamaAuth(model, base, key string) *Ollama { return newOllama(model, base, key) }
+
+func newOllama(model, base, key string) *Ollama {
+	host := strings.TrimSpace(base)
+	if host == "" {
+		host = strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
+	}
 	if host == "" {
 		host = "http://localhost:11434"
 	}
@@ -38,7 +52,16 @@ func NewOllama(model string) *Ollama {
 			model = "qwen3.8-4b:16k"
 		}
 	}
-	return &Ollama{Host: host, Model: model, http: &http.Client{Timeout: 5 * time.Minute}}
+	return &Ollama{Host: host, Model: model, Key: strings.TrimSpace(key), http: &http.Client{Timeout: 5 * time.Minute}}
+}
+
+// authKey is the key to send: an explicit ladder credential wins, else the
+// ambient $OLLAMA_API_KEY (read per request so local use stays keyless).
+func (o *Ollama) authKey() string {
+	if o.Key != "" {
+		return o.Key
+	}
+	return strings.TrimSpace(os.Getenv("OLLAMA_API_KEY"))
 }
 
 func (o *Ollama) Name() string { return "ollama/" + o.Model }
@@ -251,8 +274,9 @@ func (o *Ollama) Chat(ctx context.Context, messages []Message, tools []ToolDef) 
 		}
 		req.Header.Set("Content-Type", "application/json")
 		// Cloud API (https://ollama.com/api via $OLLAMA_HOST) needs the
-		// key; localhost ignores it. Read per-request so tests can set it.
-		if key := os.Getenv("OLLAMA_API_KEY"); key != "" {
+		// key; localhost ignores it. authKey prefers a ladder-supplied
+		// credential, else reads the env per request.
+		if key := o.authKey(); key != "" {
 			req.Header.Set("Authorization", "Bearer "+key)
 		}
 		resp, err = o.http.Do(req)
@@ -406,7 +430,7 @@ func (o *Ollama) Stream(ctx context.Context, messages []Message, defs []ToolDef)
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
-		if key := os.Getenv("OLLAMA_API_KEY"); key != "" {
+		if key := o.authKey(); key != "" {
 			req.Header.Set("Authorization", "Bearer "+key)
 		}
 		resp, err := o.http.Do(req)

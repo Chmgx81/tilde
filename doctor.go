@@ -126,25 +126,60 @@ func checkCredentials() doctorCheck {
 	store := openCredStoreOrNil()
 	var ready, missing []string
 	for _, st := range provider.Status(store, nil) {
-		if !st.Provider.NeedsKey {
-			continue // local daemon: no key expected
+		switch {
+		case st.Provider.NeedsKey:
+			if st.Source == provider.AuthNone {
+				missing = append(missing, st.Provider.ID)
+			} else {
+				ready = append(ready, st.Provider.ID+"("+st.Source.String()+")")
+			}
+		case st.Provider.OptionalKey:
+			// Ollama: no key is fine (local daemon); a key means Cloud.
+			if st.Source != provider.AuthNone {
+				ready = append(ready, st.Provider.ID+"("+st.Source.String()+")")
+			}
 		}
-		if st.Source == provider.AuthNone {
-			missing = append(missing, st.Provider.ID)
-			continue
+	}
+	if len(ready) == 0 {
+		if ollamaRemoteNoKey() {
+			return doctorCheck{"credentials", docWarn, "OLLAMA_HOST is remote but no OLLAMA_API_KEY resolved — run `tilde login ollama` (or set the env var), or unset OLLAMA_HOST for the local daemon"}
 		}
-		ready = append(ready, st.Provider.ID+"("+st.Source.String()+")")
+		return doctorCheck{"credentials", docInfo, "no cloud keys configured — `tilde login <provider>` (local Ollama needs none)"}
 	}
 	sort.Strings(ready)
 	sort.Strings(missing)
-	if len(ready) == 0 {
-		return doctorCheck{"credentials", docInfo, "no cloud keys configured — `tilde login <provider>` (local Ollama needs none)"}
+	var parts []string
+	if len(ready) > 0 {
+		parts = append(parts, "ready: "+strings.Join(ready, ", "))
 	}
-	detail := "ready: " + strings.Join(ready, ", ")
 	if len(missing) > 0 {
-		detail += " · no key: " + strings.Join(missing, ", ")
+		parts = append(parts, "no key: "+strings.Join(missing, ", "))
 	}
-	return doctorCheck{"credentials", docOK, detail}
+	status := docOK
+	if ollamaRemoteNoKey() {
+		status = docWarn
+		parts = append(parts, "OLLAMA_HOST is remote but no OLLAMA_API_KEY resolved — run `tilde login ollama`")
+	}
+	return doctorCheck{"credentials", status, strings.Join(parts, " · ")}
+}
+
+// ollamaRemoteNoKey reports the classic Ollama Cloud misconfiguration:
+// $OLLAMA_HOST points at a remote host but no key resolved from the store
+// or the env var. A local/loopback host is fine with no key.
+func ollamaRemoteNoKey() bool {
+	h := strings.ToLower(strings.TrimSpace(os.Getenv("OLLAMA_HOST")))
+	if h == "" || strings.Contains(h, "localhost") || strings.Contains(h, "127.0.0.1") || strings.Contains(h, "::1") {
+		return false
+	}
+	if strings.TrimSpace(os.Getenv("OLLAMA_API_KEY")) != "" {
+		return false
+	}
+	if store := openCredStoreOrNil(); store != nil {
+		if k, err := store.Get("ollama"); err == nil && strings.TrimSpace(k) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func checkWritableDir(label, dir string) doctorCheck {

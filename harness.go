@@ -94,7 +94,13 @@ func selectProvider(which, model, base, key string, store *creds.Store) (provide
 	}
 	switch id {
 	case "ollama":
-		return provider.NewOllama(model), ""
+		// Ollama is keyless locally; a stored/env key (Ollama Cloud) and
+		// --api-key flow through the same ladder as the cloud providers.
+		resolved, _ := provider.Resolve(store, "ollama", map[string]string{})
+		if key != "" {
+			resolved = key
+		}
+		return provider.NewOllamaAuth(model, base, resolved), ""
 	case "openai", "anthropic", "openrouter", "gemini", "opencode":
 		resolved, _ := provider.Resolve(store, id, map[string]string{})
 		// The explicit flag outranks everything (ladder step zero) —

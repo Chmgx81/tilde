@@ -53,31 +53,47 @@ func TestAuthUnknownProvider(t *testing.T) {
 	}
 }
 
-func TestAuthLocalProviderNeedsNoKey(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	err := runAuthCmd("login", []string{"login", "ollama"})
-	if err == nil || !strings.Contains(err.Error(), "Ollama Cloud") {
-		t.Fatalf("ollama login should refuse with the remote-cloud hint, got: %v", err)
-	}
-}
-
-func TestAuthVercelTarget(t *testing.T) {
+// Ollama is an optional-key target now: the local daemon needs nothing,
+// but `tilde login ollama` stores an Ollama Cloud key.
+func TestAuthOllamaCloudKey(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	const tok = "vcp_abcdefghijklmnopqrstuvwxyz0123456789ABCDEF"
-	t.Setenv("VERCEL_TOKEN", tok)
-	if err := runAuthCmd("login", []string{"login", "vercel"}); err != nil {
-		t.Fatalf("vercel login: %v", err)
+	const key = "0123456789abcdef0123456789abcdef.FAKEFAKEFAKEFAKEFAKE1234"
+	t.Setenv("OLLAMA_API_KEY", key)
+	if err := runAuthCmd("login", []string{"login", "ollama"}); err != nil {
+		t.Fatalf("ollama login: %v", err)
 	}
 	store, err := openCredStore()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := store.Get("vercel"); got != tok {
-		t.Fatalf("stored vercel token = %q", got)
+	if got, _ := store.Get("ollama"); got != key {
+		t.Fatalf("stored ollama key = %q", got)
 	}
-	if err := runAuthCmd("logout", []string{"logout", "vercel"}); err != nil {
-		t.Fatalf("vercel logout: %v", err)
+	if err := runAuthCmd("logout", []string{"logout", "ollama"}); err != nil {
+		t.Fatalf("ollama logout: %v", err)
+	}
+}
+
+// The service-token seam: an entry in the services table becomes a
+// storable target with no other code change.
+func TestAuthServiceTargetSeam(t *testing.T) {
+	targets := credTargetsWith([]serviceTarget{{ID: "example", EnvKey: "EXAMPLE_TOKEN"}})
+	if _, ok := lookupCredTargetIn(targets, "example"); !ok {
+		t.Fatal("synthetic service target must be storable")
+	}
+	// And it flows through the generic store like any other credential.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	store, err := openCredStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set("example", "svc-token"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := store.Get("example"); got != "svc-token" {
+		t.Fatalf("stored service token = %q", got)
 	}
 }
 

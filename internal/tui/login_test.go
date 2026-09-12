@@ -75,9 +75,10 @@ func TestBeginLogin(t *testing.T) {
 		t.Fatal("unknown provider must not arm key entry")
 	}
 	m.beginLogin("ollama")
-	if m.keyProvider != "" {
-		t.Fatal("local provider must not arm key entry")
+	if m.keyProvider != "ollama" {
+		t.Fatalf("optional-key provider (Ollama Cloud) must arm key entry, got %q", m.keyProvider)
 	}
+	m.cancelKeyEntry()
 	m.beginLogin("openai")
 	if m.keyProvider != "openai" {
 		t.Fatalf("cloud provider must arm key entry, got %q", m.keyProvider)

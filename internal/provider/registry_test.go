@@ -38,6 +38,42 @@ func (s stubStore) Get(id string) (string, error) {
 	return "", errors.New("none")
 }
 
+// Ollama is optional-key: keyless local works, a stored/env key means Cloud.
+func TestResolveOllamaOptionalKey(t *testing.T) {
+	t.Setenv("OLLAMA_API_KEY", "")
+	if k, src := Resolve(nil, "ollama", nil); k != "" || src != AuthNone {
+		t.Fatalf("keyless ollama: got %q %v", k, src)
+	}
+	if _, err := Factory("ollama", "", "", ""); err != nil {
+		t.Fatalf("keyless ollama must construct: %v", err)
+	}
+	store := stubStore{"ollama": "cloud-key-1234"}
+	if k, src := Resolve(store, "ollama", nil); k != "cloud-key-1234" || src != AuthStored {
+		t.Fatalf("stored ollama key: got %q %v", k, src)
+	}
+	t.Setenv("OLLAMA_API_KEY", "env-cloud-5678")
+	if k, src := Resolve(nil, "ollama", nil); k != "env-cloud-5678" || src != AuthEnv {
+		t.Fatalf("env ollama key: got %q %v", k, src)
+	}
+}
+
+func TestLoginIDsIncludeOllama(t *testing.T) {
+	login := false
+	for _, id := range LoginIDs() {
+		if id == "ollama" {
+			login = true
+		}
+	}
+	if !login {
+		t.Fatal("LoginIDs must include ollama (Ollama Cloud)")
+	}
+	for _, id := range CloudIDs() {
+		if id == "ollama" {
+			t.Fatal("CloudIDs must stay key-required only")
+		}
+	}
+}
+
 func TestResolveLadderOrder(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "env-key-1234")
 	t.Setenv("ANTHROPIC_API_KEY", "")

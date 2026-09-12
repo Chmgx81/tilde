@@ -75,7 +75,6 @@ Commands:
   plugin  install|upgrade|enable|disable|remove|rollback|verify|list
   login   [provider|service]       store a credential in the sealed store
   logout  [provider|service]       remove a stored credential
-  deploy  [vercel] [--prod]        deploy the current project (token from the store)
   doctor  [--json]                 report install health (sandbox, policy, keys, git)
   trust|untrust <dir>              record or clear project trust
   ide-bridge                       stdio JSON bridge for IDE hosts (chat approvals deny)
@@ -161,18 +160,6 @@ Flags:
 	// no provider, no log, no TUI needed.
 	if flag.NArg() > 0 && (flag.Arg(0) == "login" || flag.Arg(0) == "logout") {
 		if err := runAuthCmd(flag.Arg(0), flag.Args()); err != nil {
-			fmt.Fprintln(os.Stderr, "tilde:", err)
-			os.Exit(1)
-		}
-		markCleanExit()
-		return
-	}
-
-	// `tilde deploy [vercel] [--prod|--preview]` runs a deployment with the
-	// token from the credential ladder. User-invoked only: it is not an
-	// agent tool, so a model can never ship on its own.
-	if flag.NArg() > 0 && flag.Arg(0) == "deploy" {
-		if err := runDeployCmd(flag.Args()); err != nil {
 			fmt.Fprintln(os.Stderr, "tilde:", err)
 			os.Exit(1)
 		}

@@ -650,12 +650,12 @@ func (m *Model) switchProvider(providerID, model, _ string) tea.Cmd {
 	return nil
 }
 
-// beginLogin arms key entry for a cloud provider. Unknown or local
-// providers are named errors — /login is a cloud-only surface.
+// beginLogin arms key entry for a cloud provider (or an optional-key
+// backend such as Ollama Cloud). Unknown providers are named errors.
 func (m *Model) beginLogin(providerID string) tea.Cmd {
 	for _, d := range provider.Descriptions {
 		if d.ID == providerID {
-			if !d.NeedsKey {
+			if !d.NeedsKey && !d.OptionalKey {
 				m.append("● " + providerID + " needs no key — it talks to the local daemon.")
 				return nil
 			}
@@ -663,7 +663,7 @@ func (m *Model) beginLogin(providerID string) tea.Cmd {
 			return textinput.Blink
 		}
 	}
-	m.append("✗ unknown provider " + providerID + " — cloud options: " + strings.Join(provider.CloudIDs(), ", ") + ".")
+	m.append("✗ unknown provider " + providerID + " — options: " + strings.Join(provider.LoginIDs(), ", ") + ".")
 	return nil
 }
 

@@ -3,6 +3,7 @@ package provider
 import (
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -58,6 +59,23 @@ func Validate(providerID, key, base string) (ok bool, networkErr bool, err error
 			req.Header.Set("x-api-key", key)
 			req.Header.Set("anthropic-version", "2023-06-01")
 			req.Header.Set("content-type", "application/json")
+		}
+	case "ollama":
+		// Ollama Cloud (https://ollama.com via $OLLAMA_HOST) authenticates
+		// with a Bearer key against /api/tags. The local daemon ignores the
+		// header, so this only runs when the user is storing a key.
+		url := strings.TrimRight(base, "/")
+		if url == "" {
+			url = strings.TrimRight(os.Getenv("OLLAMA_HOST"), "/")
+		}
+		if url == "" {
+			// Storing an Ollama key means Cloud: default the check to
+			// ollama.com, not the local daemon (which ignores the header).
+			url = "https://ollama.com"
+		}
+		req, err2 = http.NewRequest("GET", url+"/api/tags", nil)
+		if err2 == nil {
+			req.Header.Set("Authorization", "Bearer "+key)
 		}
 	default:
 		return false, false, errors.New("provider does not take a key")

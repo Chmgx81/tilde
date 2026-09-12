@@ -161,12 +161,12 @@ func (m *Model) loginStatus() {
 		if st.Source != provider.AuthNone {
 			key = creds.Mask(st.KeyTail)
 		}
-		if !st.Provider.NeedsKey {
+		if !st.Provider.NeedsKey && !st.Provider.OptionalKey {
 			key = "—"
 		}
 		m.append(fmt.Sprintf("%-10s %-8s %-9s %s", st.Provider.ID, st.Source.String(), key, model))
 	}
-	m.append(dim.Render("login a cloud provider: /login <" + strings.Join(provider.CloudIDs(), "|") + ">"))
+	m.append(dim.Render("login a provider: /login <" + strings.Join(provider.LoginIDs(), "|") + ">"))
 }
 
 // currentModelRef reports the model id for providerID ("p/m"): the live
@@ -196,7 +196,7 @@ func (m *Model) runLogout(arg string) {
 	if id == "" {
 		var withKeys []string
 		for _, st := range provider.Status(m.creds, m.keyOverrides) {
-			if st.Provider.NeedsKey && st.Source == provider.AuthStored {
+			if (st.Provider.NeedsKey || st.Provider.OptionalKey) && st.Source == provider.AuthStored {
 				withKeys = append(withKeys, st.Provider.ID)
 			}
 		}

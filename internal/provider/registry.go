@@ -39,13 +39,17 @@ func (s AuthSource) String() string {
 type ProviderDesc struct {
 	ID       string // ollama | openai | anthropic
 	Name     string // human name for dropdowns and status lines
-	NeedsKey bool   // true = cloud provider; /login applies
-	EnvKey   string // ambient env var, "" for local daemons
+	NeedsKey bool   // true = cloud provider; a key is required up front
+	// OptionalKey marks a backend whose key is storable and validatable but
+	// NOT required: Ollama runs locally with no key and talks to Ollama
+	// Cloud when a key/host is configured. /login accepts it.
+	OptionalKey bool
+	EnvKey      string // ambient env var, "" for a purely local daemon
 }
 
 // Descriptions lists every backend in the registry's canonical order.
 var Descriptions = []ProviderDesc{
-	{ID: "ollama", Name: "Ollama (local)", NeedsKey: false},
+	{ID: "ollama", Name: "Ollama (local or Cloud)", OptionalKey: true, EnvKey: "OLLAMA_API_KEY"},
 	{ID: "openai", Name: "OpenAI", NeedsKey: true, EnvKey: "OPENAI_API_KEY"},
 	{ID: "anthropic", Name: "Anthropic", NeedsKey: true, EnvKey: "ANTHROPIC_API_KEY"},
 	{ID: "openrouter", Name: "OpenRouter (incl. free models)", NeedsKey: true, EnvKey: "OPENROUTER_API_KEY"},
@@ -53,11 +57,23 @@ var Descriptions = []ProviderDesc{
 	{ID: "opencode", Name: "OpenCode Zen (curated for coding agents)", NeedsKey: true, EnvKey: "OPENCODE_API_KEY"},
 }
 
-// CloudIDs lists the backends /login accepts.
+// CloudIDs lists the backends that REQUIRE a cloud key (splash/status use).
 func CloudIDs() []string {
 	var out []string
 	for _, d := range Descriptions {
 		if d.NeedsKey {
+			out = append(out, d.ID)
+		}
+	}
+	return out
+}
+
+// LoginIDs lists the backends /login accepts: cloud providers plus
+// optional-key backends (Ollama Cloud). Bare local Ollama still needs none.
+func LoginIDs() []string {
+	var out []string
+	for _, d := range Descriptions {
+		if d.NeedsKey || d.OptionalKey {
 			out = append(out, d.ID)
 		}
 	}
@@ -85,6 +101,13 @@ var Catalog = map[string][]CatalogModel{
 	"ollama": {
 		{"qwen3.8-4b:16k", "Qwen3 4B (measured default)", 16384, 0, 0},
 		{"llama3.1:8b", "Llama 3.1 8B", 131072, 0, 0},
+		// Ollama Cloud (set $OLLAMA_HOST=https://ollama.com plus a key).
+		// Cloud reports neither window nor per-token price (subscription):
+		// Context 0 skips budget auto-size and -1 renders pay-per-use,
+		// never as free.
+		{"gpt-oss:120b", "GPT-OSS 120B (Cloud)", 0, -1, -1},
+		{"qwen3-coder:480b", "Qwen3 Coder 480B (Cloud)", 0, -1, -1},
+		{"deepseek-v3.1:671b", "DeepSeek V3.1 671B (Cloud)", 0, -1, -1},
 	},
 	"openai": {
 		{"gpt-5.2", "GPT-5.2", 400000, 1.25, 10},
@@ -124,15 +147,16 @@ var Catalog = map[string][]CatalogModel{
 	// and /messages rows need other protocols (see OpenCode doc above).
 	// Windows and prices are unreported by Zen (per-request billing on
 	// the dashboard): Context 0 skips budget auto-size by design, and
-	// negative prices render as pay-per-use, never as free. The one
-	// exception is the trial-free Nemotron row (0/0) — NVIDIA's free
-	// endpoint logs sessions, so it is NOT zero-retention like the rest.
+	// negative prices render as pay-per-use, never as free. NOTE (verified
+	// 2026-09-12): Zen's free-tier rows are gated to the OpenCode app
+	// itself ("can only be used in OpenCode") and are rejected for
+	// third-party clients, so they are listed for reference only.
 	"opencode": {
 		{"kimi-k2.7-code", "Kimi K2.7 Code", 0, -1, -1},
 		{"minimax-m3", "MiniMax M3", 0, -1, -1},
 		{"glm-5.3", "GLM 5.3", 0, -1, -1},
 		{"deepseek-v4-pro", "DeepSeek V4 Pro", 0, -1, -1},
-		{"nemotron-3-ultra-free", "Nemotron 3 Ultra (free trial, logged)", 0, 0, 0},
+		{"nemotron-3-ultra-free", "Nemotron 3 Ultra (free tier, OpenCode app only)", 0, 0, 0},
 	},
 }
 
@@ -267,7 +291,7 @@ func Resolve(store CredentialStore, providerID string, flagOverrides map[string]
 func Factory(providerID, model, base, key string) (Provider, error) {
 	switch strings.ToLower(providerID) {
 	case "", "ollama":
-		return NewOllama(model), nil
+		return NewOllamaAuth(model, base, key), nil
 	case "openai", "anthropic", "openrouter", "gemini", "opencode":
 		id := strings.ToLower(providerID)
 		if key == "" {
