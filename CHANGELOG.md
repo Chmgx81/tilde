@@ -62,6 +62,11 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   file under `~/.tilde/spill` and named inline — capped shell output, a
   read that hits the byte/line window (the full file is spilled), and a
   capped grep match list. `tilde prune --spill <age>` ages them out.
+- Fixed the `mcp-shout` eval task: it configured no approval, and the
+  hardened `mcp_call` gateway deliberately passes `approved=false`, so a
+  default (`approval=prompt`) server tool was unreachable and the task
+  could never pass. The fixture now marks the tool `approvalDefault:auto`,
+  and `CallApproved`'s doc comment matches the gateway's real behavior.
 - **Typed project memory**: `memory` save now takes an optional `kind`
   (fact|decision|constraint|env|correction; default fact, which keeps the
   untagged `- YYYY-MM-DD: text` shape). A new `correct` op supersedes a

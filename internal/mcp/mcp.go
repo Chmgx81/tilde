@@ -613,10 +613,12 @@ func (m *Manager) Call(ctx context.Context, server, tool string, args map[string
 	return m.CallApproved(ctx, server, tool, args, false)
 }
 
-// CallApproved is Call with the policy-tier verdict attached: approved
-// must be true when the tool resolves to approval=prompt (the mcp_call
-// gateway passes true — the agent loop's Ask gate already approved that
-// exact call). Unapproved prompt-gated calls fail with the fix attached.
+// CallApproved is Call with the approval verdict attached: approved must be
+// true when the tool resolves to approval=prompt. The mcp_call gateway
+// deliberately passes false — nested approval is its own trust boundary, and
+// the outer ask tier is not server-tool approval — so a prompt-gated tool is
+// reachable only when its config marks it approval=auto. Unapproved
+// prompt-gated calls fail with the fix attached.
 func (m *Manager) CallApproved(ctx context.Context, server, tool string, args map[string]any, approved bool) (string, error) {
 	m.mu.Lock()
 	s, ok := m.servers[server]

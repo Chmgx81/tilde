@@ -48,7 +48,11 @@ func ExtraTasks() []Task {
 				if err := os.Chmod(script, 0o755); err != nil {
 					return err
 				}
-				cfg := fmt.Sprintf(`{"mcpServers":{"fixture":{"command":%q,"args":[]}}}`, script)
+				// The eval exercises the mcp_list/mcp_call path, not the
+				// nested approval boundary: mark the fixture tool auto so
+				// the gateway's deliberate approved=false doesn't make the
+				// task impossible (prompt-gated tools need approval=auto).
+				cfg := fmt.Sprintf(`{"mcpServers":{"fixture":{"command":%q,"args":[],"approvalDefault":"auto"}}}`, script)
 				return os.WriteFile(filepath.Join(root, ".tilde", "mcp.json"), []byte(cfg), 0o644)
 			},
 			Verify: func(_ string, _ string, events []agent.Event) (bool, string) {
