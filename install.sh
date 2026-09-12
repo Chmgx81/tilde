@@ -68,11 +68,13 @@ if [ -n "$FROM_RELEASE" ]; then
     rel="https://github.com/Chmgx81/tilde/releases/download/${FROM_RELEASE}"
     tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT INT TERM
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL -o "$tmp/$base" "$rel/$base"
-        curl -fsSL -o "$tmp/checksums.txt" "$rel/checksums.txt"
+        curl -fsSL --connect-timeout 10 --max-time 300 --retry 2 --retry-delay 2 -o "$tmp/$base" "$rel/$base" \
+            || die "download failed: $rel/$base — nothing was installed"
+        curl -fsSL --connect-timeout 10 --max-time 60 --retry 2 --retry-delay 2 -o "$tmp/checksums.txt" "$rel/checksums.txt" \
+            || die "download failed: $rel/checksums.txt — nothing was installed"
     elif command -v wget >/dev/null 2>&1; then
-        wget -q -O "$tmp/$base" "$rel/$base"
-        wget -q -O "$tmp/checksums.txt" "$rel/checksums.txt"
+        wget -q --timeout=20 --tries=3 -O "$tmp/$base" "$rel/$base" || die "download failed: $rel/$base"
+        wget -q --timeout=20 --tries=3 -O "$tmp/checksums.txt" "$rel/checksums.txt" || die "download failed: $rel/checksums.txt"
     else
         die "need curl or wget for --from-release"
     fi

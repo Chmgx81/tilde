@@ -27,9 +27,10 @@ esac
 # --- resolve latest tag ---
 api="https://api.github.com/repos/${REPO}/releases/latest"
 if command -v curl >/dev/null 2>&1; then
-    tag=$(curl -fsSL -H "Accept: application/vnd.github+json" "$api" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+    tag=$(curl -fsSL --connect-timeout 10 --max-time 60 --retry 2 --retry-delay 2 \
+        -H "Accept: application/vnd.github+json" "$api" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
 elif command -v wget >/dev/null 2>&1; then
-    tag=$(wget -qO- -H "Accept: application/vnd.github+json" "$api" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+    tag=$(wget -qO- --timeout=20 --tries=3 -H "Accept: application/vnd.github+json" "$api" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
 else
     die "need curl or wget"
 fi
@@ -49,11 +50,15 @@ sums_url="https://github.com/${REPO}/releases/download/${tag}/checksums.txt"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
+# Bounded downloads: a stalled connection must fail (with a clear error),
+# never hang the installer forever.
 dl() {
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL -o "$1" "$2"
+        curl -fsSL --connect-timeout 10 --max-time 300 --retry 2 --retry-delay 2 -o "$1" "$2" \
+            || die "download failed: $2 (network stalled or unavailable) — nothing was installed"
     else
-        wget -q -O "$1" "$2"
+        wget -q --timeout=20 --tries=3 -O "$1" "$2" \
+            || die "download failed: $2 (network stalled or unavailable) — nothing was installed"
     fi
 }
 
