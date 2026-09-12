@@ -52,7 +52,9 @@ Every `shell_command` runs inside bubblewrap (or podman if
 `policies.yaml` defines three tiers, checked in order:
 
 - **deny**: Always blocked, even with `--yes` or in Auto mode.
-- **ask**: Requires user approval (unless `--yes`/`Auto`).
+- **ask**: Requires user approval. In an interactive Auto-mode session the
+  loop auto-approves; headless `--yes` auto-approves only the read-only
+  allowlist, so mutating and network calls still need a `y` on stdin.
 - **allow**: Runs freely.
 
 Hardcoded defaults (no policy file needed):

@@ -98,6 +98,11 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   tests): it had no role in an agent CLI. The `vcp_` scrub pattern stays.
 - An unknown subcommand now fails loud with the command list (exit 2)
   instead of silently falling through to the interactive TUI.
+- Clarified `--yes` semantics: in a headless run it auto-approves only the
+  read-only allowlist, so mutating and network confirm-tier calls need a
+  `y` on stdin. The flag help, `docs/SECURITY.md`, the TUI spec, and the
+  Plan's Phase 0 note now say so (that note previously implied `--yes`
+  alone wrote files, which it does not).
 - `tilde doctor [--json]`: one read-only health report covering the sandbox
   backstop, the policy file, credential availability per provider, session
   and audit dir writability, git, provider construction, and the network

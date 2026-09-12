@@ -1465,7 +1465,7 @@ second product:
 | TUI element | Headless equivalent |
 |---|---|
 | Mode (Tab / toast) | `--mode plan\|build\|auto` |
-| Confirm prompt | `--yes` (accepts confirm-tier only) / exits non-zero on deny-tier |
+| Confirm prompt | `--yes` auto-approves only read-only confirm-tier calls; mutating/network confirm-tier needs a `y` on stdin; exits non-zero on deny-tier |
 | Compaction marker | Written to session log only; no stdout noise on piped/`NO_COLOR` runs (a TTY headless run still prints the marker line) |
 | Handoff panel | Printed as plain `ERROR:` line + non-zero exit code |
 | Skill picker | `--skill <name>` |

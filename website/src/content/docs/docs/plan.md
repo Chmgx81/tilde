@@ -281,10 +281,13 @@ TUI (composer, timeline). A minimal confirm tier gates destructive ops from
 day one, this was never "no guardrails, " just "no full policy engine yet."
 **Done when:** you can give tilde a real multi-file task in your own repo
 and it completes it, unassisted, using only these tools.
-Verified: headless `--mode build --yes` wrote two files + shell-verified
-them unassisted against local Ollama (qwen2.5-coder:7b). Note: that model
-echoes tool calls as JSON-in-content, so the provider has a minimal
-content-fallback parser; the full repair layer is still Phase 3 work.
+Verified: headless `--mode build` wrote two files + shell-verified them
+against local Ollama (qwen2.5-coder:7b) with approvals piped on stdin.
+`--yes` alone is read-only today (it auto-approves only the unattended
+read-only allowlist), so mutating headless work supplies `y` on stdin.
+Note: that model echoes tool calls as JSON-in-content, so the provider has
+a minimal content-fallback parser; the full repair layer is still Phase 3
+work.
 
 ### Phase 1: Mode system + auto-compaction (done, verified 2026-09-05)
 Tab-cycle Plan/Build/Auto, enforced at the registry layer. Auto-compaction

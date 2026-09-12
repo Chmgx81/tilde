@@ -46,7 +46,7 @@ func main() {
 	prompt := flag.String("prompt", "", "Headless: run one goal non-interactively and exit")
 	modeFlag := flag.String("mode", "plan", "Starting mode: plan|build|auto")
 	modelFlag := flag.String("model", "", "Model name (default $TILDE_MODEL or qwen3.8-4b:16k)")
-	yesFlag := flag.Bool("yes", false, "Auto-approve confirm-tier calls (deny-tier still blocks)")
+	yesFlag := flag.Bool("yes", false, "Headless: auto-approve read-only confirm-tier calls only; mutating/network confirm-tier calls still need a 'y' on stdin (deny-tier always blocks)")
 	noSandbox := flag.Bool("no-sandbox", false, "Disable bwrap sandboxing (same as TILDE_NO_SANDBOX=1; not recommended)")
 	budgetFlag := flag.Int("budget", 0, "Token budget before auto-compaction (default 32000, or $TILDE_BUDGET)")
 	resumeFlag := flag.Bool("resume", false, "Pick a past session and resume it")
@@ -786,9 +786,11 @@ func saveEvalReport(reports []eval.TaskReport) {
 }
 
 // runHeadless executes one goal without a TTY. Confirm-tier calls are
-// approved inline via stdin unless --yes; deny-tier always blocks.
-// Format "json" prints one JSON object per line (events, then a final
-// result with usage) for CI pipelines; anything else prints human text.
+// approved inline via stdin; --yes narrows that to the read-only allowlist
+// (policy.UnattendedAllowed), so mutating and network confirm-tier calls
+// still need an explicit 'y' — deny-tier always blocks. Format "json"
+// prints one JSON object per line (events, then a final result with usage)
+// for CI pipelines; anything else prints human text.
 func runHeadless(loop *agent.Loop, goal string, yes bool, format string) {
 	asJSON := strings.ToLower(format) == "json"
 	emitJSON := func(obj map[string]any) {
