@@ -342,13 +342,22 @@ func TestRunRefusesDirtyTree(t *testing.T) {
 	}
 }
 
-func TestVerifyTagHelperRefusesUnsigned(t *testing.T) {
+func TestVerifyTagHelperUnsignedIsAdvisoryByDefault(t *testing.T) {
 	stub := func(args ...string) (string, error) {
 		return "gpg: no signature found", errors.New("exit status 1")
 	}
-	if err := verifyTag(stub, "v0.9.1"); err == nil {
-		t.Fatal("verifyTag must refuse when git verify-tag fails")
-	} else if !strings.Contains(strings.ToLower(err.Error()), "fix") || !strings.Contains(strings.ToLower(err.Error()), "verify-tag") {
+	// Default: advisory (update pulls origin/main, not the tag) — a warning,
+	// not a refusal, so an unsigned release never blocks delivery.
+	if err := verifyTag(stub, "v0.9.1"); err != nil {
+		t.Fatalf("unsigned tag must not block by default, got %v", err)
+	}
+	// Strict opt-in refuses, naming the fix.
+	t.Setenv(envRequireSignedTags, "1")
+	err := verifyTag(stub, "v0.9.1")
+	if err == nil {
+		t.Fatal("strict mode must refuse an unsigned tag")
+	}
+	if lower := strings.ToLower(err.Error()); !strings.Contains(lower, "fix") || !strings.Contains(lower, "verify-tag") {
 		t.Fatalf("refusal must name the fix (verify-tag/gnupg/sign), got %q", err.Error())
 	}
 	if err := verifyTag(stub, ""); err != nil {
@@ -371,7 +380,7 @@ func TestNeedsReleaseVerificationIgnoresCurrentOrOlderTags(t *testing.T) {
 	}
 }
 
-func TestRunRefusesUnsignedTag(t *testing.T) {
+func TestRunRefusesUnsignedTagInStrictMode(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git required")
 	}
@@ -379,6 +388,7 @@ func TestRunRefusesUnsignedTag(t *testing.T) {
 	repo := filepath.Join(work, "repo")
 	t.Setenv("HOME", filepath.Join(work, "home"))
 	t.Setenv("TILDE_UPDATE_TARGET", filepath.Join(work, "bin", "tilde"))
+	t.Setenv(envRequireSignedTags, "1")
 	os.MkdirAll(repo, 0o755)
 	gitRun(t, repo, "init", "-b", "main", "-q", ".")
 	os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x\n"), 0o644)

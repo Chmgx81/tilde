@@ -5,7 +5,7 @@
 set -eu
 
 # Keep in sync with Version in internal/update/update.go.
-VERSION="v0.9.1"
+VERSION="v0.10.0"
 
 die() { echo "tilde: $*" >&2; exit 1; }
 warn() { echo "tilde: warning: $*" >&2; }

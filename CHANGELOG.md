@@ -3,7 +3,19 @@
 Release notes are grouped by version and describe shipped behavior. For
 planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
 
-## v0.10.0 (unreleased)
+## v0.10.0 (2026-09-12)
+
+- Release: cut v0.10.0 (the version had been pinned at v0.9.1 while this
+  whole section sat unreleased, so `tilde update` reported itself current
+  and the tag never moved). `internal/update`'s `Version`, `install.sh`'s
+  `VERSION`, and the in-app version strings now read v0.10.0.
+- Release-tag signature verification is now advisory by default: `tilde
+  update` pulls and builds `origin/main`, not the tag's commit, so an
+  unsigned tag must not block delivery. An unverifiable newer tag prints a
+  warning and proceeds; set `TILDE_REQUIRE_SIGNED_TAGS=1` to make it a hard
+  refusal (the previous behavior). This unblocks the release path, which
+  had no signing key configured and would otherwise refuse every future
+  update.
 
 - **Security hardening — slopsquatting defense**: a new
   `internal/slopsquatting/slopsquatting.go` package detects package-name

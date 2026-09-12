@@ -202,7 +202,7 @@ document, not to make a silent exception:
 Shown once per new session start (not on resume, see §2.13).
 
 ```
-                     ~/dev/tilde · tilde v0.9.1
+                     ~/dev/tilde · tilde v0.10.0
 
 ╭────────────────────────────────────────────────────────────────────────────╮
 │ Welcome to tilde.                                                          │
@@ -746,7 +746,7 @@ because this is a reference screen, not a log, and shouldn't compete with the
 timeline vocabulary it's explaining.
 
 ```
-  Keybindings                                                    tilde v0.9.1
+  Keybindings                                                    tilde v0.10.0
 
   Tab              Cycle mode: Plan → Build → Auto
   Ctrl+C           Clear draft; quit when empty (running turns use Esc Esc)

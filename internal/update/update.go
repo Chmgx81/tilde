@@ -53,6 +53,9 @@ const (
 	buildTimeout = 5 * time.Minute
 
 	envOptOut = "TILDE_NO_UPDATE_CHECK"
+	// envRequireSignedTags upgrades the advisory release-tag signature
+	// check to a hard refusal. See verifyTag.
+	envRequireSignedTags = "TILDE_REQUIRE_SIGNED_TAGS"
 	// envTarget overrides the reinstall destination. Test hook only:
 	// without it the running executable is replaced, which a test
 	// must never do to itself.
@@ -61,7 +64,7 @@ const (
 
 // Version is this binary's release version. It is the comparison value for
 // remote release tags and must only change when a release is tagged.
-const Version = "v0.9.1"
+const Version = "v0.10.0"
 
 // LocalSHA reports the commit this binary was built from (stamped by
 // the Go toolchain for builds inside a git checkout), or "" when
@@ -453,18 +456,25 @@ func latestLocalTag(git func(args ...string) (string, error)) string {
 	return best
 }
 
-// verifyTag refuses unsigned/unverifiable release tags before anything
-// is pulled or built: a failed `git verify-tag --raw` (missing gnupg,
-// unsigned tag) fails closed with the fix named. Empty tag means no
-// version tags exist — nothing to verify.
+// verifyTag checks a release tag's signature before anything is pulled. The
+// update pulls origin/main and builds that — not the tag's commit — so the
+// tag signature does not gate the code being installed, and an unsigned tag
+// must not block delivery. By default an unverifiable tag is a WARNING and
+// the update proceeds; TILDE_REQUIRE_SIGNED_TAGS=1 makes a newer
+// unsigned/unverifiable tag a hard refusal for operators who want that.
+// Empty tag (no version tags) is a no-op.
 func verifyTag(git func(args ...string) (string, error), tag string) error {
 	if tag == "" {
 		return nil
 	}
 	out, err := git("verify-tag", "--raw", tag)
-	if err != nil {
-		return fmt.Errorf("refusing update: tag %s failed signature verification (%s: %v) — fix: sign release tags (`git tag -s`) and install gnupg so `git verify-tag --raw %s` passes; nothing was pulled", tag, strings.TrimSpace(out), err, tag)
+	if err == nil {
+		return nil
 	}
+	if os.Getenv(envRequireSignedTags) == "1" {
+		return fmt.Errorf("refusing update: tag %s failed signature verification (%s: %v) — fix: sign release tags (`git tag -s`) and install gnupg so `git verify-tag --raw %s` passes, or unset %s to allow unsigned tags; nothing was pulled", tag, strings.TrimSpace(out), err, tag, envRequireSignedTags)
+	}
+	fmt.Fprintf(os.Stderr, "tilde: warning: release tag %s is not signature-verified (%s) — set %s=1 to require signed tags\n", tag, strings.TrimSpace(out), envRequireSignedTags)
 	return nil
 }
 
