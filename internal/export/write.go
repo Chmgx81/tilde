@@ -42,10 +42,45 @@ func WriteBriefFile(sessionID, outPath string) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	if err := os.WriteFile(out, []byte(brief), 0o600); err != nil {
-		return "", 0, fmt.Errorf("export: cannot write %q: %w", out, err)
+	if err := writeContained(out, brief); err != nil {
+		return "", 0, err
 	}
 	return out, len(brief), nil
+}
+
+// writeContained writes brief to out atomically: content lands in a temp
+// file in the same directory and is renamed over the target. Rename
+// replaces a final-component symlink instead of following it, so a
+// pre-planted link (or one swapped in after resolveOut) cannot redirect
+// the export outside the cwd.
+func writeContained(out, brief string) error {
+	dir := filepath.Dir(out)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("export: cannot create %s: %w", dir, err)
+	}
+	tmp, err := os.CreateTemp(dir, ".brief-*.tmp")
+	if err != nil {
+		return fmt.Errorf("export: cannot write %q: %w", out, err)
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.WriteString(brief); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return fmt.Errorf("export: cannot write %q: %w", out, err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("export: cannot write %q: %w", out, err)
+	}
+	if err := os.Chmod(tmpName, 0o600); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("export: cannot write %q: %w", out, err)
+	}
+	if err := os.Rename(tmpName, out); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("export: cannot write %q: %w", out, err)
+	}
+	return nil
 }
 
 // resolveOut maps the --out value to an absolute path contained in the

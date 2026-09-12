@@ -22,6 +22,11 @@ import (
 // seq makes spill filenames unique even within one nanosecond.
 var seq atomic.Uint64
 
+// MaxBytes bounds a single spill file. Larger payloads are not spilled
+// (Save returns "") so a hostile or huge result cannot fill the disk —
+// callers then keep their own inline truncation note.
+const MaxBytes = 16 << 20
+
 // Dir returns the managed spill directory: $TILDE_SPILL_DIR when set, else
 // ~/.tilde/spill. Empty when neither resolves — spilling is then disabled
 // and callers keep their own truncation note.
@@ -43,6 +48,9 @@ func Save(tool, full string) string {
 	dir := Dir()
 	if dir == "" {
 		return ""
+	}
+	if len(full) > MaxBytes {
+		return "" // too large to spill; caller keeps its truncation note
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return ""

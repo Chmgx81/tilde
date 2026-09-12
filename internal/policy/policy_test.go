@@ -837,8 +837,8 @@ func TestSlopsquattingWarningInDescribe(t *testing.T) {
 	}{
 		{"pip install langchin", "SLOPSQUATTING", "langchin"},
 		{"npm install lodahs", "SLOPSQUATTING", "lodahs"},
-		{"pip install requests", "", "unverified"}, // real pkg, generic warning
-		{"go test ./...", "", ""},                  // not an install
+		{"pip install requests", "known package", ""}, // real pkg, known wording
+		{"go test ./...", "", ""},                     // not an install
 	}
 	for _, tc := range tests {
 		got := Describe("shell_command", shellArgs(tc.cmd))
@@ -870,6 +870,10 @@ func TestDenyBypassRegressions(t *testing.T) {
 		"echo x 2>/dev/sda",
 		"echo x &>/dev/sda",
 		"echo x 1>/proc/sysrq-trigger",
+		"find . | xargs xargs rm -rf",
+		"cat <(rm -rf /)",
+		"git --no-pager reset --hard",
+		"git -c foo=bar push --force",
 	}
 	for _, cmd := range deny {
 		if got := p.Check("shell_command", shellArgs(cmd)); got != Deny {
@@ -883,6 +887,8 @@ func TestDenyBypassRegressions(t *testing.T) {
 		"echo x 2>/dev/null",
 		"echo hi > out.txt",
 		"echo x 2>&1",
+		"grep -rn tee /home/user/proj",
+		"[ -f go.mod ] && echo ok",
 	} {
 		if got := p.Check("shell_command", shellArgs(cmd)); got == Deny {
 			t.Errorf("Check(%q) = Deny, want non-deny", cmd)

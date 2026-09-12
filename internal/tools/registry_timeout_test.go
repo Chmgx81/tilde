@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +58,30 @@ func TestDispatchPerToolTimeout(t *testing.T) {
 	r3.Register(&slowTool{})
 	if got := r3.Dispatch(context.Background(), "slow_tool", nil); strings.Contains(got, "TOOL_TIMEOUT") {
 		t.Fatalf("no declared timeout must not synthesize TOOL_TIMEOUT: %q", got)
+	}
+}
+
+// wrapSlowTool wraps its context error with %v (no Unwrap), mirroring the
+// real network tools — the dispatch must still classify it as TOOL_TIMEOUT.
+type wrapSlowTool struct{ d time.Duration }
+
+func (s *wrapSlowTool) Name() string        { return "wrap_slow" }
+func (s *wrapSlowTool) Description() string { return "test" }
+func (s *wrapSlowTool) Schema() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+func (s *wrapSlowTool) Timeout() time.Duration { return s.d }
+func (s *wrapSlowTool) Exec(ctx context.Context, _ map[string]any) (string, error) {
+	<-ctx.Done()
+	return "", fmt.Errorf("transport failed: %v", ctx.Err())
+}
+
+func TestDispatchTimeoutDespiteWrappedError(t *testing.T) {
+	r := NewRegistry()
+	r.Register(&wrapSlowTool{d: 20 * time.Millisecond})
+	out := r.Dispatch(context.Background(), "wrap_slow", nil)
+	if !strings.Contains(out, "TOOL_TIMEOUT") {
+		t.Fatalf("a %%v-wrapped deadline must still surface TOOL_TIMEOUT, got %q", out)
 	}
 }
 

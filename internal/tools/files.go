@@ -28,6 +28,9 @@ type ReadFile struct {
 
 	mu   sync.Mutex
 	last readCache // unchanged-read dedup (self-expiring)
+	// spill caches the spilled whole-file path for one file version, so
+	// paging a large file window-by-window spills it once, not per window.
+	spill spillCache
 }
 
 type readCache struct {
@@ -37,6 +40,12 @@ type readCache struct {
 	mtimeUnix  int64
 	size       int64
 	stubServed bool // stub expires on first use: never loop the model forever
+}
+
+// spillCache keys a spilled file by path+mtime+size.
+type spillCache struct {
+	key  string
+	path string
 }
 
 func (t *ReadFile) Name() string { return "read_file" }
@@ -138,11 +147,7 @@ func (t *ReadFile) Exec(_ context.Context, args map[string]any) (string, error) 
 	// inline note keeps the exact resume offset.
 	spillTail := ""
 	if cutByBytes || end < len(lines) {
-		if scrubbed, _ := Scrub(string(data)); scrubbed != "" {
-			if path := spill.Save("read-"+filepath.Base(p), scrubbed); path != "" {
-				spillTail = " (full file spilled to " + path + ")"
-			}
-		}
+		spillTail = t.spillTail(full, mtime, st.Size(), string(data), p)
 	}
 	switch {
 	case cutByBytes:
@@ -162,6 +167,32 @@ func (t *ReadFile) Exec(_ context.Context, args map[string]any) (string, error) 
 		fmt.Fprintf(&b, "\n[%s]\n", note)
 	}
 	return FenceCode(b.String(), sourceLanguage(p)), nil
+}
+
+// spillTail returns the inline "full file spilled to PATH" suffix for a
+// truncated read. It spills at most once per file version (path+mtime+size),
+// so paging a large file does not rewrite it on every window.
+func (t *ReadFile) spillTail(full string, mtime, size int64, data, p string) string {
+	key := fmt.Sprintf("%s\x00%d\x00%d", full, mtime, size)
+	t.mu.Lock()
+	if t.spill.key == key && t.spill.path != "" {
+		path := t.spill.path
+		t.mu.Unlock()
+		return " (full file spilled to " + path + ")"
+	}
+	t.mu.Unlock()
+	scrubbed, _ := Scrub(data)
+	if scrubbed == "" {
+		return ""
+	}
+	path := spill.Save("read-"+filepath.Base(p), scrubbed)
+	if path == "" {
+		return ""
+	}
+	t.mu.Lock()
+	t.spill = spillCache{key: key, path: path}
+	t.mu.Unlock()
+	return " (full file spilled to " + path + ")"
 }
 
 func sourceLanguage(path string) string {

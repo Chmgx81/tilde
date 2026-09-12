@@ -85,6 +85,12 @@ type File struct {
 	// the pattern (and via a best-effort symlink resolve), so a relative
 	// glob cannot be dodged by spelling a contained path absolutely.
 	// Containment still owns `..` escapes at exec time.
+	// LIMITATION: this gates path ARGUMENTS, not file CONTENT — a gated
+	// tool can still return content from a denied file through a broad
+	// argument (e.g. `grep {pattern, dir:"."}`), because the deny is
+	// evaluated once per call, not per file visited. Treat it as a guard
+	// against direct reads/writes of known-sensitive paths, not as a
+	// content boundary; pair it with the sandbox and least privilege.
 	// Shell cwd scoping is deliberately OUT: shell stays argv-judged
 	// per segment (shellDeny), and its cwd is already containment-bound.
 	// NOTE (owner wiring, outside internal/policy): main.go loadPolicies
@@ -276,15 +282,25 @@ func denyCandidates(cand, root string) []string {
 	if real, err := filepath.EvalSymlinks(cand); err == nil {
 		spellings = append(spellings, real)
 	}
+	// Compare against both the resolved and the as-given root: if the
+	// project root was reached through a symlink, a not-yet-existent file's
+	// candidate resolves differently, so trying both avoids skipping the
+	// root-relative form.
+	roots := []string{cleanRoot}
+	if cleanRoot != root {
+		roots = append(roots, root)
+	}
 	for _, p := range spellings {
-		rel, err := filepath.Rel(cleanRoot, p)
-		if err != nil {
-			continue
+		for _, r := range roots {
+			rel, err := filepath.Rel(r, p)
+			if err != nil {
+				continue
+			}
+			if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+				continue // outside root: no root-relative form to match
+			}
+			add(rel)
 		}
-		if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-			continue // outside root: no root-relative form to match
-		}
-		add(rel)
 	}
 	return out
 }

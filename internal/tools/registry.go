@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -187,8 +186,10 @@ func (r *Registry) Dispatch(ctx context.Context, name string, args map[string]an
 			r.Undo.DiscardLast()
 		}
 		// A tool's own deadline (not the caller's cancellation) is a
-		// distinct, retryable outcome: report it as TOOL_TIMEOUT.
-		if toolTimeout > 0 && errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+		// distinct, retryable outcome: report it as TOOL_TIMEOUT. Detect via
+		// the wrapped context's Err() rather than errors.Is, because tools
+		// commonly wrap transport errors with %v (which does not Unwrap).
+		if toolTimeout > 0 && execCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
 			r.audit(name, decision, args, "timeout after "+toolTimeout.String())
 			return receipt + fmt.Sprintf("TOOL_TIMEOUT: tool %q exceeded its %s limit and was cancelled. Narrow the request (smaller scope, fewer results) and retry, or use a different tool.", name, toolTimeout)
 		}

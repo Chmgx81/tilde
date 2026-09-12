@@ -13,11 +13,13 @@ import (
 	"tilde/internal/spill"
 )
 
-// grepInline matches shown inline; grepCollect bounds the walk so a
-// match-everything pattern still terminates with a useful spill.
+// grepInline matches shown inline; grepCollect / grepCollectBytes bound
+// the walk (count and match-text size) so a match-everything pattern still
+// terminates with bounded memory and a useful spill.
 const (
-	grepInline  = 50
-	grepCollect = 2000
+	grepInline       = 50
+	grepCollect      = 2000
+	grepCollectBytes = 1 << 20 // 1 MiB of match text
 )
 
 // --- grep ---
@@ -53,6 +55,7 @@ func (t *Grep) Exec(_ context.Context, args map[string]any) (string, error) {
 	}
 	var matches []string
 	count := 0
+	matchBytes := 0
 	stopped := false
 	skippedLinks := 0
 	seenFiles := map[string]bool{}
@@ -80,7 +83,7 @@ func (t *Grep) Exec(_ context.Context, args map[string]any) (string, error) {
 		if info.Size() > 512*1024 {
 			return nil // skip huge files; read_file samples them instead
 		}
-		if err := scanOne(path, pat, t.Root, &matches, seenFiles, &count); err != nil {
+		if err := scanOne(path, pat, t.Root, &matches, seenFiles, &count, &matchBytes); err != nil {
 			if err == errLimit {
 				stopped = true
 				return filepath.SkipAll
@@ -141,7 +144,7 @@ var errLimit = fmt.Errorf("match limit reached")
 // scanOne searches a single file, closing it before returning — never
 // held open across a walk (EMFILE on large repos). Over-long lines past
 // the scanner cap are reported, never silently unsearched.
-func scanOne(path, pat, root string, matches *[]string, seenFiles map[string]bool, count *int) error {
+func scanOne(path, pat, root string, matches *[]string, seenFiles map[string]bool, count *int, matchBytes *int) error {
 	// Re-check at open time: a link swapped in between the walk and the
 	// open must still not be followed (TOCTOU, best-effort).
 	if st, lerr := os.Lstat(path); lerr != nil || st.Mode()&os.ModeSymlink != 0 || !st.Mode().IsRegular() {
@@ -159,19 +162,23 @@ func scanOne(path, pat, root string, matches *[]string, seenFiles map[string]boo
 		lineNo++
 		if strings.Contains(sc.Text(), pat) {
 			rel, _ := filepath.Rel(root, path)
-			*matches = append(*matches, fmt.Sprintf("%s:%d: %s", rel, lineNo, sc.Text()))
+			entry := fmt.Sprintf("%s:%d: %s", rel, lineNo, sc.Text())
+			*matches = append(*matches, entry)
 			seenFiles[rel] = true
 			*count++
-			if *count >= grepCollect {
+			*matchBytes += len(entry)
+			if *count >= grepCollect || *matchBytes >= grepCollectBytes {
 				return errLimit
 			}
 		}
 	}
 	if err := sc.Err(); err != nil {
 		rel, _ := filepath.Rel(root, path)
-		*matches = append(*matches, fmt.Sprintf("%s: [lines past 256KB skipped: %v — sample with read_file instead]", rel, err))
+		entry := fmt.Sprintf("%s: [lines past 256KB skipped: %v — sample with read_file instead]", rel, err)
+		*matches = append(*matches, entry)
 		*count++
-		if *count >= grepCollect {
+		*matchBytes += len(entry)
+		if *count >= grepCollect || *matchBytes >= grepCollectBytes {
 			return errLimit
 		}
 	}

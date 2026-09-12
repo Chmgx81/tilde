@@ -2,7 +2,7 @@ package provider
 
 import (
 	"errors"
-	"os"
+	"strings"
 	"testing"
 )
 
@@ -97,7 +97,8 @@ func TestResolveLadderOrder(t *testing.T) {
 }
 
 func TestStatusMasksKeys(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "sk-supersecret-4242")
+	const key = "sk-supersecret-4242"
+	t.Setenv("OPENAI_API_KEY", key)
 	t.Setenv("ANTHROPIC_API_KEY", "short")
 	for _, st := range Status(nil, nil) {
 		if st.Provider.ID != "openai" {
@@ -106,13 +107,11 @@ func TestStatusMasksKeys(t *testing.T) {
 		if st.KeyTail != "…4242" {
 			t.Fatalf("status must show only the tail, got %q", st.KeyTail)
 		}
-		if containsAll(os.Getenv("OPENAI_API_KEY")) {
+		if strings.Contains(st.KeyTail, key) {
+			t.Fatalf("mask leaked the full key: %q", st.KeyTail)
 		}
-		_ = st
 	}
 }
-
-func containsAll(string) bool { return true }
 
 func TestFactoryDefaultsAndNames(t *testing.T) {
 	p, err := Factory("ollama", "", "", "")

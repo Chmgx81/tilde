@@ -150,3 +150,31 @@ func TestWriteBriefFileOutSymlinkEscape(t *testing.T) {
 		t.Fatal("export wrote through the symlink outside the cwd")
 	}
 }
+
+// A pre-planted symlink at the FINAL path must be replaced, not followed.
+func TestWriteBriefFileLeafSymlinkReplaced(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	id := writeSessionFixture(t, home, "sessLeaf",
+		line("user", map[string]any{"text": "leaf symlink goal"}),
+	)
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	outside := t.TempDir()
+	target := filepath.Join(outside, "victim.md")
+	// A dangling symlink at the default output path.
+	if err := os.Symlink(target, filepath.Join(cwd, id+"-brief.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	path, _, err := WriteBriefFile(id, "")
+	if err != nil {
+		t.Fatalf("export over a leaf symlink should succeed by replacing it: %v", err)
+	}
+	if _, statErr := os.Stat(target); statErr == nil {
+		t.Fatalf("export followed the leaf symlink and wrote %s", target)
+	}
+	data, rerr := os.ReadFile(path)
+	if rerr != nil || !strings.Contains(string(data), "leaf symlink goal") {
+		t.Fatalf("export did not land at %s: %v", path, rerr)
+	}
+}

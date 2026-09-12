@@ -82,6 +82,19 @@ func TestPruneRemovesOldKeepsNew(t *testing.T) {
 	}
 }
 
+func TestSaveRefusesOversize(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TILDE_SPILL_DIR", dir)
+	big := strings.Repeat("x", MaxBytes+1)
+	if path := Save("t", big); path != "" {
+		t.Fatalf("oversize payload must not spill, got %q", path)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 0 {
+		t.Fatalf("oversize spill left %d file(s)", len(entries))
+	}
+}
+
 func TestPruneMissingDirIsNoop(t *testing.T) {
 	removed, err := Prune(filepath.Join(t.TempDir(), "nope"), time.Hour)
 	if err != nil || removed != 0 {

@@ -55,9 +55,10 @@ func segmentDeny(argv []string) bool {
 }
 
 // isObfuscatedBinary reports whether a binary name contains shell
-// metachars that indicate obfuscation ($'curl', backticks, globs).
+// metachars that indicate obfuscation ($'curl', backticks, globs). A bare
+// `[` is the test builtin, not obfuscation — it is deliberately excluded.
 func isObfuscatedBinary(bin string) bool {
-	if strings.ContainsAny(bin, "$`*?[{\\") {
+	if strings.ContainsAny(bin, "$`*?{\\") {
 		return true
 	}
 	if strings.ContainsAny(bin, "(){}!") || strings.HasPrefix(bin, "[[") {
@@ -66,11 +67,13 @@ func isObfuscatedBinary(bin string) bool {
 	return false
 }
 
-// hasCommandSubstitution reports whether argv contains $(...) or
-// backtick command substitution, which hides the real command.
+// hasCommandSubstitution reports whether argv contains command
+// substitution — `$(...)`, backticks, or process substitution `<(…)`/`>(…)`
+// — any of which hides the real command.
 func hasCommandSubstitution(argv []string) bool {
 	joined := strings.Join(argv, " ")
-	return strings.Contains(joined, "$(") || strings.Contains(joined, "`")
+	return strings.Contains(joined, "$(") || strings.Contains(joined, "`") ||
+		strings.Contains(joined, "<(") || strings.Contains(joined, ">(")
 }
 
 // stripWrappers peels transparent wrappers (env, nice, timeout, command,
@@ -177,14 +180,18 @@ func isDestructiveVerb(first string, rest []string) bool {
 		// `find . | xargs sh -c 'rm -rf /'`). A bare `xargs` defaults to
 		// echo and has no command word — it passes.
 		word, args := xargsTarget(rest)
-		if word == "" || word == "xargs" {
-			return false
+		if word == "" {
+			return false // bare `xargs` defaults to echo: nothing to judge
 		}
 		switch word {
 		case "rm":
 			// Any rm under xargs deletes a supplied list: fail closed
 			// (plain `rm file` is Ask-tier only at top level).
 			return true
+		case "xargs":
+			// Nested xargs: recurse on its target (args shrink each level,
+			// so this terminates) rather than declaring it benign.
+			return isDestructiveVerb(word, args)
 		case "sh", "bash", "dash", "zsh", "ksh", "ash", "env", "eval", "exec",
 			"python", "python3", "perl", "ruby", "node", "php":
 			return true // opaque/interpreter payload: fail closed
@@ -197,22 +204,35 @@ func isDestructiveVerb(first string, rest []string) bool {
 				return true
 			}
 		}
-		if len(rest) == 0 {
+		// Skip leading global options so the destructive check sees the
+		// real subcommand (`git --no-pager reset --hard`).
+		i := 0
+		for i < len(rest) && strings.HasPrefix(rest[i], "-") {
+			if (rest[i] == "-c" || rest[i] == "-C" || rest[i] == "--namespace" ||
+				rest[i] == "--config-env" || rest[i] == "--exec-path" ||
+				rest[i] == "--super-prefix") && i+1 < len(rest) {
+				i += 2 // option plus its separate value
+				continue
+			}
+			i++
+		}
+		if i >= len(rest) {
 			return false
 		}
-		switch rest[0] {
+		sub, subArgs := rest[i], rest[i+1:]
+		switch sub {
 		case "push":
-			return hasFlag(rest, "--force", "-f")
+			return hasFlag(subArgs, "--force", "-f")
 		case "reset":
-			return hasFlag(rest, "--hard")
+			return hasFlag(subArgs, "--hard")
 		case "clean":
-			return hasFlag(rest, "-f", "-fd", "-df")
+			return hasFlag(subArgs, "-f", "-fd", "-df")
 		case "checkout", "restore":
-			for i, a := range rest {
+			for j, a := range subArgs {
 				if a == "." {
 					return true
 				}
-				if a == "--" && (i+1 >= len(rest) || rest[i+1] == ".") {
+				if a == "--" && (j+1 >= len(subArgs) || subArgs[j+1] == ".") {
 					return true
 				}
 			}
@@ -274,7 +294,7 @@ func hasDangerousRedirects(argv []string) bool {
 			target = argv[i+1]
 		} else if len(redir) > 1 && strings.HasPrefix(redir, ">") {
 			target = redir
-		} else if a == "tee" || strings.HasSuffix(a, "/tee") {
+		} else if i == 0 && (a == "tee" || strings.HasSuffix(a, "/tee")) {
 			for _, t := range argv[i+1:] {
 				if strings.HasPrefix(t, "-") {
 					continue

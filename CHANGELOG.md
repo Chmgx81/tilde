@@ -27,6 +27,20 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   `xargs` no longer launders a denied verb or interpreter payload
   (`find . | xargs sh -c 'rm -rf /'`); fd-prefixed device redirects
   (`2>`, `&>`) are normalized before the `/dev`/`/proc`/`/sys` check.
+- **Deny-tier second pass**: nested `xargs` recurses instead of failing
+  open; process substitution (`<(…)`/`>(…)`) is treated as substitution;
+  git's leading global options are skipped so `git --no-pager reset
+  --hard` still denies; the `tee /absolute/path` sink only fires when
+  `tee` is the command word (no more false Deny on `grep … tee /path`),
+  and a bare `[` test is no longer read as obfuscation.
+- `TOOL_TIMEOUT` is detected from the tool's wrapped context deadline, so
+  a network tool that wraps its error with `%v` still reports the
+  distinct, retryable timeout instead of a generic failure.
+- `--export` writes via temp-file + rename, replacing a pre-planted
+  final-component symlink instead of following it.
+- The read spill is cached per file version (paging a large file spills
+  it once), `internal/spill` refuses payloads over 16 MiB, and the
+  `deny_paths` argument-vs-content limitation is documented.
 - **Path-scoped deny fix**: `deny_paths` now matches the root-relative and
   symlink-resolved spelling of an absolute contained path, so `*.key` can
   no longer be dodged by writing `<root>/id.key`.
