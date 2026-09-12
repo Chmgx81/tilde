@@ -9,8 +9,9 @@ import (
 )
 
 // Concurrent Start calls must keep the reservation bookkeeping consistent
-// under -race: the cap is never exceeded, and a slot is released on both
-// the success and failure paths.
+// under -race: the running-task cap is never exceeded, and a slot is
+// released on both the success and failure paths. The command blocks so
+// finished tasks can't be pruned mid-test and free a slot.
 func TestTaskManagerConcurrentStartAtCap(t *testing.T) {
 	m := &TaskManager{MaxTasks: 4, LogDir: t.TempDir()}
 	var wg sync.WaitGroup
@@ -21,8 +22,8 @@ func TestTaskManagerConcurrentStartAtCap(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			ctx, cancel := context.WithCancel(context.Background())
-			_, err := m.Start("true", ctx, cancel, func(io.Writer, io.Writer) *exec.Cmd {
-				return exec.Command("true")
+			_, err := m.Start("sleep 3", ctx, cancel, func(io.Writer, io.Writer) *exec.Cmd {
+				return exec.Command("sleep", "3")
 			})
 			mu.Lock()
 			if err != nil {
@@ -39,7 +40,7 @@ func TestTaskManagerConcurrentStartAtCap(t *testing.T) {
 		t.Fatal("expected at least one task to start")
 	}
 	if ok > 4 {
-		t.Fatalf("cap exceeded: %d tasks started, max 4", ok)
+		t.Fatalf("cap exceeded: %d tasks started concurrently, max 4", ok)
 	}
 	if ok+failed != 32 {
 		t.Fatalf("lost calls: ok=%d failed=%d", ok, failed)
