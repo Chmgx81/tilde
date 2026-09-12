@@ -16,7 +16,7 @@ main.go + harness.go (composition root, package main) -> internal/* (flat packag
   packages (agent, audit, compact, creds, eval, export, hooks, ide,
   mcp, marketplace, mode, plugin, policy, provider, repair, rules, sandbox,
   schedule, scrub, session, skills, slopsquatting, spill, tools, trust, tui,
-  update, vec).
+  update, vec, verify).
 - Dependency direction rule: `main.go` may import `internal/*`;
   `internal/*` packages must not import `main.go`, and new
   cross-package deps should point inward toward policy/sandbox/trust/scrub

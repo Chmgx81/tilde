@@ -20,6 +20,7 @@ import (
 	"tilde/internal/session"
 	"tilde/internal/skills"
 	"tilde/internal/tools"
+	"tilde/internal/verify"
 )
 
 // Config tunes the loop.
@@ -370,6 +371,18 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 	nudges := 0  // read-only doom nudges this turn; escalates to handoff at maxNudges
 	denials := 0 // mode/policy denials this turn; every 2nd injects a redirect reminder
 	var lastText string
+	// Verify gate: when the project has an authoritative verification
+	// command and this run changes code, a turn that would finish without
+	// running it gets a bounded reminder (warn) or is refused (strict).
+	verifyMode := verify.Mode()
+	verifyCmd := ""
+	if verifyMode != verify.Off {
+		verifyCmd = verify.Command(l.Cfg.Root)
+	}
+	const maxVerifyFires = 2
+	verifyFires := 0
+	changedCode := false
+	verifyRan := false
 
 	for i := 0; i < maxIters; i++ {
 		// System prompt is composed fresh every iteration so mid-session
@@ -416,6 +429,25 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 			l.appendLog("assistant", map[string]any{"content": resp.Content}, emit)
 		}
 		if len(resp.ToolCalls) == 0 {
+			// Verify gate: a turn that changed code may not finish without
+			// running the project's verification command. Bounded so a model
+			// that ignores the reminder still terminates.
+			if verifyCmd != "" && changedCode && !verifyRan {
+				if verifyFires < maxVerifyFires {
+					verifyFires++
+					msg := fmt.Sprintf("Verification required before finishing: this run changed files but has not run the project's verification command. Run `%s` with shell_command and report the result; fix any failures before declaring done.", verifyCmd)
+					emit(Event{Kind: "system", Text: msg})
+					l.appendLog("system", map[string]any{"verify_reminder": msg, "command": verifyCmd}, emit)
+					l.AppendMsg(provider.Message{Role: "user", Content: msg})
+					continue
+				}
+				if verifyMode == verify.Strict {
+					msg := fmt.Sprintf("Verification still outstanding (%s) after %d reminder(s) — refusing to finish in strict verify mode.", verifyCmd, maxVerifyFires)
+					emit(Event{Kind: "handoff", Text: msg})
+					l.appendLog("system", map[string]any{"verify_pending": msg, "command": verifyCmd}, emit)
+					return lastText, fmt.Errorf("%s", msg)
+				}
+			}
 			emit(Event{Kind: "done", Text: "Done"})
 			return lastText, nil
 		}
@@ -548,8 +580,21 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 				return lastText, err
 			}
 			pending = nil
-			if err := l.execApproved(ctx, tc, emit); err != nil {
+			out, err := l.execApproved(ctx, tc, emit)
+			if err != nil {
 				return lastText, err
+			}
+			// Verify-gate bookkeeping: a successful write/edit changes code;
+			// a successful run of the exact verify command satisfies it.
+			if tc.Name == "write_file" || tc.Name == "edit_file" {
+				if !strings.Contains(out, " failed:") && !strings.Contains(out, " blocked:") {
+					changedCode = true
+				}
+			}
+			if tc.Name == "shell_command" {
+				if cmdStr, _ := tc.Args["command"].(string); verify.Matches(verifyCmd, cmdStr) && verify.RanOK(out) {
+					verifyRan = true
+				}
 			}
 		}
 		if err := l.flushBatch(ctx, pending, emit); err != nil {
@@ -623,8 +668,9 @@ func ParallelSafe(name string) bool {
 }
 
 // execApproved runs one gate-and-policy-cleared call: timeline, audit
-// log, dispatch, context. Returns ctx.Err() on cancellation.
-func (l *Loop) execApproved(ctx context.Context, tc provider.ToolCall, emit func(Event)) error {
+// log, dispatch, context. Returns the dispatched output and ctx.Err() on
+// cancellation (the output lets the verify gate see whether a run passed).
+func (l *Loop) execApproved(ctx context.Context, tc provider.ToolCall, emit func(Event)) (string, error) {
 	emit(Event{Kind: "tool_call", Text: tc.Name + " " + shortArgs(tc.Args)})
 	l.appendLog("tool_call", map[string]any{"name": tc.Name, "args": tc.Args}, emit)
 	out := l.Reg.Dispatch(ctx, tc.Name, tc.Args)
@@ -632,9 +678,9 @@ func (l *Loop) execApproved(ctx context.Context, tc provider.ToolCall, emit func
 	l.appendLog("tool_result", map[string]any{"name": tc.Name, "output": out}, emit)
 	l.AppendMsg(provider.Message{Role: "user", Content: "Tool " + tc.Name + " result:\n" + out})
 	if ctx.Err() != nil {
-		return ctx.Err() // cooperative cancellation
+		return out, ctx.Err() // cooperative cancellation
 	}
-	return nil
+	return out, nil
 }
 
 // defaultFlushParallel caps concurrent Dispatch goroutines per batch.

@@ -62,6 +62,14 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   file under `~/.tilde/spill` and named inline — capped shell output, a
   read that hits the byte/line window (the full file is spilled), and a
   capped grep match list. `tilde prune --spill <age>` ages them out.
+- **Verify gate**: a new `internal/verify` leaf resolves one authoritative
+  verification command ($TILDE_VERIFY_CMD, then `.tilde/verify.yaml`
+  `command:`, then project markers — go.mod, Cargo.toml, pytest,
+  package.json test script, Makefile). A run that changed files and then
+  tries to finish without running it gets a bounded reminder
+  (`TILDE_VERIFY=warn`, the default; `strict` refuses to finish; `off`
+  disables). The command is model-run through `shell_command`, so the
+  sandbox and policy tiers still apply.
 - **Secret scrubbing enhancement**: `internal/scrub/scrub.go` adds patterns
   for Vercel tokens (`vcp_` prefix), URL credentials (`user:pass@host`),
   and the GCP service-account `private_key` JSON field (redacted in place,
