@@ -62,6 +62,10 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   file under `~/.tilde/spill` and named inline — capped shell output, a
   read that hits the byte/line window (the full file is spilled), and a
   capped grep match list. `tilde prune --spill <age>` ages them out.
+- **Edit-discipline guardrails** (warn-only, from the reference survey): an
+  `edit_file` that touches most of a substantial file, or a file edited
+  many times in one session, appends a short note to the tool result so the
+  model can reconsider; nothing is blocked.
 - **Verify gate**: a new `internal/verify` leaf resolves one authoritative
   verification command ($TILDE_VERIFY_CMD, then `.tilde/verify.yaml`
   `command:`, then project markers — go.mod, Cargo.toml, pytest,

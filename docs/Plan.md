@@ -715,6 +715,7 @@ As of v0.9+:
 | Pairing-safe compaction | DONE, kept-recent boundary walks past a leading tool-result run |
 | Tool-output spill | DONE, `internal/spill` leaf; scrubbed 0600 files under `~/.tilde/spill`; wired to capped shell output, read-window overflow (full file), and capped grep lists; `tilde prune --spill <age>` |
 | Verify gate | DONE, `internal/verify` resolves $TILDE_VERIFY_CMD → `.tilde/verify.yaml` → project markers (go.mod/Cargo.toml/pytest/package.json/Makefile); a run that changed code and tries to finish unverified gets a bounded reminder (`TILDE_VERIFY=warn`, default) or is refused (`strict`); `off` disables |
+| Edit discipline | DONE, warn-only; a wholesale rewrite of a substantial file or repeated edits to one path append a note to the tool result (`internal/tools`, `SeenMap.BumpEdits`) |
 | Install health | DONE, `tilde doctor [--json]`, exit 2 on a hard failure |
 | PTY terminal contract | DONE, `pty_smoke_test.go` runs the real binary under a pty: alt-screen enter/exit, live resize re-render, clean Ctrl+C |
 | Input bounds | DONE, NUL bytes refused at `contain()` (all file tools), 64 KiB shell-command cap naming the fix |

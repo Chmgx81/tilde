@@ -234,6 +234,9 @@ type SeenMap struct {
 	mu   sync.Mutex
 	root string
 	m    map[string]fileState
+	// edits counts successful edits per real path this session, for the
+	// warn-only edit-discipline guard (repeated churn on one file).
+	edits map[string]int
 	// Tasks, when set, makes Check aware of in-flight background work: a
 	// task started after a file was marked and still running means the
 	// file may change underfoot — Check refuses until it settles.
@@ -247,7 +250,25 @@ type fileState struct {
 }
 
 // NewSeenMap returns an empty read-state store for root.
-func NewSeenMap(root string) *SeenMap { return &SeenMap{root: root, m: map[string]fileState{}} }
+func NewSeenMap(root string) *SeenMap {
+	return &SeenMap{root: root, m: map[string]fileState{}, edits: map[string]int{}}
+}
+
+// BumpEdits records one successful edit of path and returns the running
+// count for this session. Nil store returns 0 (unit tests).
+func (s *SeenMap) BumpEdits(path string) int {
+	if s == nil {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.edits == nil {
+		s.edits = map[string]int{}
+	}
+	k := s.key(path)
+	s.edits[k]++
+	return s.edits[k]
+}
 
 // key normalizes a repo-relative or absolute path to its real location.
 // Symlinks resolve, so link-spellings and real-spellings of one file share

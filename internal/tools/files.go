@@ -412,7 +412,36 @@ func (t *EditFile) Exec(_ context.Context, args map[string]any) (string, error) 
 	if start < 0 {
 		start = 0
 	}
-	return SpanDiff(p, before, after, start, len(oldBlock), len(newBlock), actualNote), nil
+	out := SpanDiff(p, before, after, start, len(oldBlock), len(newBlock), actualNote)
+	out += editDisciplineNote(p, len(before), len(oldBlock)+len(newBlock), t.Seen.BumpEdits(p))
+	return out, nil
+}
+
+// Edit-discipline thresholds (warn-only): a large file mostly rewritten, or
+// a file edited many times this session, is worth flagging — the model may
+// be thrashing a rewrite instead of making the smallest change.
+const (
+	editRewriteMinLines = 30
+	editRewriteFraction = 0.8
+	editThrashWarn      = 8
+)
+
+// editDisciplineNote returns a suffixed, warn-only note (never blocks) when
+// an edit rewrote most of a substantial file or the file has been edited
+// many times this session. Empty when neither applies.
+func editDisciplineNote(path string, fileLines, replaced, edits int) string {
+	note := ""
+	if fileLines >= editRewriteMinLines && float64(replaced)/float64(fileLines+1) > editRewriteFraction {
+		pct := 100 * replaced / (fileLines + 1)
+		if pct > 100 {
+			pct = 100
+		}
+		note += fmt.Sprintf(" [edit discipline: this touched ~%d%% of %q — if that was not intended, re-read and make the smallest edit]", pct, path)
+	}
+	if edits >= editThrashWarn {
+		note += fmt.Sprintf(" [edit discipline: %q has been edited %d times this session — consolidate before continuing]", path, edits)
+	}
+	return note
 }
 
 // stripReadPrefixes drops fenced-read `N: ` line prefixes from old when
