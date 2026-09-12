@@ -118,33 +118,95 @@ func LikelyHallucinated(name string) (bool, string) {
 }
 
 // wellKnownPackages is the set of legitimate package names. A name that
-// matches this set exactly is not a typo — skip it before computing
-// edit distances so real packages aren't flagged as typos of other
-// real packages (e.g. `requests` is 1 edit from `reqwest`).
+// matches this set exactly (case- and separator-insensitive) is not a typo
+// — skip it before computing edit distances so real packages aren't
+// flagged as typos of other real packages (e.g. `requests` is close to
+// `reqwest`). The set covers the ecosystems the DB above reasons about;
+// it does not need to be exhaustive, only to protect names near a listed
+// one from false "possible typo" warnings.
 var wellKnownPackages = map[string]bool{
+	// Python / PyPI
 	"langchain": true, "requests": true, "numpy": true, "pandas": true,
 	"tensorflow": true, "torch": true, "flask": true, "django": true,
 	"fastapi": true, "selenium": true, "pytest": true, "matplotlib": true,
-	"scipy": true, "transformers": true, "axios": true, "lodash": true,
-	"react": true, "next": true, "vite": true, "tailwindcss": true,
-	"typescript": true, "jest": true, "eslint": true, "prettier": true,
+	"scipy": true, "transformers": true, "sqlalchemy": true, "pydantic": true,
+	"uvicorn": true, "httpx": true, "aiohttp": true, "celery": true,
+	"redis": true, "pymongo": true, "psycopg2": true, "tqdm": true,
+	"rich": true, "typer": true, "paramiko": true, "boto3": true,
+	"scikit-learn": true, "opencv-python": true, "beautifulsoup4": true,
+	// JavaScript / npm
+	"axios": true, "lodash": true, "react": true, "next": true, "vue": true,
+	"angular": true, "svelte": true, "vite": true, "webpack": true,
+	"rollup": true, "babel": true, "tailwindcss": true, "typescript": true,
+	"jest": true, "vitest": true, "eslint": true, "prettier": true,
+	"express": true, "mongoose": true, "dotenv": true, "jsonwebtoken": true,
+	"passport": true, "redux": true, "zustand": true, "playwright": true,
+	"puppeteer": true, "socket.io": true,
+	// Rust / crates.io
 	"serde": true, "tokio": true, "reqwest": true, "clap": true,
-	"rand": true, "regex": true,
+	"rand": true, "regex": true, "rayon": true, "tracing": true,
+	"anyhow": true, "thiserror": true, "hyper": true, "actix-web": true,
+	"sqlx": true,
+	// Go modules
+	"gin": true, "gorm": true, "cobra": true, "viper": true, "logrus": true,
+	"zap": true, "testify": true, "gorilla": true,
 }
 
-// IsCommonTypo reports whether a name differs by edit distance 1-2 from a
-// well-known package — a weak signal on its own, but combined with
-// Ask-tier approval it gives the user a second chance. Names that are
-// themselves well-known packages return false (correct spelling, not a typo).
-func IsCommonTypo(name string) bool {
-	lower := strings.ToLower(strings.TrimSpace(name))
-	// Exact match to a known package — not a typo.
+// normalizePkg lowercases, trims, drops a scope prefix, and strips
+// hyphen/underscore separators, so `@scope/Lang-Chin` and `lang_chin`
+// compare on equal footing.
+func normalizePkg(name string) string {
+	s := strings.ToLower(strings.TrimSpace(name))
+	if idx := strings.Index(s, "/"); idx >= 0 && idx+1 < len(s) {
+		s = s[idx+1:]
+	}
+	s = strings.ReplaceAll(s, "-", "")
+	s = strings.ReplaceAll(s, "_", "")
+	s = strings.ReplaceAll(s, ".", "")
+	return s
+}
+
+// isWellKnown reports whether a name (in any spelling) is a known package.
+func isWellKnown(lower string) bool {
 	if wellKnownPackages[lower] {
+		return true
+	}
+	n := normalizePkg(lower)
+	for k := range wellKnownPackages {
+		if normalizePkg(k) == n {
+			return true
+		}
+	}
+	return false
+}
+
+// KnownPackage reports whether name is a legitimate well-known package.
+// Callers use it to avoid wording a known-good install as "unverified".
+func KnownPackage(name string) bool {
+	return isWellKnown(strings.ToLower(strings.TrimSpace(name)))
+}
+
+// IsCommonTypo reports whether a name is a plausible misspelling of a
+// well-known package — a weak signal on its own, but combined with
+// Ask-tier approval it gives the user a second chance. Comparison is
+// case- and separator-insensitive. Short names (under five characters)
+// only flag at distance 1, which keeps the warning precise. Names that
+// are themselves well-known packages return false.
+func IsCommonTypo(name string) bool {
+	lower := normalizePkg(name)
+	if len(lower) < 3 {
 		return false
 	}
+	if isWellKnown(strings.ToLower(strings.TrimSpace(name))) {
+		return false
+	}
+	maxD := 2
+	if len(lower) < 5 {
+		maxD = 1
+	}
 	for k := range wellKnownPackages {
-		d := levenshtein(lower, k)
-		if d >= 1 && d <= 2 {
+		d := levenshtein(lower, normalizePkg(k))
+		if d >= 1 && d <= maxD {
 			return true
 		}
 	}
@@ -182,17 +244,4 @@ func levenshtein(s, t string) int {
 		prev = cur
 	}
 	return prev[len(t)]
-}
-
-func min(a, b, c int) int {
-	if a < b {
-		if a < c {
-			return a
-		}
-		return c
-	}
-	if b < c {
-		return b
-	}
-	return c
 }

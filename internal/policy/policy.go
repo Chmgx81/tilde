@@ -519,69 +519,167 @@ func builtinAsk(tool string) bool {
 	return false
 }
 
-// bareFetchers fetch remote code under any invocation (npx/uvx run it,
-// pip-family needs a fetch verb — see below).
-var bareFetchers = map[string]bool{"npx": true, "uvx": true}
-
-// fetchVerbs are the pip-family subcommands that download.
-var fetchVerbs = map[string]bool{"install": true, "download": true, "wheel": true}
-
-// installVerbs maps a package manager to the subcommands that fetch.
-var installVerbs = map[string][]string{
-	"uv": {"install", "add"}, "npm": {"install", "i", "add"},
-	"pnpm": {"add", "install", "i"}, "yarn": {"add"},
-	"bun": {"add", "install", "i"}, "go": {"get", "install"},
-	"cargo": {"add", "install"}, "gem": {"install"},
-	"bundle": {"install", "add"}, "composer": {"require"},
-	"apt": {"install"}, "apt-get": {"install"},
-	"dnf": {"install"}, "yum": {"install"},
-	"apk": {"add"}, "pacman": {"-S"}, "pipx": {"install", "run"},
+// managerSpec describes one package manager for the slopsquatting surface:
+// the subcommands that fetch remote packages, and whether a bare
+// invocation fetches (npx/uvx/bunx run a package directly).
+type managerSpec struct {
+	verbs   map[string]bool
+	fetches bool
 }
 
-// isInstallShape reports whether any pipeline segment fetches a remote
-// package — the slopsquatting surface (models hallucinate plausible
-// names; attackers pre-register them). Same segment/argv parsing as the
-// deny judge so wrappers can't hide it; unparseable segments are skipped
-// here because deny already fails those closed. Matched commands stay
-// Ask-tier (installing real dependencies is normal agent work) — the
-// mitigation is an annotated confirm prompt, not a block.
-func isInstallShape(cmd string) bool {
-	has := func(rest []string, want map[string]bool) bool {
-		for _, a := range rest {
-			if want[strings.ToLower(a)] {
+func verbSet(verbs ...string) map[string]bool {
+	m := make(map[string]bool, len(verbs))
+	for _, v := range verbs {
+		m[v] = true
+	}
+	return m
+}
+
+// managers is the SINGLE source of truth for "does this fetch a remote
+// package": both isInstallShape (detection) and extractPackageNames (name
+// extraction) consume it, so a manager can never be detected yet silently
+// skipped by the DB check — the class of gap that let `python -m pip
+// install`, `npm ci`, and `composer require` slip past.
+var managers = map[string]managerSpec{
+	"pip":      {verbs: verbSet("install", "download", "wheel")},
+	"pip3":     {verbs: verbSet("install", "download", "wheel")},
+	"pipx":     {verbs: verbSet("install", "run")},
+	"uv":       {verbs: verbSet("install", "add", "sync")},
+	"poetry":   {verbs: verbSet("add", "install")},
+	"pipenv":   {verbs: verbSet("install", "add")},
+	"pdm":      {verbs: verbSet("add", "install", "sync")},
+	"conda":    {verbs: verbSet("install", "create")},
+	"mamba":    {verbs: verbSet("install", "create")},
+	"npm":      {verbs: verbSet("install", "i", "add", "ci")},
+	"pnpm":     {verbs: verbSet("add", "install", "i", "dlx")},
+	"yarn":     {verbs: verbSet("add", "install", "dlx")},
+	"bun":      {verbs: verbSet("add", "install", "i", "x")},
+	"npx":      {fetches: true},
+	"uvx":      {fetches: true},
+	"bunx":     {fetches: true},
+	"go":       {verbs: verbSet("get", "install")},
+	"cargo":    {verbs: verbSet("add", "install")},
+	"gem":      {verbs: verbSet("install")},
+	"bundle":   {verbs: verbSet("install", "add")},
+	"composer": {verbs: verbSet("require", "install")},
+	"apt":      {verbs: verbSet("install")},
+	"apt-get":  {verbs: verbSet("install")},
+	"dnf":      {verbs: verbSet("install")},
+	"yum":      {verbs: verbSet("install")},
+	"apk":      {verbs: verbSet("add", "install")},
+	"pacman":   {verbs: verbSet("install", "--sync")},
+	"brew":     {verbs: verbSet("install")},
+	"choco":    {verbs: verbSet("install")},
+	"deno":     {verbs: verbSet("install", "add")},
+	"dotnet":   {verbs: verbSet("add")},
+	"nuget":    {verbs: verbSet("install")},
+}
+
+// installSeg is one fetching segment: the manager and its arguments.
+type installSeg struct {
+	manager string
+	args    []string
+}
+
+// joinContinuations collapses backslash-newline line continuations so a
+// command split across lines is judged as one — the package name
+// otherwise lands in a segment with no manager and escapes the DB check.
+func joinContinuations(cmd string) string {
+	cmd = strings.ReplaceAll(cmd, "\\\r\n", " ")
+	return strings.ReplaceAll(cmd, "\\\n", " ")
+}
+
+// baseManagerName strips a trailing `.N`/`.N.M` suffix from a versioned
+// binary (python3.11 → python3, pip3.11 → pip3) so versioned interpreters
+// cannot dodge detection.
+func baseManagerName(first string) string {
+	if i := strings.IndexByte(first, '.'); i > 0 {
+		return first[:i]
+	}
+	return first
+}
+
+// installSegments parses a command into the segments that fetch a remote
+// package. It shares the deny judge's segment/argv parser (so quoting and
+// later segments behave identically) and peels the transparent wrappers
+// (env/nice/timeout/command) that used to hide the manager. Opaque
+// wrappers (sudo, nohup, a `sh -c` payload) are skipped here because the
+// deny tier already fails those closed.
+func installSegments(cmd string) []installSeg {
+	var out []installSeg
+	for _, seg := range splitSegments(joinContinuations(cmd)) {
+		argv, ok := stripPrefix(splitArgs(seg))
+		if !ok || len(argv) == 0 {
+			continue
+		}
+		first, rest, opaque := stripWrappers(argv)
+		if opaque || first == "" {
+			continue
+		}
+		mgr, args, ok := managerOf(first, rest)
+		if !ok {
+			continue
+		}
+		out = append(out, installSeg{manager: mgr, args: args})
+	}
+	return out
+}
+
+// managerOf resolves the manager a peeled argv invokes, following the
+// `python -m pip` indirection, and reports whether that invocation
+// actually fetches.
+func managerOf(first string, rest []string) (string, []string, bool) {
+	base := baseManagerName(path.Base(strings.ToLower(first)))
+	args := rest
+	if base == "python" || base == "python3" {
+		idx := -1
+		for i, a := range args {
+			if strings.EqualFold(a, "pip") || strings.EqualFold(a, "pip3") {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return "", nil, false
+		}
+		base, args = "pip", args[idx+1:]
+	}
+	spec, ok := managers[base]
+	if !ok {
+		return "", nil, false
+	}
+	if !spec.fetches && !fetchesNow(base, args, spec) {
+		return "", nil, false
+	}
+	return base, args, true
+}
+
+// fetchesNow reports whether the manager's arguments name a fetching
+// subcommand. pacman is special-cased for combined forms (`-Syu`).
+func fetchesNow(base string, args []string, spec managerSpec) bool {
+	if base == "pacman" {
+		for _, a := range args {
+			if strings.HasPrefix(a, "-S") || strings.EqualFold(a, "--sync") || strings.EqualFold(a, "install") {
 				return true
 			}
 		}
 		return false
 	}
-	for _, seg := range splitSegments(cmd) {
-		argv, ok := stripPrefix(splitArgs(seg))
-		if !ok || len(argv) == 0 {
-			continue
-		}
-		first := path.Base(strings.ToLower(argv[0]))
-		rest := argv[1:]
-		if bareFetchers[first] {
+	for _, a := range args {
+		if spec.verbs[strings.ToLower(a)] {
 			return true
-		}
-		if first == "pip" || first == "pip3" {
-			if has(rest, fetchVerbs) {
-				return true
-			}
-			continue
-		}
-		if (first == "python" || first == "python3") && has(rest, map[string]bool{"pip": true}) && has(rest, fetchVerbs) {
-			return true // `python -m pip install …` hides pip behind the interpreter
-		}
-		for _, v := range installVerbs[first] {
-			for _, a := range rest {
-				if strings.EqualFold(a, v) {
-					return true
-				}
-			}
 		}
 	}
 	return false
+}
+
+// isInstallShape reports whether any pipeline segment fetches a remote
+// package — the slopsquatting surface (models hallucinate plausible
+// names; attackers pre-register them). Matched commands stay Ask-tier
+// (installing real dependencies is normal agent work) — the mitigation is
+// an annotated confirm prompt, not a block.
+func isInstallShape(cmd string) bool {
+	return len(installSegments(cmd)) > 0
 }
 
 // shellDeny reports whether a shell command matches a destructive shape.
@@ -961,10 +1059,11 @@ func Describe(tool string, args map[string]any) string {
 	case "shell_command":
 		if c, _ := args["command"].(string); c != "" {
 			if isInstallShape(c) {
-				// Extract package names and check for hallucinations.
-				warn := slopsquattingWarning(c)
-				if warn != "" {
+				if warn := slopsquattingWarning(c); warn != "" {
 					return "Run: " + c + " — " + warn
+				}
+				if allKnownPackages(c) {
+					return "Run: " + c + " — known package(s); verify the command before approving"
 				}
 				return "Run: " + c + " — unverified package name, check spelling/registry before approving"
 			}
@@ -1006,51 +1105,99 @@ func slopsquattingWarning(cmd string) string {
 	return "⚠ SLOPSQUATTING WARNING — multiple suspicious packages: " + strings.Join(flagged, "; ") + " — verify on the registry before approving"
 }
 
+// allKnownPackages reports whether every extracted package name is a
+// well-known package, so the confirm prompt can say "known" instead of
+// "unverified". An empty name set returns false (keep the generic
+// warning — a bare `-r requirements.txt` proves nothing about its pins).
+func allKnownPackages(cmd string) bool {
+	names := extractPackageNames(cmd)
+	if len(names) == 0 {
+		return false
+	}
+	for _, n := range names {
+		if !slopsquatting.KnownPackage(n) {
+			return false
+		}
+	}
+	return true
+}
+
 // extractPackageNames pulls package names out of install commands. It
-// handles the common shapes: `pip install foo bar`, `npm i foo bar`,
-// `uv add foo`, etc. Version specs (>=1.0, @1.0.0) are stripped.
-// Package manager verbs (install, add, get, ...) are skipped.
+// walks the exact segments isInstallShape matched, so a manager that is
+// detected is always also checked against the hallucination DB. Version
+// specs (`==1.2`, `>=2`, `@1.0`, `[extra]`) are stripped; flag values
+// (`-r FILE`, `--index-url URL`) are skipped rather than read as names;
+// unresolved `$VAR` tokens are dropped (the generic warning still shows).
 func extractPackageNames(cmd string) []string {
-	// Verbs that package managers take — skip these, they're not package names.
-	verbs := map[string]bool{
-		"install": true, "i": true, "add": true, "get": true,
-		"download": true, "wheel": true, "require": true, "run": true,
+	skip := map[string]bool{
+		"pip": true, "pip3": true, "sync": true, "package": true, "x": true,
+		"install": true, "i": true, "add": true, "get": true, "download": true,
+		"wheel": true, "require": true, "run": true, "ci": true, "dlx": true,
+		"create": true, "remove": true, "publish": true, "update": true,
 	}
 	var names []string
 	seen := map[string]bool{}
-	for _, seg := range splitSegments(cmd) {
-		argv, ok := stripPrefix(splitArgs(seg))
-		if !ok || len(argv) < 2 {
-			continue
+	for _, seg := range installSegments(cmd) {
+		if spec, ok := managers[seg.manager]; ok {
+			for v := range spec.verbs {
+				skip[v] = true
+			}
 		}
-		first := path.Base(strings.ToLower(argv[0]))
-		// Skip the manager and its verb; everything after is a package.
-		isMgr := first == "pip" || first == "pip3" || first == "npm" || first == "pnpm" ||
-			first == "yarn" || first == "bun" || first == "go" || first == "cargo" ||
-			first == "gem" || first == "bundle" || first == "uv" || first == "pipx"
-		if !isMgr && first != "npx" && first != "uvx" {
-			continue
-		}
-		for _, a := range argv[1:] {
-			a = strings.TrimSpace(a)
-			if a == "" || strings.HasPrefix(a, "-") {
+		args := seg.args
+		for i := 0; i < len(args); i++ {
+			a := strings.TrimSpace(args[i])
+			if a == "" {
 				continue
 			}
-			// Skip package manager verbs (install, add, get, ...).
-			if verbs[strings.ToLower(a)] {
+			if strings.HasPrefix(a, "-") {
+				if installValueFlag(a) && i+1 < len(args) {
+					i++ // skip the flag's value (e.g. -r requirements.txt)
+				}
 				continue
 			}
-			// Strip version specs.
-			if idx := strings.IndexAny(a, "@>"); idx > 0 {
-				a = a[:idx]
-			}
-			a = strings.TrimLeft(a, "@")
-			if a == "" || seen[a] {
+			if skip[strings.ToLower(a)] {
 				continue
 			}
-			seen[a] = true
-			names = append(names, a)
+			name := stripVersionSpec(a)
+			if name == "" || strings.HasPrefix(name, "$") {
+				continue
+			}
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			names = append(names, name)
 		}
 	}
 	return names
+}
+
+// installValueFlag reports manager flags that take a separate value which
+// must not be read as a package name.
+func installValueFlag(a string) bool {
+	switch a {
+	case "-r", "--requirement", "-c", "--constraint", "-i", "--index-url",
+		"--extra-index-url", "-f", "--find-links", "-t", "--target",
+		"--prefix", "--root", "--src", "--cache-dir":
+		return true
+	}
+	return false
+}
+
+// stripVersionSpec removes a trailing version/range/extras spec from a
+// package name, keeping a leading npm scope: `@scope/pkg@1.0` →
+// `@scope/pkg`, `langchin==1.2.3` → `langchin`, `numpy[extra]` → `numpy`.
+func stripVersionSpec(name string) string {
+	s := name
+	if strings.HasPrefix(s, "@") {
+		if i := strings.IndexByte(s[1:], '@'); i >= 0 {
+			s = s[:i+1]
+		}
+	} else if i := strings.IndexByte(s, '@'); i > 0 {
+		s = s[:i]
+	}
+	if i := strings.IndexAny(s, "><=~!["); i > 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
 }

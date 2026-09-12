@@ -75,6 +75,38 @@ func TestIsCommonTypo(t *testing.T) {
 	}
 }
 
+func TestKnownPackageNormalization(t *testing.T) {
+	known := []string{"requests", "Requests", "scikit-learn", "Sci_Kit-Learn", "opencv-python", "@scope/requests"}
+	for _, n := range known {
+		if !KnownPackage(n) {
+			t.Errorf("KnownPackage(%q) = false, want true", n)
+		}
+	}
+	unknown := []string{"langchin", "totally-fake-pkg", ""}
+	for _, n := range unknown {
+		if KnownPackage(n) {
+			t.Errorf("KnownPackage(%q) = true, want false", n)
+		}
+	}
+}
+
+func TestIsCommonTypoNormalization(t *testing.T) {
+	cases := map[string]bool{
+		"LangChin": true,  // langchain, one deletion
+		"lodashs":  true,  // lodash, one insertion
+		"floack":   true,  // flask, two edits (len >= 5)
+		"numpy":    false, // exact known package
+		"Numpy":    false, // case-insensitive exact
+		"num_py":   false, // separator variant of a known package, not a typo
+		"xyzabc":   false, // far from anything
+	}
+	for name, want := range cases {
+		if got := IsCommonTypo(name); got != want {
+			t.Errorf("IsCommonTypo(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
 func TestLevenshtein(t *testing.T) {
 	tests := []struct {
 		s, t string

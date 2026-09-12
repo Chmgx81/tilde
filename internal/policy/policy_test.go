@@ -27,7 +27,7 @@ func TestInstallShapeAnnotated(t *testing.T) {
 		if !isInstallShape(cmd) {
 			t.Errorf("install shape missed: %q", cmd)
 		}
-		if got := Describe("shell_command", shellArgs(cmd)); !strings.Contains(got, "unverified package name") {
+		if got := Describe("shell_command", shellArgs(cmd)); !strings.Contains(got, "unverified package name") && !strings.Contains(got, "known package(s)") {
 			t.Errorf("install prompt missing warning: %q", got)
 		}
 	}
@@ -907,4 +907,104 @@ func TestNetworkToolsBuiltinAsk(t *testing.T) {
 	if got := p.Check("read_file", map[string]any{"path": "x"}); got != Allow {
 		t.Errorf("unrelated read-only tool = %v, want Allow", got)
 	}
+}
+
+// The install-shape evasions from the slopsquatting audit: each must
+// both detect AND reach the hallucination check (the DB name appears in
+// the warning). Before the manager-table unification several of these
+// produced only the generic prompt — or nothing at all.
+func TestSlopsquattingEvasionMatrix(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want string // flagged (hallucinated) name that must appear
+	}{
+		{"pip install langchin==1.2.3", "langchin"},
+		{"pip install langchin~=1.0", "langchin"},
+		{"pip install langchin<2", "langchin"},
+		{"pip install langchin[extra]", "langchin"},
+		{"python -m pip install langchin", "langchin"},
+		{"python3.11 -m pip install langchin", "langchin"},
+		{"pip3.11 install langchin", "langchin"},
+		{"env pip install langchin", "langchin"},
+		{"nice pip install langchin", "langchin"},
+		{"timeout 5 pip install langchin", "langchin"},
+		{"command pip install langchin", "langchin"},
+		{"npm install @scope/langchin", "langchin"},
+		{"npm install @scope/langchin@1.0", "langchin"},
+		{"npm ci lodahs", "lodahs"},
+		{"yarn install lodahs", "lodahs"},
+		{"composer require foo/lodahs", "lodahs"},
+		{"apt install langchin", "langchin"},
+		{"pacman -Syu langchin", "langchin"},
+		{"pip install \\\nlangchin", "langchin"},
+		{"pip install langchin serd", "langchin"},
+	}
+	for _, tc := range cases {
+		if !isInstallShape(tc.cmd) {
+			t.Errorf("install shape missed: %q", tc.cmd)
+			continue
+		}
+		if warn := slopsquattingWarning(tc.cmd); !strings.Contains(warn, tc.want) {
+			t.Errorf("cmd %q: warning %q missing %q", tc.cmd, warn, tc.want)
+		}
+	}
+}
+
+// extractPackageNames strips version specs, skips flag values, keeps npm
+// scopes, and drops unresolved variables.
+func TestExtractPackageNames(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want []string
+	}{
+		{"pip install requests numpy", []string{"requests", "numpy"}},
+		{"pip install -r requirements.txt", nil},
+		{"pip install --index-url https://x langchin", []string{"langchin"}},
+		{"pip install --extra-index-url=https://x langchin", []string{"langchin"}},
+		{"npm i -D typescript", []string{"typescript"}},
+		{"go install example.com/x@v1", []string{"example.com/x"}},
+		{"npx -y some-tool", []string{"some-tool"}},
+		{"npm install @scope/pkg@1.0", []string{"@scope/pkg"}},
+		{"pip install $PKG", nil},
+		{"npm install langchin==1.2.3", []string{"langchin"}},
+	}
+	for _, tc := range cases {
+		got := extractPackageNames(tc.cmd)
+		if !eqStrs(got, tc.want) {
+			t.Errorf("extractPackageNames(%q) = %v, want %v", tc.cmd, got, tc.want)
+		}
+	}
+}
+
+// Detection must not over-fire on ordinary build/test commands.
+func TestInstallShapeNoFalsePositives(t *testing.T) {
+	for _, cmd := range []string{
+		"go test ./...", "go vet ./...", "npm run build", "npm test",
+		"yarn build", "cargo build", "pip list", "python -m pytest",
+		"uv run python x.py", "cargo test --release",
+	} {
+		if isInstallShape(cmd) {
+			t.Errorf("false install positive: %q", cmd)
+		}
+	}
+}
+
+// A wholly known install reads as "known", not "unverified".
+func TestKnownPackageWording(t *testing.T) {
+	got := Describe("shell_command", shellArgs("pip install requests numpy"))
+	if !strings.Contains(got, "known package(s)") {
+		t.Errorf("known install should read as known, got: %q", got)
+	}
+}
+
+func eqStrs(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
