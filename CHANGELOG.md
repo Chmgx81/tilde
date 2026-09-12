@@ -81,6 +81,8 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   generic service-token table is the seam for future non-model keys.
 - Removed the unreleased `tilde deploy`/Vercel command (target, dispatch,
   tests): it had no role in an agent CLI. The `vcp_` scrub pattern stays.
+- An unknown subcommand now fails loud with the command list (exit 2)
+  instead of silently falling through to the interactive TUI.
 - `tilde doctor [--json]`: one read-only health report covering the sandbox
   backstop, the policy file, credential availability per provider, session
   and audit dir writability, git, provider construction, and the network

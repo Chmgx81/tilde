@@ -531,6 +531,14 @@ Flags:
 		return
 	}
 
+	// Any leftover positional is a typo'd subcommand — the headless goal is
+	// --prompt, never a bare argument. Refuse loudly (exit 2) instead of
+	// silently falling through to the interactive TUI.
+	if flag.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "tilde: unknown command %q — run `tilde --help` for the command list (headless goals use --prompt).\n", flag.Arg(0))
+		os.Exit(2)
+	}
+
 	if *prompt != "" {
 		_ = sessLog.Append("meta", map[string]any{"root": root, "model": prov.Name(), "budget": budget})
 		runHeadless(loop, *prompt, *yesFlag, *outputFlag)
