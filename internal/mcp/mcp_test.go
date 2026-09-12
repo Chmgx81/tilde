@@ -307,29 +307,31 @@ func TestApprovalPromptBlocks(t *testing.T) {
 	}
 }
 
-func TestGatewayEnforcesNestedApproval(t *testing.T) {
+func TestGatewayTreatsOuterApprovalAsNested(t *testing.T) {
+	// The mcp_call gateway passes approved=true: reaching it means the outer
+	// ask tier already approved this exact server.tool call, so a
+	// prompt-gated tool is callable. The raw Manager.Call path (below) still
+	// enforces the nested gate.
 	mgr := testManagerWith(t, ServerConfig{}) // default: every nested tool is prompt-gated
 	call := &CallTool{Mgr: mgr}
-	if _, err := call.Exec(context.Background(), map[string]any{
+	out, err := call.Exec(context.Background(), map[string]any{
 		"server": "fake", "tool": "shout", "arguments": map[string]any{"text": "hi"},
-	}); err == nil || !strings.Contains(err.Error(), "needs user approval") {
-		t.Fatalf("outer mcp_call approval must not bypass nested approval, got %v", err)
+	})
+	if err != nil || !strings.Contains(out, "HI") {
+		t.Fatalf("gateway must pass the outer approval through, got %q, %v", out, err)
 	}
 	reg := tools.NewRegistry()
 	reg.Register(call)
 	reg.Gate = func(string, map[string]any) (bool, string) { return true, "approved" }
 	if out := reg.Dispatch(context.Background(), "mcp_call", map[string]any{
 		"server": "fake", "tool": "shout", "arguments": map[string]any{"text": "hi"},
-	}); !strings.Contains(out, "needs user approval") {
-		t.Fatalf("registry-approved outer call must not bypass the nested gate, got %q", out)
+	}); !strings.Contains(out, "HI") {
+		t.Fatalf("registry-approved mcp_call should run a prompt-gated tool, got %q", out)
 	}
-
-	auto := testManagerWith(t, ServerConfig{Approval: map[string]string{"shout": "auto"}})
-	out, err := (&CallTool{Mgr: auto}).Exec(context.Background(), map[string]any{
-		"server": "fake", "tool": "shout", "arguments": map[string]any{"text": "hi"},
-	})
-	if err != nil || !strings.Contains(out, "HI") {
-		t.Fatalf("explicit nested auto approval must run, got %q, %v", out, err)
+	// The low-level boundary is intact: an unapproved raw call still refuses.
+	if _, err := mgr.Call(context.Background(), "fake", "shout", map[string]any{"text": "hi"}); err == nil ||
+		!strings.Contains(err.Error(), "needs user approval") {
+		t.Fatalf("raw unapproved call must still refuse, got %v", err)
 	}
 }
 

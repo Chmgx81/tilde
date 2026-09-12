@@ -62,16 +62,14 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   file under `~/.tilde/spill` and named inline — capped shell output, a
   read that hits the byte/line window (the full file is spilled), and a
   capped grep match list. `tilde prune --spill <age>` ages them out.
-- MCP approval refusal is now actionable: a `prompt`-gated server tool has
-  no per-call approve flag, so the error names the only real fix (mark the
-  tool `approval: {"<tool>": "auto"}` in the user's mcp.json) instead of
-  telling the model to "retry as approved" — a retry that could never
-  succeed. Documented in the Plan's MCP merge row.
-- Fixed the `mcp-shout` eval task: it configured no approval, and the
-  hardened `mcp_call` gateway deliberately passes `approved=false`, so a
-  default (`approval=prompt`) server tool was unreachable and the task
-  could never pass. The fixture now marks the tool `approvalDefault:auto`,
-  and `CallApproved`'s doc comment matches the gateway's real behavior.
+- MCP tools are usable by default again: the `mcp_call` gateway now passes
+  the outer ask-tier confirmation through as nested approval, so a
+  `prompt`-gated server tool runs after the user approves that exact
+  `server.tool` call. The raw `Manager.Call` path still refuses unapproved
+  prompt-gated tools, and a project config still cannot loosen approval
+  toward `auto` (`Merge`). This also fixes the `mcp-shout` eval task, which
+  used the default (prompt) approval and previously could never pass; the
+  refusal text and `CallApproved` doc now match the behavior.
 - **Typed project memory**: `memory` save now takes an optional `kind`
   (fact|decision|constraint|env|correction; default fact, which keeps the
   untagged `- YYYY-MM-DD: text` shape). A new `correct` op supersedes a

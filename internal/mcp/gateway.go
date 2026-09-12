@@ -91,11 +91,14 @@ func (t *CallTool) Exec(ctx context.Context, args map[string]any) (string, error
 	if t.Mgr == nil {
 		return "", fmt.Errorf("no MCP servers live")
 	}
-	// mcp_call approval is not server-tool approval. A server tool configured
-	// with approval=prompt must receive its own approval; otherwise allowing the
-	// outer gateway would bypass the nested trust boundary. Auto-configured MCP
-	// tools still proceed through CallApproved's explicit auto path.
-	out, err := t.Mgr.CallApproved(ctx, server, tool, argv, false)
+	// mcp_call reaches Exec only after the policy Gate allowed it, and
+	// mcp_call is ask-tier by default — so the user has explicitly approved
+	// this exact server.tool call. That confirmation IS the nested approval:
+	// pass it through so a prompt-gated tool is callable. The project-config
+	// boundary is unaffected (Merge still forbids a project loosening
+	// approval toward auto), and a raw Manager.Call (no outer approval)
+	// still refuses prompt-gated tools.
+	out, err := t.Mgr.CallApproved(ctx, server, tool, argv, true)
 	if err != nil {
 		return "", err
 	}

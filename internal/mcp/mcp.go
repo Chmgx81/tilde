@@ -613,20 +613,19 @@ func (m *Manager) Call(ctx context.Context, server, tool string, args map[string
 	return m.CallApproved(ctx, server, tool, args, false)
 }
 
-// approvalPromptErr is the refusal for a prompt-gated server tool. There is
-// no per-call approve flag (the outer mcp_call tier is not nested approval),
-// so the only fix is config: mark the tool approval=auto in the USER's
-// mcp.json. Saying so prevents a model from looping on an impossible retry.
+// approvalPromptErr is the refusal for a prompt-gated server tool reached
+// WITHOUT approval (the raw Manager.Call path). The gateway passes true, so
+// this fires only for a caller that bypassed the outer ask tier.
 func approvalPromptErr(server, tool string) error {
-	return fmt.Errorf("mcp %s.%s needs user approval (approval=prompt): the nested tool is gated independently of the outer mcp_call tier and there is no per-call approve flag. Fix: add \"approval\": {\"%s\": \"auto\"} to server %q in your user mcp.json (a project config cannot loosen approval to auto), then retry", server, tool, tool, server)
+	return fmt.Errorf("mcp %s.%s needs user approval (approval=prompt): this call bypassed the mcp_call gateway, which passes the outer ask-tier confirmation through. Call it via mcp_call (the user approves server.tool), or mark it \"approval\": {\"%s\": \"auto\"} in your user mcp.json", server, tool, tool)
 }
 
 // CallApproved is Call with the approval verdict attached: approved must be
-// true when the tool resolves to approval=prompt. The mcp_call gateway
-// deliberately passes false — nested approval is its own trust boundary, and
-// the outer ask tier is not server-tool approval — so a prompt-gated tool is
-// reachable only when its config marks it approval=auto. Unapproved
-// prompt-gated calls fail with the fix attached.
+// true when the tool resolves to approval=prompt. The mcp_call gateway passes
+// true — reaching it means the outer ask tier already approved this exact
+// server.tool call — while the raw Manager.Call path (no outer approval)
+// passes false and refuses. Unapproved prompt-gated calls fail with the
+// config fix attached.
 func (m *Manager) CallApproved(ctx context.Context, server, tool string, args map[string]any, approved bool) (string, error) {
 	m.mu.Lock()
 	s, ok := m.servers[server]
