@@ -613,6 +613,14 @@ func (m *Manager) Call(ctx context.Context, server, tool string, args map[string
 	return m.CallApproved(ctx, server, tool, args, false)
 }
 
+// approvalPromptErr is the refusal for a prompt-gated server tool. There is
+// no per-call approve flag (the outer mcp_call tier is not nested approval),
+// so the only fix is config: mark the tool approval=auto in the USER's
+// mcp.json. Saying so prevents a model from looping on an impossible retry.
+func approvalPromptErr(server, tool string) error {
+	return fmt.Errorf("mcp %s.%s needs user approval (approval=prompt): the nested tool is gated independently of the outer mcp_call tier and there is no per-call approve flag. Fix: add \"approval\": {\"%s\": \"auto\"} to server %q in your user mcp.json (a project config cannot loosen approval to auto), then retry", server, tool, tool, server)
+}
+
 // CallApproved is Call with the approval verdict attached: approved must be
 // true when the tool resolves to approval=prompt. The mcp_call gateway
 // deliberately passes false — nested approval is its own trust boundary, and
@@ -642,10 +650,10 @@ func (m *Manager) CallApproved(ctx context.Context, server, tool string, args ma
 	}
 	if cfg, ok := m.configs[server]; ok {
 		if cfg.toolApproval(tool) != "auto" && !approved {
-			return "", fmt.Errorf("mcp %s.%s needs user approval (approval=prompt) — ask the user, then retry the call as approved", server, tool)
+			return "", approvalPromptErr(server, tool)
 		}
 	} else if !approved {
-		return "", fmt.Errorf("mcp %s.%s needs user approval (approval=prompt) — ask the user, then retry the call as approved", server, tool)
+		return "", approvalPromptErr(server, tool)
 	}
 	if args == nil {
 		args = map[string]any{}

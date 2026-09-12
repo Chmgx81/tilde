@@ -674,7 +674,7 @@ As of v0.9+:
 | Signed update verification | DONE, newer release tags are verified with `git verify-tag --raw` before pull; historical unsigned tags do not block current-source refreshes |
 | Session scrub at rest | DONE, `session.Append` scrubs via `tools.Scrub`, `0600` heal, crypto-random IDs |
 | Hook safe-env + session hooks | DONE, minimal env (no `*_KEY/*_TOKEN/*_SECRET/*_PASSWORD`), 32KB scrubbed output cap, `session_start`/`session_end` |
-| MCP user-authoritative merge | DONE, project config only adds servers or tightens approval; remote type + `headersFile`, SSRF-guarded URLs |
+| MCP user-authoritative merge | DONE, project config only adds servers or tightens per-tool approval; remote type + `headersFile`, SSRF-guarded URLs. Nested per-tool approval defaults to `prompt` and is deliberately NOT satisfied by the outer `mcp_call` ask tier, so a server tool is callable only when the user's `mcp.json` marks it `approval: {"<tool>": "auto"}` (a project config cannot loosen toward auto) |
 | Streaming providers | DONE, optional `Streamer` (ollama NDJSON + openai SSE) carrying the same tool defs as `Chat`; `CollectWith` delivers safe visible prose deltas to the TUI, which commits or rolls back one provisional block atomically; native calls + length-cut signal remain intact, with `Chat` fallback on any stream error |
 | symbol_search tool | DONE, stdlib definition index (go/py/ts/js/rs) + reference fallback, read-only, counts as seen |
 | memory tool | DONE, project `.tilde/memory.md` save/recall/forget, recall Plan-safe, save/forget Plan-blocked + ask-tier |
