@@ -359,9 +359,9 @@ func NewWorkChild(parent *Loop, task, workRoot string) *Loop {
 			case *tools.ReadFile:
 				reg.Register(&tools.ReadFile{Root: workRoot, Seen: seen})
 			case *tools.Grep:
-				reg.Register(&tools.Grep{Root: workRoot, Seen: seen})
+				reg.Register(&tools.Grep{Root: workRoot, Seen: seen, Denied: t.Denied})
 			case *tools.Glob:
-				reg.Register(&tools.Glob{Root: workRoot})
+				reg.Register(&tools.Glob{Root: workRoot, Denied: t.Denied})
 			case *tools.WriteFile:
 				reg.Register(&tools.WriteFile{Root: workRoot, Seen: seen})
 			case *tools.EditFile:

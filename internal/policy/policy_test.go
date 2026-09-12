@@ -780,6 +780,31 @@ func TestDenyPathsAbsoluteContainedPath(t *testing.T) {
 	}
 }
 
+// DeniesPath is the per-file check walk tools use; it must agree with the
+// per-call deny and fail closed on a broken pattern.
+func TestDeniesPath(t *testing.T) {
+	root := t.TempDir()
+	f := &File{DenyPaths: []string{"**/secrets/**", "*.key"}}
+	if !f.DeniesPath(root, "secrets/x") {
+		t.Fatal("relative denied path must report true")
+	}
+	if !f.DeniesPath(root, filepath.Join(root, "secrets", "x")) {
+		t.Fatal("absolute denied path must report true")
+	}
+	if !f.DeniesPath(root, "id.key") {
+		t.Fatal("glob-matched path must report true")
+	}
+	if f.DeniesPath(root, "src/app.go") {
+		t.Fatal("unrelated path must report false")
+	}
+	if (&File{}).DeniesPath(root, "x") {
+		t.Fatal("empty deny_paths must allow")
+	}
+	if !(&File{DenyPaths: []string{"[unclosed"}}).DeniesPath(root, "x") {
+		t.Fatal("broken pattern must fail closed (deny)")
+	}
+}
+
 func TestValidateDenyPaths(t *testing.T) {
 	valid := []*File{nil, {}, {DenyPaths: []string{"**/secrets/**", "*.key", "/abs/*", "a/../b", "?"}}}
 	for _, f := range valid {

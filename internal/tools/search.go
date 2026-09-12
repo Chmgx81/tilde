@@ -27,6 +27,9 @@ const (
 type Grep struct {
 	Root string
 	Seen *SeenMap // matched files count as seen (partial views)
+	// Denied, when set, prunes a file from the walk (deny_paths is a
+	// content boundary too, not just an argument one). Nil = no filtering.
+	Denied func(path string) bool
 }
 
 func (t *Grep) Name() string { return "grep" }
@@ -58,6 +61,7 @@ func (t *Grep) Exec(_ context.Context, args map[string]any) (string, error) {
 	matchBytes := 0
 	stopped := false
 	skippedLinks := 0
+	skippedDenied := 0
 	seenFiles := map[string]bool{}
 	err = filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
 		if stopped {
@@ -79,6 +83,10 @@ func (t *Grep) Exec(_ context.Context, args map[string]any) (string, error) {
 		if st, lerr := os.Lstat(path); lerr != nil || st.Mode()&os.ModeSymlink != 0 || !st.Mode().IsRegular() {
 			skippedLinks++
 			return nil
+		}
+		if t.Denied != nil && t.Denied(path) {
+			skippedDenied++
+			return nil // deny_paths: never read a denied file's contents
 		}
 		if info.Size() > 512*1024 {
 			return nil // skip huge files; read_file samples them instead
@@ -102,6 +110,9 @@ func (t *Grep) Exec(_ context.Context, args map[string]any) (string, error) {
 			plural = "y"
 		}
 		linkNote = fmt.Sprintf("\n[note: skipped %d symlink/non-regular entr%s — links are never followed]", skippedLinks, plural)
+	}
+	if skippedDenied > 0 {
+		linkNote += fmt.Sprintf("\n[note: skipped %d deny_paths-matched file(s) — denied by policy]", skippedDenied)
 	}
 	if len(matches) == 0 {
 		return "", fmt.Errorf("no matches for %q in %q: not an error — try a shorter substring or a different dir%s", pat, dir, linkNote)
@@ -187,7 +198,11 @@ func scanOne(path, pat, root string, matches *[]string, seenFiles map[string]boo
 
 // --- glob ---
 
-type Glob struct{ Root string }
+type Glob struct {
+	Root string
+	// Denied, when set, prunes deny_paths-matched files from results.
+	Denied func(path string) bool
+}
 
 func (t *Glob) Name() string { return "glob" }
 func (t *Glob) Description() string {
@@ -224,6 +239,9 @@ func (t *Glob) Exec(_ context.Context, args map[string]any) (string, error) {
 	for _, rel := range rels {
 		if rel == "." || strings.HasPrefix(rel, ".git/") || strings.HasPrefix(rel, "../") || filepath.IsAbs(rel) {
 			continue // never surface .git or anything outside root
+		}
+		if t.Denied != nil && t.Denied(rel) {
+			continue // deny_paths: a denied file must not be listed
 		}
 		kept = append(kept, rel)
 		if len(kept) >= 50 {

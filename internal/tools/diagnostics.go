@@ -28,6 +28,8 @@ import (
 type Diagnose struct {
 	Root string
 	Seen *SeenMap // files with findings count as seen (partial views)
+	// Denied, when set, prunes deny_paths-matched files (content boundary).
+	Denied func(path string) bool
 }
 
 func (t *Diagnose) Name() string { return "diagnose" }
@@ -87,6 +89,9 @@ func (t *Diagnose) Exec(_ context.Context, args map[string]any) (string, error) 
 		if !st.Mode().IsRegular() {
 			return "", fmt.Errorf("refusing %q: not a regular file — point at a real .go file inside the project and retry", sub)
 		}
+		if t.Denied != nil && t.Denied(base) {
+			return "", fmt.Errorf("refusing %q: matches a deny_paths glob — choose a path outside the denied patterns", sub)
+		}
 		if st.Size() > diagnoseMaxFileBytes {
 			return "", fmt.Errorf("file %q is over the 512KB cap: not diagnosed — sample it with read_file instead", sub)
 		}
@@ -111,6 +116,9 @@ func (t *Diagnose) Exec(_ context.Context, args map[string]any) (string, error) 
 			if lst, lerr := os.Lstat(path); lerr != nil || lst.Mode()&os.ModeSymlink != 0 || !lst.Mode().IsRegular() {
 				skippedLinks++
 				return nil
+			}
+			if t.Denied != nil && t.Denied(path) {
+				return nil // deny_paths: never diagnose a denied file's contents
 			}
 			if info.Size() > diagnoseMaxFileBytes {
 				return nil // skip huge files; read_file samples them instead

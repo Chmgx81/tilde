@@ -85,12 +85,12 @@ type File struct {
 	// the pattern (and via a best-effort symlink resolve), so a relative
 	// glob cannot be dodged by spelling a contained path absolutely.
 	// Containment still owns `..` escapes at exec time.
-	// LIMITATION: this gates path ARGUMENTS, not file CONTENT — a gated
-	// tool can still return content from a denied file through a broad
-	// argument (e.g. `grep {pattern, dir:"."}`), because the deny is
-	// evaluated once per call, not per file visited. Treat it as a guard
-	// against direct reads/writes of known-sensitive paths, not as a
-	// content boundary; pair it with the sandbox and least privilege.
+	// LIMITATION (narrowed): the deny is enforced per call AND per file —
+	// read/write/edit by their path arg, and the walk-based content readers
+	// (grep, glob, symbol_search, diagnose, remember) prune denied files so
+	// a broad dir arg cannot read their contents. It remains an argument/
+	// path filter, not a byte-level taint: content already copied elsewhere
+	// (a session log, a spill file) is out of scope.
 	// Shell cwd scoping is deliberately OUT: shell stays argv-judged
 	// per segment (shellDeny), and its cwd is already containment-bound.
 	// NOTE (owner wiring, outside internal/policy): main.go loadPolicies
@@ -227,18 +227,9 @@ func (f *File) PathDenyReason(tool string, args map[string]any, root string) str
 	if !ok {
 		return ""
 	}
-	// Compile every pattern first so a broken pattern reports itself
-	// regardless of which candidate would have matched.
-	matchers := make([]func(string) bool, 0, len(f.DenyPaths))
-	for _, pat := range f.DenyPaths {
-		if strings.TrimSpace(pat) == "" {
-			return fmt.Sprintf("invalid deny_paths entry %q — remove it or fix the pattern", pat)
-		}
-		m, err := compileDenyPattern(normDenyPath(pat))
-		if err != nil {
-			return fmt.Sprintf("invalid deny_paths pattern %q — fix the pattern or remove it", pat)
-		}
-		matchers = append(matchers, m)
+	matchers, broken := f.denyMatchers()
+	if broken != "" {
+		return broken
 	}
 	for _, target := range denyCandidates(cand, root) {
 		for i, m := range matchers {
@@ -248,6 +239,45 @@ func (f *File) PathDenyReason(tool string, args map[string]any, root string) str
 		}
 	}
 	return ""
+}
+
+// denyMatchers compiles the deny_paths globs. A broken/empty entry returns
+// its reason (and nil matchers) so callers fail closed.
+func (f *File) denyMatchers() ([]func(string) bool, string) {
+	matchers := make([]func(string) bool, 0, len(f.DenyPaths))
+	for _, pat := range f.DenyPaths {
+		if strings.TrimSpace(pat) == "" {
+			return nil, fmt.Sprintf("invalid deny_paths entry %q — remove it or fix the pattern", pat)
+		}
+		m, err := compileDenyPattern(normDenyPath(pat))
+		if err != nil {
+			return nil, fmt.Sprintf("invalid deny_paths pattern %q — fix the pattern or remove it", pat)
+		}
+		matchers = append(matchers, m)
+	}
+	return matchers, ""
+}
+
+// DeniesPath reports whether the concrete path p (absolute or root-relative)
+// is denied by any deny_paths pattern. Walk-based tools (grep, glob) use it
+// to prune files, so a broad dir arg cannot bypass a file-scoped deny and
+// read denied contents. A broken pattern denies (fail closed).
+func (f *File) DeniesPath(root, p string) bool {
+	if f == nil || len(f.DenyPaths) == 0 {
+		return false
+	}
+	matchers, broken := f.denyMatchers()
+	if broken != "" {
+		return true
+	}
+	for _, target := range denyCandidates(p, root) {
+		for _, m := range matchers {
+			if m(target) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // denyCandidates lists the normalized spellings of a path arg that

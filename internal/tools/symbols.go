@@ -24,6 +24,8 @@ import (
 type SymbolSearch struct {
 	Root string
 	Seen *SeenMap // matched files count as seen (partial views)
+	// Denied, when set, prunes deny_paths-matched files (content boundary).
+	Denied func(path string) bool
 }
 
 func (t *SymbolSearch) Name() string { return "symbol_search" }
@@ -247,6 +249,9 @@ func (t *SymbolSearch) Exec(_ context.Context, args map[string]any) (string, err
 		if st, lerr := os.Lstat(path); lerr != nil || st.Mode()&os.ModeSymlink != 0 || !st.Mode().IsRegular() {
 			skippedLinks++
 			return nil
+		}
+		if t.Denied != nil && t.Denied(path) {
+			return nil // deny_paths: never index a denied file's contents
 		}
 		if info.Size() > symbolMaxFileBytes {
 			return nil

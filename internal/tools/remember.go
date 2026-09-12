@@ -76,6 +76,8 @@ var rememberExts = map[string]bool{
 type Remember struct {
 	Root string
 	Seen *SeenMap // recall hits count as seen (partial views, like grep)
+	// Denied, when set, prunes deny_paths-matched files (content boundary).
+	Denied func(path string) bool
 }
 
 func (t *Remember) Name() string { return "remember" }
@@ -165,6 +167,9 @@ func (t *Remember) index(sub, envModel string) (string, error) {
 				skippedLinks++
 				return nil
 			}
+			if t.Denied != nil && t.Denied(path) {
+				return nil // deny_paths: never index a denied file's contents
+			}
 			if lst.Size() > rememberMaxFileBytes {
 				return nil
 			}
@@ -177,6 +182,9 @@ func (t *Remember) index(sub, envModel string) (string, error) {
 	} else {
 		if !st.Mode().IsRegular() {
 			return "", fmt.Errorf("refusing %q: not a regular file — pass a file or dir inside the project", display)
+		}
+		if t.Denied != nil && t.Denied(base) {
+			return "", fmt.Errorf("refusing %q: matches a deny_paths glob — choose a path outside the denied patterns", display)
 		}
 		if st.Size() > rememberMaxFileBytes {
 			return "", fmt.Errorf("refusing %q: file is %d bytes (over the %d-byte cap) — index a subdir of smaller files instead", display, st.Size(), rememberMaxFileBytes)

@@ -229,7 +229,7 @@ func NewExploreChild(parent *Loop, task string) *Loop {
 			case *tools.ReadFile:
 				reg.Register(&tools.ReadFile{Root: t.Root, Seen: tools.NewSeenMap(parent.Cfg.Root)})
 			case *tools.Grep:
-				reg.Register(&tools.Grep{Root: t.Root, Seen: tools.NewSeenMap(parent.Cfg.Root)})
+				reg.Register(&tools.Grep{Root: t.Root, Seen: tools.NewSeenMap(parent.Cfg.Root), Denied: t.Denied})
 			case *tools.WriteFile:
 				reg.Register(&tools.WriteFile{Root: t.Root, Seen: tools.NewSeenMap(parent.Cfg.Root)})
 			case *tools.EditFile:

@@ -38,6 +38,12 @@ type harness struct {
 	fetch  *tools.WebFetch
 	search *tools.WebSearch
 	shot   *tools.WebShot
+	grep   *tools.Grep
+	glob   *tools.Glob
+	// Walk-based content readers that must honor deny_paths too.
+	symbol   *tools.SymbolSearch
+	diagnose *tools.Diagnose
+	remember *tools.Remember
 }
 
 // auditSink adapts *audit.AuditLog to the registry's AuditSink interface
@@ -211,8 +217,10 @@ func buildHarness(root string) harness {
 	h.reg.Register(&tools.EditFile{Root: root, Seen: h.seen})
 	h.reg.Register(&tools.Shell{Root: root, Sandbox: &sandbox.Config{Root: root}, Tasks: h.tasks})
 	h.reg.Register(&tools.ShellPoll{Tasks: h.tasks})
-	h.reg.Register(&tools.Grep{Root: root, Seen: h.seen})
-	h.reg.Register(&tools.Glob{Root: root})
+	h.grep = &tools.Grep{Root: root, Seen: h.seen}
+	h.glob = &tools.Glob{Root: root}
+	h.reg.Register(h.grep)
+	h.reg.Register(h.glob)
 	h.reg.Register(&tools.GitStatus{Root: root})
 	h.reg.Register(&tools.GitDiff{Root: root})
 	h.reg.Register(&tools.GitWorktreeList{Root: root})
@@ -223,10 +231,13 @@ func buildHarness(root string) harness {
 	h.reg.Register(h.fetch)
 	h.reg.Register(h.search)
 	h.reg.Register(h.shot)
-	h.reg.Register(&tools.SymbolSearch{Root: root, Seen: h.seen})
+	h.symbol = &tools.SymbolSearch{Root: root, Seen: h.seen}
+	h.diagnose = &tools.Diagnose{Root: root, Seen: h.seen}
+	h.remember = &tools.Remember{Root: root, Seen: h.seen}
+	h.reg.Register(h.symbol)
 	h.reg.Register(&tools.Memory{Root: root})
-	h.reg.Register(&tools.Diagnose{Root: root, Seen: h.seen})
-	h.reg.Register(&tools.Remember{Root: root, Seen: h.seen})
+	h.reg.Register(h.diagnose)
+	h.reg.Register(h.remember)
 	h.reg.Register(&tools.SavePlan{Root: root})
 	return h
 }

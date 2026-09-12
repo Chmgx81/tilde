@@ -296,6 +296,16 @@ Flags:
 
 	h := buildHarness(root)
 	polFile := loadPolicies(root)
+	// deny_paths is a content boundary, not only an argument one: prune
+	// denied files from grep/glob walks so a broad dir arg can't read them.
+	if polFile != nil {
+		deny := func(p string) bool { return polFile.DeniesPath(root, p) }
+		h.grep.Denied = deny
+		h.glob.Denied = deny
+		h.symbol.Denied = deny
+		h.diagnose.Denied = deny
+		h.remember.Denied = deny
+	}
 	// P1-G per-host net approval: the allow_net hostname list is checked
 	// in webfetch via HostAllow; the session-wide TILDE_ALLOW_NET=1
 	// opt-in in AllowNet above is untouched.
@@ -666,6 +676,15 @@ func runEval(root string, prov provider.Provider, filter string, trials int) {
 	newLoop := func(dir string) *agent.Loop {
 		closeTrialLive() // reap the previous trial before starting the next
 		h := buildHarness(dir)
+		// Same deny_paths content filtering per trial (see the main path).
+		if evalPol != nil {
+			deny := func(p string) bool { return evalPol.DeniesPath(dir, p) }
+			h.grep.Denied = deny
+			h.glob.Denied = deny
+			h.symbol.Denied = deny
+			h.diagnose.Denied = deny
+			h.remember.Denied = deny
+		}
 		h.fetch.HostAllow = func(host string) bool { return evalPol.NetAllowed(host) }
 		h.search.HostAllow = func(host string) bool { return evalPol.NetAllowed(host) }
 		h.shot.HostAllow = func(host string) bool { return evalPol.NetAllowed(host) }

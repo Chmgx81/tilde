@@ -70,6 +70,12 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   toward `auto` (`Merge`). This also fixes the `mcp-shout` eval task, which
   used the default (prompt) approval and previously could never pass; the
   refusal text and `CallApproved` doc now match the behavior.
+- `deny_paths` is now a content boundary, not only an argument one: `grep`,
+  `glob`, `symbol_search`, `diagnose`, and `remember` prune denied files
+  during their walks, so a broad `dir: "."` can no longer read a denied
+  file's contents. `File.DeniesPath` is the shared per-file matcher
+  (broken pattern fails closed); it is wired through the harness, the eval
+  trials, and subagent/tool clones.
 - **Typed project memory**: `memory` save now takes an optional `kind`
   (fact|decision|constraint|env|correction; default fact, which keeps the
   untagged `- YYYY-MM-DD: text` shape). A new `correct` op supersedes a

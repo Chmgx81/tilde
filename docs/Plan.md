@@ -646,7 +646,7 @@ As of v0.9+:
 | Splash / fuzzy search / session picker UI | DONE, Phase 4 |
 | Skills loader | DONE, Phase 6 |
 | MCP client | DONE, Phase 6 |
-| Trajectory-level eval suite | DONE, Phase 7 (historical 7/15 → 14/15 per run, 28/30 across two runs; current runs report task set, trials, costs + paths) |
+| Trajectory-level eval suite | DONE, Phase 7 (historical 7/15 → 14/15 per run, 28/30 across two runs; current runs report task set, trials, costs + paths). Latest full run on the hardened build: 19 tasks × 5 = 95 trials, 80/95 ≈ 84% on qwen3.8-4b:16k — single-shot file/shell/plan/skill/MCP/diagnose tasks 5/5; misses cluster on multi-step edit/repair tasks (iteration cap, model ceiling) plus two backend 500 flakes; the harness correctly rejected output-only passes ("wrong trajectory") |
 | todo_write / ask_user / web_fetch (ask-tier) | DONE, buildHarness-registered; web_fetch also needs TILDE_ALLOW_NET |
 | Secret scrubber + high-risk path notes | DONE, Dispatch Scrub, read annotate |
 | Project trust gate (`tilde trust`/`untrust`) | DONE, skills fallback, deny on missing/corrupt store |
@@ -698,7 +698,7 @@ As of v0.9+:
 | Memory hardening | DONE, recency-weighted recall (opt-in half-life), dated memory saves, poisoning trust-model notes |
 | Eval costs | DONE, MED_COST column (median over passing trials, $0 when unpriced), JSON reports carry it |
 | Retention | DONE, `tilde prune` for sessions (keep-5 floor) + audit trim (atomic, 0600), dry run by default |
-| Path-scoped policy | DONE, `deny_paths` globs deny file-tool paths before tiers (beats --yes); loop names the pattern, audit records it |
+| Path-scoped policy | DONE, `deny_paths` globs deny file-tool paths before tiers (beats --yes); loop names the pattern, audit records it. Also a CONTENT boundary: the walk tools (grep, glob, symbol_search, diagnose, remember) prune denied files via `File.DeniesPath`, so a broad dir arg cannot read a denied file's contents (broken pattern fails closed) |
 | Session fork | DONE, `tilde fork <id> [--at]` byte-identical branch + marker, source untouched |
 | Cost meter | DONE, TUI status bar shows session $ (hidden when unpriced, $0.0000 when known-free) |
 | Loop-level audit | DONE, mode-gate/policy/user denials audited (previously only dispatched calls were) |
