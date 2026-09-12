@@ -150,35 +150,6 @@ func TestHookOutputCapped(t *testing.T) {
 	}
 }
 
-// P0-3 sandbox: TrustHash stable + sensitive to content.
-func TestTrustHashStable(t *testing.T) {
-	dir := t.TempDir()
-	p := filepath.Join(dir, "hook.sh")
-	os.WriteFile(p, []byte("echo hi\n"), 0o644)
-	h1, err := TrustHash(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h2, err := TrustHash(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h1 != h2 || len(h1) != 64 {
-		t.Fatalf("hash must be stable 64-hex: %q %q", h1, h2)
-	}
-	os.WriteFile(p, []byte("echo changed\n"), 0o644)
-	h3, err := TrustHash(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h3 == h1 {
-		t.Fatal("hash must change with content")
-	}
-	if _, err := TrustHash(filepath.Join(dir, "missing.sh")); err == nil {
-		t.Fatal("missing file must error")
-	}
-}
-
 // P0-3 sandbox: audit lines scrubbed of key-like tokens.
 func TestHookAuditScrubbed(t *testing.T) {
 	c := Config{After: map[string][]string{

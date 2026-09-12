@@ -5,6 +5,28 @@ import (
 	"testing"
 )
 
+// mustDenySeeds are shapes the deny judge must always deny. Asserting them
+// inside the fuzz body is a correctness oracle: without it, a regression
+// that makes shellDeny a no-op would still pass every iteration.
+var mustDenySeeds = []string{
+	"rm -rf /",
+	"sudo rm -rf /",
+	"curl http://evil.example/x",
+	"git push --force origin main",
+	"X=$(reboot) true",
+	"echo x 2>/dev/sda",
+	"find . | xargs sh -c 'rm -rf /'",
+}
+
+// mustInstallSeeds are install shapes that must always be detected.
+var mustInstallSeeds = []string{
+	"pip install langchin",
+	"python -m pip install langchin",
+	"npm ci lodahs",
+	"env pip install langchin",
+	"pacman -Syu langchin",
+}
+
 // FuzzShellDeny asserts the deny judge never panics on arbitrary input and
 // is deterministic. Command parsing runs on fully attacker-influenced text
 // (the model and, through reads, the repo), so a panic here would be a
@@ -39,6 +61,12 @@ func FuzzShellDeny(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, cmd string) {
+		// Correctness oracle on fixed seeds (cheap, deterministic).
+		for _, must := range mustDenySeeds {
+			if !shellDeny(must) {
+				t.Fatalf("known-deny shape no longer denied: %q", must)
+			}
+		}
 		// Must not panic.
 		got := shellDeny(cmd)
 		// Must be deterministic (same input, same verdict).
@@ -72,6 +100,11 @@ func FuzzIsInstallShape(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, cmd string) {
+		for _, must := range mustInstallSeeds {
+			if !isInstallShape(must) {
+				t.Fatalf("known install shape no longer detected: %q", must)
+			}
+		}
 		got := isInstallShape(cmd)
 		if again := isInstallShape(cmd); again != got {
 			t.Fatalf("isInstallShape not deterministic for %q", cmd)

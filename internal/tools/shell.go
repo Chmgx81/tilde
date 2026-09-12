@@ -285,6 +285,9 @@ func (m *TaskManager) KillAll() []string {
 
 // Get fetches a task by id, naming the fix when unknown.
 func (m *TaskManager) Get(id string) (*Task, error) {
+	if m == nil {
+		return nil, fmt.Errorf("unknown task %q: no task manager is wired — start one with shell_command {background: true}", id)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if t, ok := m.tasks[id]; ok {

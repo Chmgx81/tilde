@@ -135,7 +135,7 @@ func (t *WebFetch) Exec(ctx context.Context, args map[string]any) (string, error
 	if err != nil {
 		return "", fmt.Errorf("fetch of %q failed: %v — the host may be unreachable; try again later or use local context", raw, err)
 	}
-	defer resp.Body.Close()
+	defer closeRespBody(resp)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("fetch of %q returned status %s: not an error in your call — the remote page refused; try a different URL", raw, resp.Status)
 	}

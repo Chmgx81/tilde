@@ -194,8 +194,12 @@ func checkWritableDir(label, dir string) doctorCheck {
 		return doctorCheck{label + "-dir", docFail, fmt.Sprintf("%s: not writable: %v", dir, err)}
 	}
 	name := f.Name()
-	f.Close()
-	os.Remove(name)
+	if cerr := f.Close(); cerr != nil {
+		return doctorCheck{label + "-dir", docWarn, fmt.Sprintf("%s: writable, but the probe file did not close cleanly: %v", dir, cerr)}
+	}
+	if rerr := os.Remove(name); rerr != nil {
+		return doctorCheck{label + "-dir", docWarn, fmt.Sprintf("%s: writable, but the probe file could not be removed: %v", dir, rerr)}
+	}
 	return doctorCheck{label + "-dir", docOK, dir + " writable"}
 }
 

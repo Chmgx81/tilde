@@ -80,11 +80,14 @@ func (l *Log) Append(typ string, data map[string]any) error {
 }
 
 // Close flushes and closes, reporting a flush failure instead of hiding it.
-// A zero-value Log errors instead of panicking.
+// A zero-value Log errors instead of panicking. Takes the same mutex as
+// Append so a concurrent writer cannot race the close.
 func (l *Log) Close() error {
 	if l == nil || l.w == nil || l.f == nil {
 		return fmt.Errorf("session: log not open — nothing to close")
 	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if err := l.w.Flush(); err != nil {
 		_ = l.f.Close()
 		return fmt.Errorf("session: flush on close: %w", err)

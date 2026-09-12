@@ -119,6 +119,11 @@ func Fork(dir, srcID, throughTS string) (string, error) {
 		newID = NewID() // collision (astronomically unlikely); retry
 		dst = filepath.Join(dir, newID+".jsonl")
 	}
+	// Never rename over an existing session: if three ids still collided,
+	// fail instead of clobbering whatever is there.
+	if _, err := os.Stat(dst); err == nil {
+		return "", fmt.Errorf("session: fork %q: could not allocate a unique branch id after 3 attempts — retry", srcID)
+	}
 
 	tmp, err := os.CreateTemp(dir, ".fork-*.tmp")
 	if err != nil {

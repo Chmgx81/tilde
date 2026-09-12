@@ -104,16 +104,15 @@ func TestDoctorJSONAndExitCount(t *testing.T) {
 	root := t.TempDir()
 	os.WriteFile(filepath.Join(root, "policies.yaml"), []byte("ask: [unclosed"), 0o644)
 	t.Setenv("HOME", t.TempDir())
-	// Capture stdout is unnecessary: assert the failure count directly.
+	// Chdir into root so the malformed policy is actually seen (cwd is
+	// what checkPolicy reads), making the assertion meaningful.
+	t.Chdir(root)
 	fails, err := runDoctorCmd([]string{"doctor", "--json"}, doctorProviderConfig{Provider: "ollama"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// cwd is the repo, not root, so the malformed file is not seen here;
-	// the count reflects the real environment. Just assert it is >= 0 and
-	// the call did not error.
-	if fails < 0 {
-		t.Fatalf("fails = %d", fails)
+	if fails == 0 {
+		t.Fatal("malformed policies.yaml in the cwd must produce a hard failure")
 	}
 }
 

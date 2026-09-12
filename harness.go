@@ -72,7 +72,6 @@ func openAuditLog() *audit.AuditLog {
 	return l
 }
 
-// loadPolicies reads policies.yaml (missing = built-in defaults).
 // selectProvider picks the model backend. Unknown names fail loud with
 // the valid set — never a silent fallback to a different vendor.
 // selectProvider builds the startup backend, resolving its key through
@@ -142,6 +141,8 @@ func selectProvider(which, model, base, key string, store *creds.Store) (provide
 	}
 }
 
+// loadPolicies reads policies.yaml (missing = built-in defaults; a
+// malformed file or unknown top-level key is a hard startup refusal).
 func loadPolicies(root string) *policy.File {
 	path := filepath.Join(root, "policies.yaml")
 	f, err := policy.Load(path)
@@ -234,7 +235,12 @@ func buildHarness(root string) harness {
 // Project hooks (arrive with cloned repos, run as unsandboxed shell)
 // need explicit opt-in — same trust rule as project MCP servers.
 func loadHooks(root string, allowProject bool) *hooks.Config {
-	home, _ := os.UserHomeDir()
+	// A failed home lookup must not make the user config resolve relative
+	// to the cwd (that would read a project-adjacent file as user-level).
+	home, herr := os.UserHomeDir()
+	if herr != nil {
+		fmt.Fprintf(os.Stderr, "tilde: warning: user hooks skipped (cannot locate home: %v)\n", herr)
+	}
 	var proj hooks.Config
 	if allowProject {
 		var err error
@@ -247,9 +253,13 @@ func loadHooks(root string, allowProject bool) *hooks.Config {
 			fmt.Fprintf(os.Stderr, "tilde: project hooks present but NOT loaded (untrusted source) — pass --hooks-project to opt in\n")
 		}
 	}
-	user, err := hooks.LoadFile(filepath.Join(home, ".tilde", "hooks.yaml"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "tilde: warning: %v\n", err)
+	var user hooks.Config
+	if herr == nil {
+		var err error
+		user, err = hooks.LoadFile(filepath.Join(home, ".tilde", "hooks.yaml"))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "tilde: warning: %v\n", err)
+		}
 	}
 	merged := hooks.Merge(proj, user)
 	if merged.Empty() {
@@ -268,10 +278,16 @@ func loadHooks(root string, allowProject bool) *hooks.Config {
 // start only with explicit opt-in — a cloned repo must never execute code
 // on launch day without your say-so.
 func startMCP(root string, allowProject bool) *mcp.Manager {
-	home, _ := os.UserHomeDir()
-	userCfg, err := mcp.LoadFile(filepath.Join(home, ".tilde", "mcp.json"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "tilde: warning: %v\n", err)
+	home, herr := os.UserHomeDir()
+	var userCfg mcp.FileConfig
+	if herr != nil {
+		fmt.Fprintf(os.Stderr, "tilde: warning: user MCP config skipped (cannot locate home: %v)\n", herr)
+	} else {
+		var err error
+		userCfg, err = mcp.LoadFile(filepath.Join(home, ".tilde", "mcp.json"))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "tilde: warning: %v\n", err)
+		}
 	}
 	projCfg, err := mcp.LoadFile(filepath.Join(root, ".tilde", "mcp.json"))
 	if err != nil {

@@ -22,8 +22,6 @@ package hooks
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -259,17 +257,6 @@ func isSecretName(k string) bool {
 		}
 	}
 	return false
-}
-
-// TrustHash returns the sha256 hex of a file's bytes, for
-// workspace+path trust pinning (P0-3; wiring into main is P1).
-func TrustHash(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("hooks: cannot hash %s: %v", path, err)
-	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]), nil
 }
 
 // scrubLocal redacts via the shared leaf internal/scrub (full pattern set).
