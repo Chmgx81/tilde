@@ -9,6 +9,15 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"tilde/internal/spill"
+)
+
+// grepInline matches shown inline; grepCollect bounds the walk so a
+// match-everything pattern still terminates with a useful spill.
+const (
+	grepInline  = 50
+	grepCollect = 2000
 )
 
 // --- grep ---
@@ -102,9 +111,21 @@ func (t *Grep) Exec(_ context.Context, args map[string]any) (string, error) {
 		files = append(files, f)
 	}
 	sort.Strings(files)
-	out := fmt.Sprintf("[files (%d): %s]\n", len(files), strings.Join(files, ", ")) + strings.Join(matches, "\n")
-	if count >= 50 {
-		out += "\n[truncated: showing first 50 of 50+ matches — narrow the pattern or dir and retry to see the rest]"
+	shown := matches
+	if len(shown) > grepInline {
+		shown = shown[:grepInline]
+	}
+	out := fmt.Sprintf("[files (%d): %s]\n", len(files), strings.Join(files, ", ")) + strings.Join(shown, "\n")
+	if len(matches) > grepInline {
+		// Everything past the inline 50 is spilled (scrubbed) so the model
+		// gets a bounded result while the full list stays retrievable.
+		tail := ""
+		if scrubbed, _ := Scrub(strings.Join(matches, "\n")); scrubbed != "" {
+			if sp := spill.Save("grep", scrubbed); sp != "" {
+				tail = " — all " + fmt.Sprint(len(matches)) + " matches spilled to " + sp
+			}
+		}
+		out += "\n[truncated: showing first 50 of 50+ matches — narrow the pattern or dir and retry to see the rest" + tail + "]"
 	}
 	out += linkNote
 	if t.Seen != nil {
@@ -141,7 +162,7 @@ func scanOne(path, pat, root string, matches *[]string, seenFiles map[string]boo
 			*matches = append(*matches, fmt.Sprintf("%s:%d: %s", rel, lineNo, sc.Text()))
 			seenFiles[rel] = true
 			*count++
-			if *count >= 50 {
+			if *count >= grepCollect {
 				return errLimit
 			}
 		}
@@ -150,7 +171,7 @@ func scanOne(path, pat, root string, matches *[]string, seenFiles map[string]boo
 		rel, _ := filepath.Rel(root, path)
 		*matches = append(*matches, fmt.Sprintf("%s: [lines past 256KB skipped: %v — sample with read_file instead]", rel, err))
 		*count++
-		if *count >= 50 {
+		if *count >= grepCollect {
 			return errLimit
 		}
 	}

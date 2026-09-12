@@ -44,9 +44,10 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
 - **Pairing-safe compaction**: the kept-recent boundary walks past a
   leading tool-result run, so a retained result never loses its
   originating call.
-- **Tool-output spill**: oversized shell output is written (scrubbed) to a
-  0600 file under `~/.tilde/spill` and named inline; `tilde prune --spill
-  <age>` ages it out.
+- **Tool-output spill**: oversized results are written (scrubbed) to a 0600
+  file under `~/.tilde/spill` and named inline — capped shell output, a
+  read that hits the byte/line window (the full file is spilled), and a
+  capped grep match list. `tilde prune --spill <age>` ages them out.
 - **Secret scrubbing enhancement**: `internal/scrub/scrub.go` adds patterns
   for Vercel tokens (`vcp_` prefix), URL credentials (`user:pass@host`),
   and the GCP service-account `private_key` JSON field (redacted in place,

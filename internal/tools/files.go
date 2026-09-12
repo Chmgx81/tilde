@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"tilde/internal/spill"
 )
 
 // Read ceilings (Phase 3): all three, always together. Miss any one and
@@ -131,12 +133,23 @@ func (t *ReadFile) Exec(_ context.Context, args map[string]any) (string, error) 
 	if clamped > 0 {
 		fmt.Fprintf(&b, "[note: %d long line(s) clamped at %d chars]\n", clamped, maxLineChars)
 	}
+	// When the window is cut short, spill the WHOLE file (scrubbed) so the
+	// full content stays retrievable without another bounded read; the
+	// inline note keeps the exact resume offset.
+	spillTail := ""
+	if cutByBytes || end < len(lines) {
+		if scrubbed, _ := Scrub(string(data)); scrubbed != "" {
+			if path := spill.Save("read-"+filepath.Base(p), scrubbed); path != "" {
+				spillTail = " (full file spilled to " + path + ")"
+			}
+		}
+	}
 	switch {
 	case cutByBytes:
-		fmt.Fprintf(&b, "[truncated at the %d-byte cap with %d more lines unread — re-read %q with offset=%d to continue]\n",
-			maxReadBytes, len(lines)-(resumeAt-1), p, resumeAt)
+		fmt.Fprintf(&b, "[truncated at the %d-byte cap with %d more lines unread%s — re-read %q with offset=%d to continue]\n",
+			maxReadBytes, len(lines)-(resumeAt-1), spillTail, p, resumeAt)
 	case end < len(lines):
-		fmt.Fprintf(&b, "[truncated: %d more lines — re-read with offset=%d to continue]\n", len(lines)-end, end+1)
+		fmt.Fprintf(&b, "[truncated: %d more lines%s — re-read with offset=%d to continue]\n", len(lines)-end, spillTail, end+1)
 	}
 
 	t.mu.Lock()

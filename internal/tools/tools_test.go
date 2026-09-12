@@ -281,6 +281,9 @@ func TestReadByteCapNamesResumeOffset(t *testing.T) {
 	if !contains(out, "offset=") {
 		t.Fatalf("expected exact resume offset, got tail: %q", out[max(0, len(out)-300):])
 	}
+	if !contains(out, "spilled to") {
+		t.Fatalf("byte-cap read should spill the full file, got tail: %q", out[max(0, len(out)-300):])
+	}
 	// Follow the resume offset: content must join seamlessly, no gaps/dupes.
 	resume := 0
 	fmt.Sscanf(out[strings.LastIndex(out, "offset="):], "offset=%d", &resume)
@@ -708,6 +711,9 @@ func TestShellForegroundCapNamesPollOffset(t *testing.T) {
 	if !contains(out, "shell_poll") || !contains(out, "\"offset\":") {
 		t.Fatalf("expected shell_poll resume hint with offset: %q", out[max(0, len(out)-400):])
 	}
+	if !contains(out, "spilled to") {
+		t.Fatalf("capped shell output should spill the full log, got tail: %q", out[max(0, len(out)-400):])
+	}
 }
 
 // FIX 15 (resume hints): grep cap carries a resume-style hint.
@@ -723,6 +729,9 @@ func TestGrepCapNamesResume(t *testing.T) {
 	}
 	if !contains(out, "showing first 50") || !contains(out, "retry to see the rest") {
 		t.Fatalf("expected resume hint, got tail: %q", out[max(0, len(out)-200):])
+	}
+	if !contains(out, "spilled to") {
+		t.Fatalf("capped grep should spill the full match list, got tail: %q", out[max(0, len(out)-200):])
 	}
 }
 
