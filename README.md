@@ -45,7 +45,7 @@ It is built for engineers who want an agent that is useful in production codebas
 curl -fsSL https://raw.githubusercontent.com/Chmgx81/tilde/main/get.sh | sh
 ```
 
-Downloads the latest release binary to `~/.local/bin/tilde`. No Go toolchain required.
+Downloads the latest release binary to `~/.local/bin/tilde` (sha256-verified). No Go toolchain required. The installer records the release channel, so `tilde update` later downloads the newest release the same way.
 
 ### Install from source
 
@@ -56,7 +56,7 @@ go build -o tilde .
 ./tilde
 ```
 
-Go 1.25 or newer and Linux with [bubblewrap](https://github.com/containers/bubblewrap) are required for the default sandbox. On macOS (where bwrap is unavailable) tilde refuses to start until you pass `--no-sandbox` / `TILDE_NO_SANDBOX=1`. Shell tools then run unsandboxed, so prefer Linux for untrusted work. To use the local Ollama provider, install Ollama and make sure a model is available:
+Platforms: Linux (bubblewrap) and macOS (Seatbelt via `sandbox-exec`). Build from source with Go 1.25+; the release binary needs no toolchain. On either platform the sandbox is fail-closed: shell commands refuse to run if the sandbox tool is missing, unless you explicitly opt out with `--no-sandbox` / `TILDE_NO_SANDBOX=1` (not recommended). Other platforms are unsupported. To use the local Ollama provider, install Ollama and make sure a model is available:
 
 ```sh
 ollama pull qwen3.8-4b:16k
@@ -122,7 +122,7 @@ Useful administrative commands:
 ./tilde update
 ```
 
-Plugin lifecycle commands also include `install`, `upgrade`, `enable`, `disable`, `remove`, and `rollback`. Update refuses dirty or unexpected source checkouts and never overwrites a working binary after a failed build.
+Plugin lifecycle commands also include `install`, `upgrade`, `enable`, `disable`, `remove`, and `rollback`. `tilde update` follows the install channel: a release install downloads the newest release (sha256-verified, atomic swap, never a downgrade); a source install pulls and rebuilds, refusing dirty or unexpected checkouts and never overwriting a working binary after a failed build. Run `tilde doctor` to see which channel this binary uses and whether the install dir is writable.
 
 ## Plugins, skills, hooks, and MCP
 

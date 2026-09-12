@@ -5,6 +5,32 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
 
 ## v0.10.0 (2026-09-12)
 
+- **Release-based self-update.** `get.sh` (and `install.sh --from-release`)
+  install a release binary but wrote no install record, so `tilde update`
+  failed with "no install record — reinstall from a fresh clone" — the
+  advertised update was impossible for the primary install path. The record
+  now carries a channel (`release` | `source`): release installs download the
+  newest tag's tarball/zip, verify its sha256 against the release
+  `checksums.txt`, and swap the binary atomically; source installs keep the
+  pull + build path. A missing record falls back to the release channel, the
+  update never downgrades, and every failure (offline, checksum mismatch,
+  unsupported platform, unwritable install dir) refuses with a specific fix
+  and changes nothing.
+- **macOS builds + a real macOS sandbox.** GoReleaser now ships
+  darwin/amd64+arm64 (zip archives), and the sandbox gained a Seatbelt
+  (`sandbox-exec`) backend so macOS keeps the fail-closed posture instead of
+  refusing to start. Reads are allowed, writes are confined to the project
+  root plus private temp dirs, and network is denied unless opted in; if
+  `sandbox-exec` is missing, shell commands refuse (same invariant as bwrap).
+  `--version`, `doctor`, and the splash report `● enforced (seatbelt)`.
+- **Installer fixes.** `get.sh` and `install.sh --from-release` write the
+  install record; `get.sh` warns when `~/.local/bin` is not on `PATH` with the
+  exact export line; archive/asset names follow `_{{ .Os }}_{{ .Arch }}` so the
+  same names work on Linux and macOS.
+- `tilde doctor` gained an `install` check: which channel this binary uses and
+  whether the install directory is writable, so a permissions-broken update is
+  visible before you run it.
+
 - Release: cut v0.10.0 (the version had been pinned at v0.9.1 while this
   whole section sat unreleased, so `tilde update` reported itself current
   and the tag never moved). `internal/update`'s `Version`, `install.sh`'s

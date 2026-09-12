@@ -81,6 +81,11 @@ if [ -n "$FROM_RELEASE" ]; then
     mkdir -p "$dest"
     cp "$tmp/tilde" "$dest/tilde"
     "$dest/tilde" --help >/dev/null 2>&1 || die "installed binary failed its --help smoke test"
+    # Record a release install so `tilde update` follows the release channel.
+    mkdir -p "$HOME/.tilde" 2>/dev/null || true
+    printf '{"kind":"release","tag":"%s","installed_at":"%s"}\n' \
+        "$FROM_RELEASE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOME/.tilde/install.json" 2>/dev/null \
+        || warn "could not write ~/.tilde/install.json — \`tilde update\` will still use the release channel"
     echo "installed to $dest/tilde ($FROM_RELEASE)"
     exit 0
 fi
@@ -116,7 +121,7 @@ cp ./tilde "$dest/tilde"
 src=$(pwd -P)
 esc=$(printf '%s' "$src" | sed 's/\\/\\\\/g; s/"/\\"/g')
 mkdir -p "$HOME/.tilde"
-printf '{"source":"%s","installed_at":"%s"}\n' "$esc" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOME/.tilde/install.json" \
+printf '{"kind":"source","source":"%s","installed_at":"%s"}\n' "$esc" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOME/.tilde/install.json" \
     || warn "could not write ~/.tilde/install.json — \`tilde update\` will not know its source"
 
 echo "installed to $dest/tilde"

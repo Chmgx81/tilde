@@ -28,7 +28,9 @@ main.go + harness.go (composition root, package main) -> internal/* (flat packag
 
 ## Runtime boundaries
 
-- `policy`, `trust`, and `sandbox` decide whether work may execute.
+- `policy`, `trust`, and `sandbox` decide whether work may execute. The
+  sandbox backend is per platform: Linux uses bubblewrap (`sandbox.go`), macOS
+  uses Seatbelt (`seatbelt.go`), and anything else fails closed.
 - `tools` exposes bounded capabilities; it does not grant trust by itself.
 - `provider` adapts model APIs without changing the agent loop.
 - `session` and `audit` preserve an inspectable record of work and decisions.

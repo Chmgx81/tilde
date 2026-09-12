@@ -216,15 +216,56 @@ type checkFile struct {
 	Remote string `json:"remote"`
 }
 
+// Install kinds: how this binary was installed, which decides how
+// `tilde update` updates it.
+const (
+	kindRelease = "release" // installer downloaded a release binary
+	kindSource  = "source"  // built from a git checkout
+)
+
 type installFile struct {
-	Source      string `json:"source"`
+	// Kind selects the update channel. A legacy record (no kind, source
+	// set) reads as "source".
+	Kind        string `json:"kind"`
+	Source      string `json:"source,omitempty"`
+	Tag         string `json:"tag,omitempty"`
 	InstalledAt string `json:"installed_at"`
 }
 
-// RecordInstall remembers where this binary came from so `tilde
-// update` knows what to pull. Called by install.sh after a successful
-// install; failures are warnings, never fatal.
+// InstallInfo describes how this binary was installed, for doctor/splash.
+type InstallInfo struct {
+	Kind   string // "release" | "source"
+	Tag    string
+	Source string
+}
+
+// CurrentInstall reads the install record for status surfaces. A missing or
+// unreadable record reports the release channel (the curl installer wrote
+// none before release records existed) and never errors — doctor must not
+// fail because of it.
+func CurrentInstall() InstallInfo {
+	inst, err := readInstall()
+	if err != nil {
+		return InstallInfo{Kind: kindRelease}
+	}
+	return InstallInfo{Kind: inst.Kind, Tag: inst.Tag, Source: inst.Source}
+}
+
+// RecordInstall remembers a source checkout so `tilde update` knows what
+// to pull. Called by install.sh after a successful source build; failures
+// are warnings, never fatal.
 func RecordInstall(sourceDir string) error {
+	return writeInstall(installFile{Kind: kindSource, Source: sourceDir, InstalledAt: time.Now().UTC().Format(time.RFC3339)})
+}
+
+// RecordRelease remembers a release install (curl | sh, --from-release) so
+// `tilde update` follows the release channel instead of demanding a source
+// checkout. Failures are warnings at the call sites, never fatal.
+func RecordRelease(tag string) error {
+	return writeInstall(installFile{Kind: kindRelease, Tag: tag, InstalledAt: time.Now().UTC().Format(time.RFC3339)})
+}
+
+func writeInstall(f installFile) error {
 	p, err := installPath()
 	if err != nil {
 		return err
@@ -232,8 +273,12 @@ func RecordInstall(sourceDir string) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}
-	data, _ := json.Marshal(installFile{Source: sourceDir, InstalledAt: time.Now().UTC().Format(time.RFC3339)})
-	return os.WriteFile(p, append(data, '\n'), 0o600)
+	data, _ := json.Marshal(f)
+	tmp := p + ".tmp"
+	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, p)
 }
 
 func readInstall() (installFile, error) {
@@ -246,7 +291,16 @@ func readInstall() (installFile, error) {
 	if err != nil {
 		return f, err
 	}
-	if err := json.Unmarshal(data, &f); err != nil || f.Source == "" {
+	if err := json.Unmarshal(data, &f); err != nil {
+		return f, fmt.Errorf("unreadable install record")
+	}
+	if f.Kind == "" {
+		if f.Source == "" {
+			return f, fmt.Errorf("unreadable install record")
+		}
+		f.Kind = kindSource // legacy record written before kinds existed
+	}
+	if f.Kind == kindSource && f.Source == "" {
 		return f, fmt.Errorf("unreadable install record")
 	}
 	return f, nil
@@ -549,12 +603,12 @@ func fetchedCommit(git func(args ...string) (string, error)) (string, error) {
 	return fetchHead, nil
 }
 
-// Run pulls, rebuilds, and reinstalls tilde from its install source.
-// Fail-closed throughout: a dirty tree refuses (never stashes or
-// resets user work), a failed build or smoke test never touches the
-// running binary, and the executable is replaced by atomic rename —
-// never a partial overwrite.
-func Run() error {
+// runSource pulls, rebuilds, and reinstalls tilde from its source checkout
+// (the "source" install channel). Fail-closed throughout: a dirty tree
+// refuses (never stashes or resets user work), a failed build or smoke test
+// never touches the running binary, and the executable is replaced by
+// atomic rename — never a partial overwrite.
+func runSource() error {
 	inst, err := readInstall()
 	if err != nil {
 		return fmt.Errorf("no install record (~/.tilde/install.json) — reinstall from a fresh clone (%s) with ./install.sh, then retry", repoURL)

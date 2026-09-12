@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -64,8 +65,12 @@ func (c *Config) Backend() (string, error) { return ResolveBackend() }
 // Disabled reports whether the TILDE_NO_SANDBOX escape hatch is set.
 func Disabled() bool { return os.Getenv("TILDE_NO_SANDBOX") == "1" }
 
-// Available reports whether bwrap exists on PATH.
+// Available reports whether this platform's sandbox tool exists on PATH:
+// bwrap on Linux, sandbox-exec on macOS.
 func Available() bool {
+	if runtime.GOOS == "darwin" {
+		return seatbeltAvailable()
+	}
 	_, err := exec.LookPath("bwrap")
 	return err == nil
 }
@@ -78,6 +83,9 @@ func Enforced() bool {
 	if Disabled() {
 		return false
 	}
+	if runtime.GOOS == "darwin" {
+		return seatbeltAvailable()
+	}
 	be, err := ResolveBackend()
 	if err != nil {
 		return false
@@ -89,15 +97,27 @@ func Enforced() bool {
 }
 
 // Command builds the sandbox-wrapped bash invocation. It does not start it.
-// The backend comes from Backend(): the default bwrap path is unchanged,
-// while "podman" delegates to the podman backend (BuildPodmanArgs via
-// PodmanConfig) with the digest-pinned image from TILDE_SANDBOX_IMAGE.
+// The backend is chosen per platform: Linux uses bwrap (or podman via
+// TILDE_BACKEND), macOS uses Seatbelt (sandbox-exec); any other platform
+// fails closed. TILDE_NO_SANDBOX=1 is the explicit opt-out on every platform.
 func (c *Config) Command(ctx context.Context, shellCmd string) (*exec.Cmd, error) {
 	if Disabled() {
 		cmd := exec.CommandContext(ctx, "bash", "-c", shellCmd)
 		cmd.Dir = c.Root
 		return cmd, nil
 	}
+	switch runtime.GOOS {
+	case "linux":
+		return c.commandLinux(ctx, shellCmd)
+	case "darwin":
+		return c.commandDarwin(ctx, shellCmd)
+	default:
+		return nil, fmt.Errorf("sandbox: no sandbox backend for %s — tilde supports Linux (bubblewrap) and macOS (Seatbelt); set TILDE_NO_SANDBOX=1 to run unsandboxed (not recommended)", runtime.GOOS)
+	}
+}
+
+// commandLinux is the bwrap/podman path (see the package doc).
+func (c *Config) commandLinux(ctx context.Context, shellCmd string) (*exec.Cmd, error) {
 	be, err := c.Backend()
 	if err != nil {
 		return nil, err
@@ -183,6 +203,9 @@ func (c *Config) Command(ctx context.Context, shellCmd string) (*exec.Cmd, error
 func StatusLine() string {
 	if Disabled() {
 		return "○ sandbox disabled (TILDE_NO_SANDBOX=1)"
+	}
+	if runtime.GOOS == "darwin" {
+		return seatbeltStatusLine()
 	}
 	be, err := ResolveBackend()
 	if err != nil {

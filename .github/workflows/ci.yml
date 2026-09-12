@@ -34,6 +34,8 @@ jobs:
         run: go test -count=1 ./...
       - name: Build
         run: go build -o /tmp/tilde-smoke .
+      - name: Cross-compile (darwin)
+        run: GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...
       - name: Smoke
         run: /tmp/tilde-smoke --help
       - name: Version smoke

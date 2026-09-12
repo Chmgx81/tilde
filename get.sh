@@ -94,6 +94,22 @@ chmod +x "$DEST/$BIN"
 # --- verify ---
 "$DEST/$BIN" --help >/dev/null 2>&1 || die "installed binary failed smoke test"
 
+# --- record provenance so `tilde update` follows the release channel ---
+# (best effort: a read-only HOME must not fail the install)
+mkdir -p "$HOME/.tilde" 2>/dev/null || true
+printf '{"kind":"release","tag":"%s","installed_at":"%s"}\n' \
+    "$tag" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOME/.tilde/install.json" 2>/dev/null \
+    || echo "tilde: note: could not write ~/.tilde/install.json — \`tilde update\` will still use the release channel" >&2
+
 echo "tilde: installed ${tag} to ${DEST}/${BIN}"
+
+# --- PATH check: the most common first-run surprise ---
+case ":${PATH}:" in
+    *":${DEST}:"*) ;;
+    *)
+        echo "tilde: note: ${DEST} is not on your PATH — add it, then reopen your shell:"
+        echo "  export PATH=\"${DEST}:\$PATH\""
+        ;;
+esac
 echo "next steps:"
 echo "  cd ~/my-project && tilde"

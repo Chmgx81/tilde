@@ -21,6 +21,7 @@ import (
 	"tilde/internal/policy"
 	"tilde/internal/provider"
 	"tilde/internal/sandbox"
+	"tilde/internal/update"
 )
 
 // doctorStatus is the severity of one check.
@@ -89,6 +90,7 @@ func doctorChecks(root string, cfg doctorProviderConfig) []doctorCheck {
 	out = append(out, checkSandbox())
 	out = append(out, checkPolicy(root))
 	out = append(out, checkCredentials())
+	out = append(out, checkInstall())
 	out = append(out, checkWritableDir("sessions", sessionDirForDoctor()))
 	out = append(out, checkWritableDir("audit", auditDirForDoctor()))
 	out = append(out, checkGit(root))
@@ -180,6 +182,46 @@ func ollamaRemoteNoKey() bool {
 		}
 	}
 	return true
+}
+
+// checkInstall reports the install channel and whether `tilde update` can
+// replace the binary (a read-only install dir is a common, silent update
+// failure the user should learn about before running update).
+func checkInstall() doctorCheck {
+	info := update.CurrentInstall()
+	exe, err := os.Executable()
+	if err != nil {
+		return doctorCheck{"install", docWarn, "cannot locate the running binary"}
+	}
+	dir := filepath.Dir(exe)
+	writable := false
+	if f, ferr := os.CreateTemp(dir, ".tilde-doctor-*"); ferr == nil {
+		writable = true
+		name := f.Name()
+		f.Close()
+		os.Remove(name)
+	}
+	switch info.Kind {
+	case "release":
+		tag := info.Tag
+		if tag == "" {
+			tag = "unknown"
+		}
+		detail := fmt.Sprintf("release (tag %s) — `tilde update` downloads the newest release", tag)
+		if !writable {
+			return doctorCheck{"install", docWarn, detail + fmt.Sprintf("; %s is not writable, so update will fail — reinstall with PREFIX set to a writable dir", dir)}
+		}
+		return doctorCheck{"install", docOK, detail}
+	default:
+		detail := fmt.Sprintf("source (%s) — `tilde update` pulls and rebuilds", info.Source)
+		if info.Source == "" {
+			return doctorCheck{"install", docInfo, detail}
+		}
+		if !writable {
+			return doctorCheck{"install", docWarn, detail + fmt.Sprintf("; %s is not writable, so update will fail — reinstall with PREFIX set to a writable dir", dir)}
+		}
+		return doctorCheck{"install", docOK, detail}
+	}
 }
 
 func checkWritableDir(label, dir string) doctorCheck {

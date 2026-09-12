@@ -111,10 +111,14 @@ func TestNewestTag(t *testing.T) {
 	}
 }
 
-func TestRunWithoutInstallRecord(t *testing.T) {
+func TestRunWithoutInstallRecordUsesReleaseChannel(t *testing.T) {
+	// A missing record (the curl installer historically wrote none) must
+	// fall back to the release channel, not demand a source checkout.
 	t.Setenv("HOME", t.TempDir())
-	if err := Run(); err == nil || !strings.Contains(err.Error(), "install.sh") {
-		t.Fatalf("missing record must point at install.sh, got %v", err)
+	t.Setenv("TILDE_UPDATE_TARGET", filepath.Join(t.TempDir(), "tilde"))
+	defer stubNewestRelease(Version)()
+	if err := Run(); err != nil {
+		t.Fatalf("missing record must use the release channel, got %v", err)
 	}
 }
 
