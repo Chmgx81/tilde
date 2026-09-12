@@ -71,11 +71,12 @@ func runRelease() error {
 	if err != nil {
 		return err
 	}
-	// One context spans resolve + download + verify; it must stay live for
-	// the whole run (an earlier cancel would abort the download).
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	newest, _, err := resolveNewestRelease(ctx)
+	// Resolve with a short bound; the downloads manage their own per-attempt
+	// timeouts and resume across attempts (a throttled link must make
+	// progress, not hit one overall guillotine).
+	rctx, rcancel := context.WithTimeout(context.Background(), apiTimeout)
+	newest, _, err := resolveNewestRelease(rctx)
+	rcancel()
 	if err != nil {
 		return fmt.Errorf("cannot resolve the newest release (offline or rate-limited?): %v — nothing was changed", err)
 	}
@@ -97,13 +98,13 @@ func runRelease() error {
 	asset := assetName(newest, runtime.GOOS, runtime.GOARCH)
 	base := releaseDownloadBase + "/" + newest
 	assetPath := filepath.Join(tmp, asset)
-	if err := downloadFile(ctx, base+"/"+asset, assetPath); err != nil {
+	if err := downloadFile(context.Background(), base+"/"+asset, assetPath); err != nil {
 		if errors.Is(err, errAssetAbsent) {
 			return fmt.Errorf("no release asset %s for %s/%s — supported: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 — nothing was changed", asset, runtime.GOOS, runtime.GOARCH)
 		}
 		return fmt.Errorf("download failed: %v — nothing was changed", err)
 	}
-	sums, err := downloadString(ctx, base+"/checksums.txt")
+	sums, err := downloadString(context.Background(), base+"/checksums.txt")
 	if err != nil {
 		return fmt.Errorf("cannot fetch checksums.txt: %v — refusing to install an unverified binary", err)
 	}
@@ -232,42 +233,119 @@ func extractZip(assetPath, dest string) error {
 	return fmt.Errorf("archive did not contain a 'tilde' file")
 }
 
-// downloadFile GETs url to dest, mapping 404 to errAssetAbsent and capping
-// the body at maxAssetBytes.
+// Download retry/resume bounds: a throttled link makes progress each
+// attempt instead of restarting from zero.
+const (
+	dlAttempts    = 6
+	dlAttemptTime = 2 * time.Minute
+)
+
+// downloadFile fetches url to dest, resuming a partial dest across attempts.
+// 404 is errAssetAbsent and does not retry. The partial file is kept on
+// failure so the next attempt continues from where it stopped.
 func downloadFile(ctx context.Context, url, dest string) error {
-	resp, err := get(ctx, url)
-	if err != nil {
-		return err
+	var lastErr error
+	for attempt := 1; attempt <= dlAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		lastErr = downloadOnce(ctx, url, dest)
+		if lastErr == nil {
+			return nil
+		}
+		if errors.Is(lastErr, errAssetAbsent) {
+			return lastErr
+		}
+		if attempt < dlAttempts {
+			fmt.Fprintf(os.Stderr, "tilde: download interrupted (%v) — resuming (%d/%d)\n", lastErr, attempt, dlAttempts)
+		}
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return errAssetAbsent
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("status %d for %s", resp.StatusCode, url)
-	}
-	f, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(f, io.LimitReader(resp.Body, maxAssetBytes)); err != nil {
-		f.Close()
-		return err
-	}
-	return f.Close()
+	return lastErr
 }
 
-func downloadString(ctx context.Context, url string) (string, error) {
-	resp, err := get(ctx, url)
+// downloadOnce performs one ranged GET, appending to an existing partial
+// dest. A short body (server closed early) is an error so the caller
+// resumes; the bytes already written stay on disk.
+func downloadOnce(ctx context.Context, url, dest string) error {
+	var offset int64
+	if st, err := os.Stat(dest); err == nil {
+		offset = st.Size()
+	}
+	actx, cancel := context.WithTimeout(ctx, dlAttemptTime)
+	defer cancel()
+	req, err := http.NewRequestWithContext(actx, "GET", url, nil)
 	if err != nil {
-		return "", err
+		return err
+	}
+	if offset > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
+	}
+	resp, err := releaseHTTP.Do(req)
+	if err != nil {
+		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("status %d for %s", resp.StatusCode, url)
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		return errAssetAbsent
+	case http.StatusRequestedRangeNotSatisfiable:
+		return nil // dest already holds the whole file
+	case http.StatusPartialContent:
+		// append from offset
+	case http.StatusOK:
+		offset = 0 // server ignored the Range: start over
+	default:
+		return fmt.Errorf("status %d for %s", resp.StatusCode, url)
 	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	return string(b), err
+	flags := os.O_CREATE | os.O_WRONLY
+	if offset == 0 {
+		flags |= os.O_TRUNC
+	}
+	f, err := os.OpenFile(dest, flags, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return err
+	}
+	n, err := io.Copy(f, io.LimitReader(resp.Body, maxAssetBytes-offset))
+	if err != nil {
+		return err
+	}
+	if resp.ContentLength > 0 && n != resp.ContentLength {
+		return fmt.Errorf("incomplete download (%d of %d bytes)", n, resp.ContentLength)
+	}
+	return nil
+}
+
+// downloadString fetches a small text file (checksums.txt) with bounded
+// retries.
+func downloadString(ctx context.Context, url string) (string, error) {
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		actx, cancel := context.WithTimeout(ctx, dlAttemptTime)
+		resp, err := get(actx, url)
+		if err != nil {
+			cancel()
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			cancel()
+			lastErr = fmt.Errorf("status %d for %s", resp.StatusCode, url)
+			continue
+		}
+		b, rerr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		resp.Body.Close()
+		cancel()
+		if rerr == nil {
+			return string(b), nil
+		}
+		lastErr = rerr
+	}
+	return "", lastErr
 }
 
 func get(ctx context.Context, url string) (*http.Response, error) {

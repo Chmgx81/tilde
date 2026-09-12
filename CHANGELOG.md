@@ -23,6 +23,11 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   root plus private temp dirs, and network is denied unless opted in; if
   `sandbox-exec` is missing, shell commands refuse (same invariant as bwrap).
   `--version`, `doctor`, and the splash report `● enforced (seatbelt)`.
+- **Resumable updates.** `tilde update` (release channel) now retries with
+  HTTP range requests, resuming a partial download instead of restarting, so
+  a throttled link completes across attempts (mirrors `get.sh`). A server
+  that ignores `Range` restarts cleanly; an incomplete body is retried; a
+  transient error retries; 404 still reports the platform with no retry.
 - **Installer fixes.** `get.sh` and `install.sh --from-release` write the
   install record; `get.sh` warns when `~/.local/bin` is not on `PATH` with the
   exact export line; archive/asset names follow `_{{ .Os }}_{{ .Arch }}` so the

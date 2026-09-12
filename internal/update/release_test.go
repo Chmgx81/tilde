@@ -174,6 +174,91 @@ func TestRunReleaseMissingPlatformAsset(t *testing.T) {
 	}
 }
 
+func TestDownloadOnceResumesFromPartial(t *testing.T) {
+	full := []byte("0123456789ABCDEFGHIJ")
+	half := len(full) / 2
+	var gotRange string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRange = r.Header.Get("Range")
+		w.Header().Set("Content-Range", "bytes 10-19/20")
+		w.WriteHeader(http.StatusPartialContent)
+		w.Write(full[half:])
+	}))
+	defer srv.Close()
+
+	dest := filepath.Join(t.TempDir(), "f.bin")
+	if err := os.WriteFile(dest, full[:half], 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := downloadOnce(context.Background(), srv.URL, dest); err != nil {
+		t.Fatalf("downloadOnce: %v", err)
+	}
+	if gotRange != "bytes=10-" {
+		t.Fatalf("resume must send a Range header, got %q", gotRange)
+	}
+	got, _ := os.ReadFile(dest)
+	if string(got) != string(full) {
+		t.Fatalf("resumed file = %q, want %q", got, full)
+	}
+}
+
+func TestDownloadOnceRestartsWhenRangeIgnored(t *testing.T) {
+	full := []byte("whole-file-bytes")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK) // ignores Range
+		w.Write(full)
+	}))
+	defer srv.Close()
+
+	dest := filepath.Join(t.TempDir(), "f.bin")
+	os.WriteFile(dest, []byte("stale-partial"), 0o644) // a 200 must replace, not append
+	if err := downloadOnce(context.Background(), srv.URL, dest); err != nil {
+		t.Fatalf("downloadOnce: %v", err)
+	}
+	if got, _ := os.ReadFile(dest); string(got) != string(full) {
+		t.Fatalf("200 must restart cleanly, got %q", got)
+	}
+}
+
+func TestDownloadOnceAlreadyComplete(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable) // 416: nothing left
+	}))
+	defer srv.Close()
+	dest := filepath.Join(t.TempDir(), "f.bin")
+	os.WriteFile(dest, []byte("done"), 0o644)
+	if err := downloadOnce(context.Background(), srv.URL, dest); err != nil {
+		t.Fatalf("416 (already complete) must be a no-op success, got %v", err)
+	}
+	if got, _ := os.ReadFile(dest); string(got) != "done" {
+		t.Fatalf("416 must leave the file intact, got %q", got)
+	}
+}
+
+func TestDownloadFileRetriesThenSucceeds(t *testing.T) {
+	full := []byte("retry-me")
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Write(full)
+	}))
+	defer srv.Close()
+	dest := filepath.Join(t.TempDir(), "f.bin")
+	if err := downloadFile(context.Background(), srv.URL, dest); err != nil {
+		t.Fatalf("downloadFile should retry past a transient 500, got %v", err)
+	}
+	if calls < 2 {
+		t.Fatalf("expected a retry, calls = %d", calls)
+	}
+	if got, _ := os.ReadFile(dest); string(got) != string(full) {
+		t.Fatalf("file = %q, want %q", got, full)
+	}
+}
+
 func TestExtractBinaryRefusesNonRegularMember(t *testing.T) {
 	dir := t.TempDir()
 	asset := filepath.Join(dir, "a.tar.gz")
