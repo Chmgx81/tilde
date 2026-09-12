@@ -14,6 +14,11 @@ import (
 )
 
 // WebFetch is the blessed fetcher: plain HTTP GET only, no search, no JS.
+// Timeout bounds a dispatch of web_fetch at the harness level: the HTTP
+// client carries a shorter internal timeout, so this is the backstop
+// against a wedged fetch holding the turn.
+func (w *WebFetch) Timeout() time.Duration { return 45 * time.Second }
+
 type WebFetch struct {
 	AllowNet func() bool
 	// HostAllow optionally approves one host (P1-G per-host approval

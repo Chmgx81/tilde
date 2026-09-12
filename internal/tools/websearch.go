@@ -19,6 +19,9 @@ import (
 
 // WebSearch is the keyless-first search: DuckDuckGo html endpoint only,
 // no API keys, no JS. Default-deny unless network is allowed.
+// Timeout bounds a dispatch of web_search at the harness level.
+func (w *WebSearch) Timeout() time.Duration { return 30 * time.Second }
+
 type WebSearch struct {
 	AllowNet func() bool
 	// HostAllow optionally approves one host (P1-G per-host approval

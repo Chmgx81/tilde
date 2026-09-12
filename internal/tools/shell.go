@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tilde/internal/sandbox"
+	"tilde/internal/spill"
 )
 
 // --- background task plumbing ---
@@ -479,7 +480,16 @@ func (t *Shell) foregroundResult(task *Task, cmdStr string) string {
 		// The log keeps the "$ cmd" + "[started]" wrapper lines, so the
 		// shown output starts at log line 3: resume from there.
 		resume := 3 + strings.Count(shown, "\n")
-		out = shown + fmt.Sprintf("\n[truncated: output capped at 8000 chars (full stream in %s) — poll it with shell_poll {\"action\": \"log\", \"task_id\": %q, \"offset\": %d} to continue, or narrow the command and retry]", task.LogPath, task.ID, resume)
+		// Spill the full (scrubbed) output to a managed file so the whole
+		// log stays retrievable even after the task log is gone; the inline
+		// note keeps both the tail offset and the path.
+		spillNote := ""
+		if scrubbed, _ := Scrub(out); scrubbed != "" {
+			if path := spill.Save("shell-"+task.ID, scrubbed); path != "" {
+				spillNote = " (full output spilled to " + path + ")"
+			}
+		}
+		out = shown + fmt.Sprintf("\n[truncated: output capped at 8000 chars%s (full stream in %s) — poll it with shell_poll {\"action\": \"log\", \"task_id\": %q, \"offset\": %d} to continue, or narrow the command and retry]", spillNote, task.LogPath, task.ID, resume)
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "exit=%d\n", code)

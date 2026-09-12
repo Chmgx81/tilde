@@ -35,6 +35,10 @@ import (
 )
 
 // WebShot screenshots a URL with headless Firefox (viewport-only).
+// Timeout bounds a dispatch of web_shot: a headless browser launch plus
+// render can legitimately take a while, but not forever.
+func (w *WebShot) Timeout() time.Duration { return 90 * time.Second }
+
 type WebShot struct {
 	AllowNet func() bool
 	// HostAllow optionally approves one host (same P1-G per-host shape

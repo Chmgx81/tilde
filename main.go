@@ -36,6 +36,7 @@ import (
 	"tilde/internal/schedule"
 	"tilde/internal/session"
 	"tilde/internal/skills"
+	"tilde/internal/spill"
 	"tilde/internal/trust"
 	"tilde/internal/tui"
 	"tilde/internal/update"
@@ -82,8 +83,8 @@ Commands:
                                    read the append-only audit log
   run-due [--yes]                  run due scheduled jobs now
   schedule [--json]                list scheduled jobs with due state + next run
-  prune   [--sessions D|--audit D] [--yes]
-                                   delete old sessions / trim audit log (dry run by default)
+  prune   [--sessions D|--audit D|--spill D] [--yes]
+                                   delete old sessions / audit log / spilled output (dry run by default)
   fork <id> [--at RFC3339]         branch a session at a message
   models                           list the provider model catalog
   update                           pull, rebuild, and reinstall tilde
@@ -1247,17 +1248,23 @@ func pluginHome() (string, error) {
 }
 
 // runPruneCmd implements `tilde prune`: retention windows for session
-// logs (default 30d, newest 5 always kept) and the audit trail (default
-// 90d). Dry run without --yes. Cron-friendly: missing dirs are no-ops.
+// logs (default 30d, newest 5 always kept), the audit trail (default
+// 90d), and spilled tool output (default 7d). Dry run without --yes.
+// Cron-friendly: missing dirs are no-ops.
 func runPruneCmd(args []string) error {
 	fs := flag.NewFlagSet("prune", flag.ContinueOnError)
 	sessionsAge := fs.String("sessions", "30d", "delete session logs older than this (Go duration)")
 	auditAge := fs.String("audit", "90d", "drop audit events older than this (Go duration)")
+	spillAge := fs.String("spill", "7d", "delete spilled tool output older than this (Go duration)")
 	yes := fs.Bool("yes", false, "actually delete (without it: dry-run plan only)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	sAge, err := parseRetention(sessionsAge, "sessions")
+	if err != nil {
+		return err
+	}
+	spAge, err := parseRetention(spillAge, "spill")
 	if err != nil {
 		return err
 	}
@@ -1271,10 +1278,12 @@ func runPruneCmd(args []string) error {
 	}
 	sessDir := filepath.Join(home, ".tilde", "sessions")
 	auditPath := filepath.Join(home, ".tilde", "audit", "audit.jsonl")
+	spillDir := spill.Dir()
 	if !*yes {
 		fmt.Printf("tilde: prune plan (dry run — pass --yes to delete):\n")
 		fmt.Printf("  sessions older than %s in %s (newest 5 kept)\n", sAge, sessDir)
 		fmt.Printf("  audit events older than %s in %s\n", aAge, auditPath)
+		fmt.Printf("  spilled tool output older than %s in %s\n", spAge, spillDir)
 		return nil
 	}
 	deleted, err := session.Prune(sessDir, sAge, 5)
@@ -1290,6 +1299,11 @@ func runPruneCmd(args []string) error {
 		return err
 	}
 	fmt.Printf("tilde: audit: kept %d, dropped %d\n", kept, dropped)
+	spilled, err := spill.Prune(spillDir, spAge)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("tilde: spill: removed %d file(s)\n", spilled)
 	return nil
 }
 

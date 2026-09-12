@@ -103,6 +103,24 @@ func (c *Compactor) NeededWith(msgs []provider.Message, overhead int) bool {
 	return float64(Estimate(msgs)+overhead)/float64(b) >= Threshold
 }
 
+// safeSplit chooses where the kept-recent slice begins so it never starts
+// on a stranded tool result. Tool exchanges are textual here
+// (provider.Message carries only Role+Content): a call's output is a
+// user-role message prefixed "Tool <name> result:". Splitting inside such
+// a run would keep results whose originating call was summarized away, so
+// the boundary walks forward past any leading tool-result messages. The
+// kept slice may shrink; it never strands a result.
+func safeSplit(msgs []provider.Message, keep int) int {
+	split := len(msgs) - keep
+	if split < 0 {
+		return 0
+	}
+	for split < len(msgs) && strings.HasPrefix(msgs[split].Content, "Tool ") {
+		split++
+	}
+	return split
+}
+
 // Compact summarizes all but the trailing KeepRecent messages. It never
 // fails the turn: if Summarize errors, FallbackSummary keeps the original
 // user goal plus a receipt of what was dropped.
@@ -111,7 +129,8 @@ func (c *Compactor) Compact(ctx context.Context, msgs []provider.Message) *Resul
 	if len(msgs) <= keep {
 		return &Result{Msgs: msgs}
 	}
-	old, recent := msgs[:len(msgs)-keep], msgs[len(msgs)-keep:]
+	split := safeSplit(msgs, keep)
+	old, recent := msgs[:split], msgs[split:]
 	var summary string
 	if c.Summarize != nil {
 		s, err := c.Summarize(ctx, old)

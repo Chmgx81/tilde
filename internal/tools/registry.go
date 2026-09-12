@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -165,10 +166,31 @@ func (r *Registry) Dispatch(ctx context.Context, name string, args map[string]an
 	if r.Undo != nil && snapshotTools(name) {
 		snapshotted = r.Undo.SnapshotFor(name, args)
 	}
-	out, err := t.Exec(ctx, args)
+	// Cooperative per-tool timeout: a tool may declare one via a
+	// Timeout() time.Duration method. The dispatch wraps the context so a
+	// hung call is cancelled and surfaced as a distinct TOOL_TIMEOUT
+	// instead of running to the loop's iteration cap. Tools without the
+	// method are unaffected (shell_command keeps its own detach logic).
+	execCtx := ctx
+	var toolTimeout time.Duration
+	if tt, ok := t.(interface{ Timeout() time.Duration }); ok {
+		if d := tt.Timeout(); d > 0 {
+			toolTimeout = d
+			var cancel context.CancelFunc
+			execCtx, cancel = context.WithTimeout(ctx, d)
+			defer cancel()
+		}
+	}
+	out, err := t.Exec(execCtx, args)
 	if err != nil {
 		if snapshotted {
 			r.Undo.DiscardLast()
+		}
+		// A tool's own deadline (not the caller's cancellation) is a
+		// distinct, retryable outcome: report it as TOOL_TIMEOUT.
+		if toolTimeout > 0 && errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			r.audit(name, decision, args, "timeout after "+toolTimeout.String())
+			return receipt + fmt.Sprintf("TOOL_TIMEOUT: tool %q exceeded its %s limit and was cancelled. Narrow the request (smaller scope, fewer results) and retry, or use a different tool.", name, toolTimeout)
 		}
 		r.audit(name, decision, args, "error: "+err.Error())
 		return receipt + fmt.Sprintf("tool %q failed: %v. Fix the arguments from this message and retry, or try a different tool.", name, err)

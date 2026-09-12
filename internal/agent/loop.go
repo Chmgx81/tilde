@@ -6,6 +6,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -455,13 +456,18 @@ func (l *Loop) Run(ctx context.Context, goal string, emit func(Event)) (string, 
 				if !mode.IsMutatingCall(tc.Name, tc.Args) && nudges < maxNudges {
 					nudges++
 					runLen = 0 // re-arm: next nudge needs doomAt fresh repeats
-					out := fmt.Sprintf("identical read-only call %q issued %d times in a row — the result is already in context above; act on it with a different call next (nudge %d of %d). Do not retry the identical call.", tc.Name, doomAt, nudges, maxNudges)
+					shown := previewArg(tc.Args)
+					last := ""
+					if nudges == maxNudges {
+						last = " This is the last nudge — one more identical repeat hands off to Plan."
+					}
+					out := fmt.Sprintf("identical read-only call %q%s issued %d times in a row — the result is already in context above; act on it with a different call next (nudge %d of %d).%s Do not retry the identical call.", tc.Name, shown, doomAt, nudges, maxNudges, last)
 					emit(Event{Kind: "tool_result", Text: out})
 					l.appendLog("tool_result", map[string]any{"name": tc.Name, "output": out}, emit)
 					l.AppendMsg(provider.Message{Role: "user", Content: "Tool " + tc.Name + " result:\n" + out})
 					continue
 				}
-				msg := fmt.Sprintf("Same call (%s) issued %d times in a row with no progress — reverting to Plan mode. Nothing further will be changed. Partial work above is preserved.", tc.Name, runLen)
+				msg := fmt.Sprintf("Same call (%s)%s issued %d times in a row with no progress — reverting to Plan mode. Nothing further will be changed. Partial work above is preserved.", tc.Name, previewArg(tc.Args), runLen)
 				emit(Event{Kind: "handoff", Text: msg})
 				l.appendLog("system", map[string]any{"handoff": msg}, emit)
 				l.SetMode(mode.Plan) // fail closed: drop autonomy
@@ -767,18 +773,15 @@ func (l *Loop) flushBatch(ctx context.Context, batch []provider.ToolCall, emit f
 }
 
 func fingerprint(name string, args map[string]any) string {
-	keys := make([]string, 0, len(args))
-	for k := range args {
-		keys = append(keys, k)
+	// json.Marshal emits map keys in sorted order and a stable number
+	// format, so nested args (objects/arrays) fingerprint identically
+	// regardless of Go map iteration order — the old `%v` spelling could
+	// differ between two identical calls and defeat repeat detection.
+	raw, err := json.Marshal(args)
+	if err != nil {
+		raw = []byte(fmt.Sprintf("%v", args))
 	}
-	sort.Strings(keys)
-	var b strings.Builder
-	b.WriteString(name)
-	b.WriteString("\x00")
-	for _, k := range keys {
-		fmt.Fprintf(&b, "%s=%v;", k, args[k])
-	}
-	return b.String()
+	return name + "\x00" + string(raw)
 }
 
 func shortArgs(args map[string]any) string {
@@ -790,6 +793,16 @@ func shortArgs(args map[string]any) string {
 			}
 			return s
 		}
+	}
+	return ""
+}
+
+// previewArg renders a one-line, capped argument preview for the repeat
+// guard's messages: a parenthesized " (path=…)" suffix, or "" when the
+// args carry no previewable key. Never echoes large values.
+func previewArg(args map[string]any) string {
+	if p := shortArgs(args); p != "" {
+		return " (" + p + ")"
 	}
 	return ""
 }
