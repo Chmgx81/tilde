@@ -116,7 +116,7 @@ When the model suggests installing a package (`pip install`, `npm install`,
 1. Detects the install shape (`isInstallShape`).
 2. Extracts package names from the command.
 3. Checks each name against a database of known LLM hallucinations
-   (`internal/policy/slopsquatting.go`).
+   (`internal/slopsquatting/slopsquatting.go`).
 4. If a name matches, shows a prominent warning in the confirm prompt:
    `⚠ SLOPSQUATTING WARNING — langchin (did you mean langchain?)`.
 
@@ -189,7 +189,7 @@ Key security tests:
 - `internal/policy/policy_test.go` — deny shapes, bypass attempts, mode gates
 - `internal/tools/shell_caps_test.go` — task limits, secret redaction
 - `internal/scrub/scrub_test.go` — secret pattern coverage
-- `internal/policy/slopsquatting_test.go` — hallucination detection
+- `internal/slopsquatting/slopsquatting_test.go` — hallucination detection
 
 ## Reporting Security Issues
 

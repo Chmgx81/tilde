@@ -21,7 +21,7 @@ All four must be clean before a commit. Anything that needs explanation is in
 
 | Path | Owns |
 |---|---|
-| `main.go`, `auth.go`, `deploy.go`, `doctor.go`, `harness.go` | CLI dispatch, credential/deploy/doctor commands, tool-registry wiring |
+| `main.go`, `auth.go`, `doctor.go`, `harness.go` | CLI dispatch, credential/doctor commands, tool-registry wiring |
 | `internal/agent/` | The ReAct loop, modes, subagents |
 | `internal/tools/` | read/write/edit/shell/search/git/web/memory tools |
 | `internal/tui/` | Bubble Tea UI — [`tui-design-spec.md`](tui-design-spec.md) is the source of truth |

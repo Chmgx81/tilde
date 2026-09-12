@@ -5,13 +5,48 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
 
 ## v0.10.0 (unreleased)
 
-- **Security hardening — slopsquatting defense**: a new `internal/policy/slopsquatting.go`
-  package detects package-name hallucinations (e.g. `langchin` for `langchain`)
-  in install commands (`pip install`, `npm install`, `cargo add`, ...).
+- **Security hardening — slopsquatting defense**: a new
+  `internal/slopsquatting/slopsquatting.go` package detects package-name
+  hallucinations (e.g. `langchin` for `langchain`) in install commands.
   Flagged names trigger a prominent `SLOPSQUATTING WARNING` in the confirm
   prompt naming the probable real package. `TILDE_STRICT_INSTALL=1` makes
   all install commands require explicit approval even in Auto mode with
   `--yes`. See `docs/SLOPSQUATTING.md`.
+- **Slopsquatting hardening**: detection and name extraction now share one
+  manager table, closing the evasions that produced only a generic (or no)
+  warning: `pip install x==1.2.3` / `~=` / `<` / `[extra]`, `python -m pip`
+  and versioned interpreters (`python3.11`, `pip3.11`), transparent
+  wrappers (`env`/`nice`/`timeout`/`command`), `npm ci`, `yarn install`,
+  `composer`, system managers, combined `pacman -Syu`, backslash-newline
+  continuations, scoped+versioned npm names, and flag values
+  (`-r FILE`, `--index-url URL`) read as packages. Typo detection is
+  separator/case-insensitive and length-aware (short names need distance
+  1); a wholly known install reads as `known package(s)`.
+- **Deny-tier bypass fixes**: command substitution inside a `VAR=value`
+  prefix (`X=$(reboot) true`) is judged before the prefix is stripped;
+  `xargs` no longer launders a denied verb or interpreter payload
+  (`find . | xargs sh -c 'rm -rf /'`); fd-prefixed device redirects
+  (`2>`, `&>`) are normalized before the `/dev`/`/proc`/`/sys` check.
+- **Path-scoped deny fix**: `deny_paths` now matches the root-relative and
+  symlink-resolved spelling of an absolute contained path, so `*.key` can
+  no longer be dodged by writing `<root>/id.key`.
+- **Network tools are builtin ask-tier**: `web_fetch`/`web_search`/
+  `web_shot` prompt even when a project ships no `policies.yaml`.
+- **Export containment fix**: `--export --out` resolves symlinks in the
+  existing prefix, so a symlinked parent cannot redirect a brief outside
+  the cwd.
+- **Per-tool cooperative timeout**: dispatch probes an optional
+  `Timeout()` and cancels a hung call with a distinct `TOOL_TIMEOUT`
+  result instead of running to the iteration cap.
+- **Repeat-tool guard**: the doom fingerprint canonicalizes args through
+  JSON, so nested objects/arrays can no longer defeat repeat detection;
+  the nudge/handoff messages carry a capped argument preview.
+- **Pairing-safe compaction**: the kept-recent boundary walks past a
+  leading tool-result run, so a retained result never loses its
+  originating call.
+- **Tool-output spill**: oversized shell output is written (scrubbed) to a
+  0600 file under `~/.tilde/spill` and named inline; `tilde prune --spill
+  <age>` ages it out.
 - **Secret scrubbing enhancement**: `internal/scrub/scrub.go` adds patterns
   for Vercel tokens (`vcp_` prefix), URL credentials (`user:pass@host`),
   and the GCP service-account `private_key` JSON field (redacted in place,
@@ -37,15 +72,15 @@ planned work and implementation status, see [docs/Plan.md](docs/Plan.md).
   `/login` is the interactive equivalent). The key is read from the
   target's env var or stdin — never argv, so it stays out of `ps` and
   shell history; a bare `tilde login` prints the masked
-  credential-ladder status. `vercel` is accepted alongside the model
-  providers.
-- `tilde deploy [vercel] [--prod|--preview]`: deploy the current project
-  with the Vercel CLI, resolving the token through the same ladder
-  (`$VERCEL_TOKEN`, then the sealed store) and passing it in the child's
-  environment — never argv. User-invoked only; it is deliberately not an
-  agent tool, so a model can never ship on its own. Prefers a `vercel`
-  already on PATH, else `npx vercel@<major>` (matching the website
-  deploy workflow); a missing token or Node fails loud with the fix.
+  credential-ladder status.
+- **Ollama Cloud is first-class**: `ollama` is now an optional-key
+  backend — the local daemon still runs keyless, and `tilde login ollama`
+  / `/login ollama` store a Cloud key the credential ladder resolves
+  (store, then `$OLLAMA_API_KEY`). `tilde doctor` reports Ollama
+  readiness and warns when `$OLLAMA_HOST` is remote with no key. A
+  generic service-token table is the seam for future non-model keys.
+- Removed the unreleased `tilde deploy`/Vercel command (target, dispatch,
+  tests): it had no role in an agent CLI. The `vcp_` scrub pattern stays.
 - `tilde doctor [--json]`: one read-only health report covering the sandbox
   backstop, the policy file, credential availability per provider, session
   and audit dir writability, git, provider construction, and the network

@@ -706,7 +706,11 @@ As of v0.9+:
 | Secret scrubber hardening | DONE, Vercel `vcp_` tokens, URL `user:pass@host` credentials, GCP service-account `private_key` redacted in place (never whole-document) |
 | SSRF / DNS-rebinding guard | DONE, `web_fetch` + `web_search` resolve once, refuse un-routable addresses, and dial the validated IP (`internal/tools/netsafe.go`); no HTTP proxy on guarded fetchers |
 | Headless credentials | DONE, `tilde login\|logout [provider\|service]` against the sealed store; keys read from env or stdin, never argv |
-| Deploy | DONE, `tilde deploy [vercel] [--prod\|--preview]`, token from the credential ladder, passed in the child env, deployment URL reported; not an agent tool |
+| Ollama Cloud | DONE, optional-key backend; `tilde login ollama` / `/login ollama`, ladder store→env, `tilde doctor` readiness + remote-host-no-key warn, `/api/tags` validation |
+| Per-tool timeout | DONE, optional `Timeout()` probe in Dispatch returns `TOOL_TIMEOUT`; web_fetch/web_search/web_shot declare limits |
+| Repeat-tool guard | DONE, JSON-canonical fingerprint; escalating nudge wording; capped argument preview |
+| Pairing-safe compaction | DONE, kept-recent boundary walks past a leading tool-result run |
+| Tool-output spill | DONE, `internal/spill` leaf; scrubbed 0600 files under `~/.tilde/spill`; `tilde prune --spill <age>` |
 | Install health | DONE, `tilde doctor [--json]`, exit 2 on a hard failure |
 | PTY terminal contract | DONE, `pty_smoke_test.go` runs the real binary under a pty: alt-screen enter/exit, live resize re-render, clean Ctrl+C |
 | Input bounds | DONE, NUL bytes refused at `contain()` (all file tools), 64 KiB shell-command cap naming the fix |

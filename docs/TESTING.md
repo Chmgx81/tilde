@@ -86,7 +86,7 @@ Existing security coverage to extend rather than duplicate:
 
 - `internal/policy/policy_test.go` — deny shapes, wrapper/expansion bypasses,
   heredoc handling, session allowlist, path-scoped denies.
-- `internal/policy/slopsquatting_test.go` — hallucination and typo detection.
+- `internal/slopsquatting/slopsquatting_test.go` — hallucination and typo detection.
 - `internal/tools/netsafe_test.go` — SSRF address classification and dialer.
 - `internal/tools/tools_test.go` — NUL-path refusal, command-length cap,
   read-before-write, path traversal.

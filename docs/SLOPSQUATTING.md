@@ -17,7 +17,7 @@ tilde defends against slopsquatting at multiple layers.
 
 ### Hallucination Database
 
-`internal/policy/slopsquatting.go` maintains a curated list of known
+`internal/slopsquatting/slopsquatting.go` maintains a curated list of known
 hallucinated package names across ecosystems (Python, JavaScript, Rust, Go).
 Each entry maps the hallucinated name to the real package it probably
 represents:
@@ -37,17 +37,30 @@ both a common hallucination AND a realistic attack vector.
 ### Typo Detection
 
 In addition to the known-hallucination database, tilde uses Levenshtein
-distance to detect package names that are close to well-known packages (edit
-distance ≤ 2). This catches novel misspellings not yet in the database.
+distance to detect package names close to a curated set of well-known
+packages, catching novel misspellings not yet in the database. Matching is
+case- and separator-insensitive (`Lang-Chin` == `langchin`), and the
+distance is length-aware: names under five characters only flag at edit
+distance 1, which keeps short real names from triggering false "possible
+typo" warnings. A name that is itself a known package is never flagged.
 
 ### Package Name Extraction
 
 When an install command is detected, tilde extracts package names by:
 
-1. Splitting the command into pipeline segments.
-2. Identifying the package manager (`pip`, `npm`, `cargo`, ...).
-3. Stripping version specs (`@1.0.0`, `>=2.0`).
+1. Joining backslash-newline continuations, then splitting into pipeline
+   segments and peeling transparent wrappers (`env`, `nice`, `timeout`,
+   `command`) and `VAR=x` prefixes, so the manager can't hide.
+2. Identifying the package manager, including versioned binaries
+   (`python3.11`, `pip3.11`) and the `python -m pip` indirection.
+3. Stripping version specs (`==1.2`, `~=`, `<`, `!=`, `[extra]`, `@scope/pkg@1.0`).
 4. Handling scoped packages (`@scope/pkg`).
+5. Skipping flag values (`-r requirements.txt`, `--index-url URL`) instead
+   of reading them as package names, and dropping unresolved `$VAR` tokens.
+
+A package name that resolves to a known package renders as
+`known package(s)`; anything else keeps the `unverified package name`
+notice.
 
 ## Warning Prompts
 
@@ -85,27 +98,33 @@ In strict mode:
 
 ## Install Shape Detection
 
-The policy layer (`internal/policy/policy.go isInstallShape`) detects
-install commands across package managers:
+The policy layer (`internal/policy/policy.go`) detects install commands
+across package managers from **one table** shared by detection and name
+extraction, so a manager that is detected is always also DB-checked:
 
-| Manager | Install Verbs |
-|---------|--------------|
-| pip | `install`, `download`, `wheel` |
-| uv | `install`, `add`, `pip install` |
-| npm | `install`, `i`, `add` |
-| pnpm | `add`, `install`, `i` |
-| yarn | `add` |
-| bun | `add`, `install`, `i` |
+| Manager | Fetch verbs |
+|---------|-------------|
+| pip / pip3 | `install`, `download`, `wheel` |
+| python / python3 | `-m pip` + a pip verb |
+| uv | `install`, `add`, `sync` |
+| poetry | `add`, `install` |
+| pipenv / pdm | `install`, `add`, `sync` |
+| conda / mamba | `install`, `create` |
+| npm | `install`, `i`, `add`, `ci` |
+| pnpm | `add`, `install`, `i`, `dlx` |
+| yarn | `add`, `install`, `dlx` |
+| bun | `add`, `install`, `i`, `x` |
 | go | `get`, `install` |
 | cargo | `add`, `install` |
-| gem | `install` |
-| bundle | `install`, `add` |
-| composer | `require` |
+| gem / bundle | `install`, `add` |
+| composer | `require`, `install` |
+| apt/apt-get/dnf/yum/brew/choco | `install` |
+| apk | `add`, `install` |
+| pacman | `-S`, `-Syu`, `--sync`, `install` |
 | pipx | `install`, `run` |
-| apt/dnf/yum | `install` |
-| apk | `add` |
-| pacman | `-S` |
-| npx/uvx | (always fetch) |
+| deno | `install`, `add` |
+| dotnet / nuget | `add` / `install` |
+| npx / uvx / bunx | (always fetch) |
 
 Multi-segment commands are also caught: `cd proj && pip install x` flags
 the install even though it's not the first segment.
@@ -140,7 +159,7 @@ visible; the user makes the decision.
 ## Contributing
 
 If you discover a new common hallucination, consider adding it to the
-database in `internal/policy/slopsquatting.go`. The entry should be:
+database in `internal/slopsquatting/slopsquatting.go`. The entry should be:
 - A name that is actually hallucinated (not just a rare legitimate name).
 - Mapped to the real package it probably represents.
 - Lowercase (matching is case-insensitive).
