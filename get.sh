@@ -50,21 +50,40 @@ sums_url="https://github.com/${REPO}/releases/download/${tag}/checksums.txt"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-# Bounded downloads: a stalled connection must fail (with a clear error),
-# never hang the installer forever.
+# Bounded, resumable downloads: a stalled/throttled link must fail with a
+# clear error, never hang — and each attempt resumes from where the last
+# stopped (GitHub release assets support range requests) instead of
+# restarting, so a slow connection can still finish.
 dl() {
-    if command -v curl >/dev/null 2>&1; then
-        curl -fsSL --connect-timeout 10 --max-time 300 --retry 2 --retry-delay 2 -o "$1" "$2" \
-            || die "download failed: $2 (network stalled or unavailable) — nothing was installed"
-    else
-        wget -q --timeout=20 --tries=3 -O "$1" "$2" \
-            || die "download failed: $2 (network stalled or unavailable) — nothing was installed"
-    fi
+    tries=0
+    while [ "$tries" -lt 5 ]; do
+        tries=$((tries + 1))
+        if command -v curl >/dev/null 2>&1; then
+            curl -fsSL --connect-timeout 10 --max-time 300 -C - -o "$1" "$2" && return 0
+        else
+            wget -q --timeout=20 --tries=1 -c -O "$1" "$2" && return 0
+        fi
+        echo "tilde: download interrupted (attempt ${tries}/5) — resuming..." >&2
+        sleep 2
+    done
+    die "download failed: $2 (network stalled or unavailable after 5 attempts) — nothing was installed"
 }
 
-echo "tilde: downloading ${tag} for ${os}/${arch}..."
-dl "$tmp/${base}.${ext}" "$url"
-dl "$tmp/checksums.txt" "$sums_url"
+got_all=0
+# Fast path: an authenticated `gh` downloads through the API (often much
+# faster than the anonymous release CDN on throttled links).
+if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    echo "tilde: downloading ${tag} for ${os}/${arch} via gh..."
+    if gh release download "$tag" -R "${REPO}" -p "${base}.${ext}" -p checksums.txt -D "$tmp" --clobber >/dev/null 2>&1 \
+        && [ -f "$tmp/${base}.${ext}" ] && [ -f "$tmp/checksums.txt" ]; then
+        got_all=1
+    fi
+fi
+if [ "$got_all" -eq 0 ]; then
+    echo "tilde: downloading ${tag} for ${os}/${arch}..."
+    dl "$tmp/${base}.${ext}" "$url"
+    dl "$tmp/checksums.txt" "$sums_url"
+fi
 
 # --- verify checksum (fail closed: no verification, no install) ---
 [ -f "$tmp/checksums.txt" ] || die "missing checksums.txt for ${tag} — refusing unverified install"
